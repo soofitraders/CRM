@@ -1,0 +1,279 @@
+{%- comment -%}
+  Hero Banner Slider
+  © 2025 Azfar Ul Hussain. All rights reserved.
+{%- endcomment -%}
+
+{% schema %}
+  {
+    "name": "Collections Slider",
+    "settings": [],
+    "blocks": [
+      {
+        "type": "collection",
+        "name": "Collection Item",
+        "settings": [
+          {
+            "type": "image_picker",
+            "id": "collection_image",
+            "label": "Collection Image"
+          },
+          {
+            "type": "text",
+            "id": "collection_name",
+            "label": "Collection Name"
+          },
+          {
+            "type": "url",
+            "id": "collection_link",
+            "label": "Collection Link"
+          }
+        ]
+      }
+    ],
+    "presets": [
+      {
+        "name": "Collections Slider"
+      }
+    ]
+  }
+{% endschema %}
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap');
+
+  .collections-section {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 40px;
+    font-family: 'Poppins', sans-serif;
+  }
+  .collections-title {
+    font-size: 24px;
+    font-weight: bold;
+  }
+  .collections-slider {
+    display: flex;
+    overflow: hidden; /* Hides horizontal scrolling */
+    position: relative;
+    width: 100%;
+  }
+  .collections-slider-wrapper {
+    display: flex;
+    transition: transform 0.3s ease;
+    white-space: nowrap; /* Prevents scrollbars */
+    overflow: hidden; /* Prevents scrollbars */
+    gap: 10px;
+  }
+  .collection-item {
+    min-width: 200px;
+    margin-right: 10px;
+    text-align: center;
+  }
+  .collection-item img {
+    width: 100%;
+    height: 200px; /* Ensuring square images */
+    object-fit: cover;
+    display: block;
+  }
+  .collection-name {
+    margin-top: 10px;
+    font-size: 16px;
+    font-weight: 500;
+  }
+  .slider-nav {
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    background: #fff;
+    border: none;
+    cursor: pointer;
+    font-size: 24px;
+  }
+  @media (max-width: 768px) {
+    .collections-section {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .collections-title {
+      margin-bottom: 20px;
+    }
+    .collections-slider-wrapper {
+      gap: 10px;
+      flex-wrap: nowrap;
+      white-space: nowrap; /* Ensures no scrollbar */
+      overflow: hidden; /* Ensures no scrollbar */
+      scroll-snap-type: x mandatory;
+    }
+    .collection-item {
+      min-width: 66%; /* Show 1.5 items */
+      scroll-snap-align: start;
+    }
+    .slider-nav {
+      display: none; /* Hide arrows on mobile */
+    }
+  }
+</style>
+
+
+<div class="collections-section">
+  <div class="collections-title">OUR COLLECTIONS</div>
+  <div class="collections-slider">
+    <div class="collections-slider-wrapper">
+      {% for block in section.blocks %}
+        <div class="collection-item">
+          <a href="{{ block.settings.collection_link }}">
+            <img src="{{ block.settings.collection_image | img_url: 'medium' }}" alt="Collection">
+          </a>
+          <div class="collection-name">{{ block.settings.collection_name }}</div>
+        </div>
+      {% endfor %}
+    </div>
+    <button class="slider-nav" onclick="scrollSlider(1)">→</button>
+  </div>
+</div>
+
+<script>
+  function scrollSlider(direction) {
+    const sliderWrapper = document.querySelector(".collections-slider-wrapper");
+    sliderWrapper.style.transform = `translateX(${direction * -200}px)`;
+  }
+</script>
+ -->
+
+
+ <style>
+  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap');
+
+  .collections-section {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 40px;
+    font-family: 'Poppins', sans-serif;
+  }
+
+  .collections-title {
+    font-size: 24px;
+    font-weight: bold;
+  }
+
+  .collections-slider {
+    display: flex;
+    overflow: hidden;
+    position: relative;
+    width: 100%;
+  }
+
+  .collections-slider-wrapper {
+    display: flex;
+    transition: transform 0.4s ease-in-out;
+    gap: 10px;
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    scrollbar-width: none; /* Hides scrollbar in Firefox */
+    -ms-overflow-style: none; /* Hides scrollbar in IE */
+  }
+
+  .collections-slider-wrapper::-webkit-scrollbar {
+    display: none; /* Hides scrollbar in Chrome and Safari */
+  }
+
+  .collection-item {
+    min-width: 200px;
+    margin-right: 10px;
+    text-align: center;
+  }
+
+  .collection-item img {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+    display: block;
+  }
+
+  .collection-name {
+    margin-top: 10px;
+    font-size: 16px;
+    font-weight: 500;
+  }
+
+  .slider-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0, 0, 0, 0.5);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    font-size: 24px;
+    padding: 10px 15px;
+    border-radius: 50%;
+    transition: 0.3s;
+    z-index: 10;
+  }
+
+  .slider-nav:hover {
+    background: rgba(0, 0, 0, 0.8);
+  }
+
+  .slider-prev {
+    left: 10px;
+  }
+
+  .slider-next {
+    right: 10px;
+  }
+
+  @media (max-width: 768px) {
+    .collections-section {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .collections-title {
+      margin-bottom: 20px;
+    }
+    .collections-slider-wrapper {
+      gap: 10px;
+      flex-wrap: nowrap;
+      white-space: nowrap;
+      overflow-x: scroll;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+    }
+    .collection-item {
+      min-width: 66%;
+      scroll-snap-align: start;
+    }
+    .slider-nav {
+      display: none; /* Hide arrows on mobile */
+    }
+  }
+</style>
+
+<div class="collections-section">
+  <div class="collections-title">OUR COLLECTIONS</div>
+  <div class="collections-slider">
+    <button class="slider-nav slider-prev" onclick="scrollSlider(-1)">←</button>
+    <div class="collections-slider-wrapper">
+      {% for block in section.blocks %}
+        <div class="collection-item">
+          <a href="{{ block.settings.collection_link }}">
+            <img src="{{ block.settings.collection_image | img_url: 'large' }}" alt="Collection">
+          </a>
+          <div class="collection-name">{{ block.settings.collection_name }}</div>
+        </div>
+      {% endfor %}
+    </div>
+    <button class="slider-nav slider-next" onclick="scrollSlider(1)">→</button>
+  </div>
+</div>
+
+<script>
+  function scrollSlider(direction) {
+    const sliderWrapper = document.querySelector(".collections-slider-wrapper");
+    const scrollAmount = 250; // Adjust scroll speed based on item width
+    sliderWrapper.scrollLeft += direction * scrollAmount;
+  }
+</script>

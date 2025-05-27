@@ -1,0 +1,340 @@
+{%- comment -%}
+  Hero Banner Slider
+  © 2025 Azfar Ul Hussain. All rights reserved.
+{%- endcomment -%}
+
+
+{%- assign image_size = 'master' -%}
+{% assign full = section.settings.full %}
+{% assign desktop = section.settings.margin1 | split: ',' %}
+{% assign d1 = desktop[0] %}
+{% assign d2 = desktop[1] %}
+{% assign d3 = desktop[2] %}
+{% assign d4 = desktop[3] %}
+{% assign tablet = section.settings.margin2 | split: ',' %}
+{% assign t1 = tablet[0] %}
+{% assign t2 = tablet[1] %}
+{% assign t3 = tablet[2] %}
+{% assign t4 = tablet[3] %}
+{% assign mobile = section.settings.margin3 | split: ',' %}
+{% assign m1 = mobile[0] %}
+{% assign m2 = mobile[1] %}
+{% assign m3 = mobile[2] %}
+{% assign m4 = mobile[3] %}
+
+{% style %}  
+  @media screen and (min-width: 1261px){
+	.spacing-{{ section.id }}{
+      margin-top: {{d1}}px;
+      margin-bottom: {{d2}}px;
+      padding-top: {{d3}}px;
+      padding-bottom: {{d4}}px;
+    }
+  }
+  @media screen and (min-width: 801px) and (max-width: 1260px){
+    .spacing-{{ section.id }}{
+      margin-top: {{t1}}px;
+      margin-bottom: {{t2}}px;
+      padding-top: {{t3}}px;
+      padding-bottom: {{t4}}px;
+    }
+  }
+  @media screen and (max-width: 800px){
+	.spacing-{{ section.id }}{
+      margin-top: {{m1}}px;
+      margin-bottom: {{m2}}px;
+      padding-top: {{m3}}px;
+      padding-bottom: {{m4}}px;
+    }
+  }
+{% endstyle %}
+
+<div data-section-id="{{ section.id }}" class="spacing-{{ section.id }}" style="background-color:{{section.settings.color}}">
+  <div class="{{ section.settings.display }}">
+    <div class="page-width">
+      {% if section.settings.title != blank %}
+        <h2 class="h2 text-center" style="font-size: 2rem; margin-bottom: 1rem; font-family: 'Poppins', sans-serif; font-size: 28px;
+          font-weight: 600;
+          margin-bottom: 1rem;
+          font-family: 'Poppins', sans-serif;
+          text-align: center;
+          padding-top: 35px;">{{ section.settings.title }}</h2>
+      {% endif %}
+      {% if section.blocks.size > 0 %}
+        <div class="tabs-container">
+          <ul class="tabs list-unstyled" role="tablist">
+            {% for block in section.blocks %}
+              <li class="tab{% if forloop.first %} active{% endif %}" role="tab">
+                <a href="#tab-{{ section.id }}-{{ forloop.index }}" role="tab">{{ block.settings.title }}</a>
+              </li>
+            {% endfor %}
+          </ul>
+          <div class="tabs-content">
+            {% for block in section.blocks %}
+              <div id="tab-{{ section.id }}-{{ forloop.index }}" class="tab-content{% if forloop.first %} active{% endif %}" role="tabpanel">
+                {% assign collection = collections[block.settings.collection] %}
+                {% if collection != blank and collection.products_count > 0 %}
+                  <div class="splide product-carousel" id="carousel-{{ block.id }}">
+                    <div class="splide__track">
+                      <ul class="splide__list">
+                        {% for product in collection.products limit: section.settings.limit %}
+                          <li class="splide__slide">
+                            <div class="product-card">
+                              <a href="{{ product.url }}" class="product-link">
+                                <div class="product-image">
+                                  <img src="{{ product.featured_image | img_url: '600x600' }}" alt="{{ product.title }}">
+                                </div>
+                                <div class="product-details">
+                                  <h3 class="product-title">{{ product.title | truncatewords: 8 }}</h3>
+                                  <div class="product-price">
+                                    {% if product.compare_at_price > product.price %}
+                                      <span class="compare-price">{{ product.compare_at_price | money }}</span>
+                                    {% endif %}
+                                    <span class="current-price">{{ product.price | money }}</span>
+                                  </div>
+                                </div>
+                              </a>
+                            </div>
+                          </li>
+                        {% endfor %}
+                      </ul>
+                    </div>
+                  </div>
+                {% else %}
+                  <p>{{ 'collections.general.no_matches' | t }}</p>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@splidejs/splide@4.1.3/dist/js/splide.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@splidejs/splide@4.1.3/dist/css/splide.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    document.querySelectorAll('.splide').forEach(function (carousel) {
+      new Splide(carousel, {
+        type   : 'slide',
+        perPage: 5,
+        gap    : '1rem',
+        pagination: true,
+        arrows: true,
+        breakpoints: {
+          800: {
+            perPage: 2,
+          }
+        },
+      }).mount();
+    });
+
+    const tabs = document.querySelectorAll(".tabs li");
+    const tabContents = document.querySelectorAll(".tab-content");
+
+    tabs.forEach((tab, index) => {
+      tab.addEventListener("click", function(e) {
+        e.preventDefault();
+        tabs.forEach(t => t.classList.remove("active"));
+        tab.classList.add("active");
+        tabContents.forEach(tc => tc.classList.remove("active"));
+        document.querySelector(`#tab-{{ section.id }}-${index + 1}`).classList.add("active");
+      });
+    });
+  });
+</script>
+
+<style>
+  * {
+    font-family: 'Poppins', sans-serif;
+    text-decoration: none;
+  }
+
+  .tabs {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin: 2rem 0;
+    flex-wrap: wrap;
+  }
+   .tabs li a {
+      text-decoration: none;
+      color: inherit;
+      padding: 0.75rem 1.5rem;
+      border: 1px solid #DB572E;
+      /* border-radius: 6px; */
+      display: inline-block;
+      font-size: 1.5rem;
+      font-weight: 500;
+  }
+  .tabs li.active a {
+    background-color: #DB572E;
+    color: #fff;
+  }
+  .tab-content {
+    display: none;
+  }
+  .tab-content.active {
+    display: block;
+    animation: fadeIn 0.4s ease-in-out;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .product-card {
+    /* border: 1px solid #eee; */
+    overflow: hidden;
+    background: #fff;
+    /* text-align: center; */
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 100%;
+  }
+
+  .product-image {
+    width: 100%;
+    aspect-ratio: 4 / 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f9f9f9;
+    overflow: hidden;
+  }
+
+  .product-image img {
+    object-fit: cover;
+    width: 100%;
+    height: 100%;
+  }
+
+  .product-details {
+    /* padding: 0.75rem; */
+    display: flex;
+    flex-direction: column;
+    /* gap: 0.25rem; */
+  }
+
+  .product-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: #000;
+    line-height: 1.4;
+    text-decoration: none !important;
+    font-family: poppins;
+  }
+
+  .product-title a {
+    text-decoration: none !important;
+  }
+
+  .product-price {
+    font-size: 13px;
+    /* font-weight: bold; */
+    color: #000;
+  }
+
+  .product-price .compare-price {
+    text-decoration: line-through;
+    color: #999;
+    margin-right: 8px;
+    font-weight: 400;
+  }
+  .splide__pagination {
+   display:none;
+}
+</style>
+
+{% schema %}
+{
+  "name": "Products Tab Grid Custom",
+  "settings": [
+    {
+      "type": "text",
+      "id": "title",
+      "label": "Section Title"
+    },
+    {
+      "type": "checkbox",
+      "id": "full",
+      "label": "Full Width",
+      "default": false
+    },
+    {
+      "type": "text",
+      "id": "margin1",
+      "label": "Desktop Spacing (mt,mb,pt,pb)",
+      "default": "0,60,0,0"
+    },
+    {
+      "type": "text",
+      "id": "margin2",
+      "label": "Tablet Spacing (mt,mb,pt,pb)",
+      "default": "0,50,0,0"
+    },
+    {
+      "type": "text",
+      "id": "margin3",
+      "label": "Mobile Spacing (mt,mb,pt,pb)",
+      "default": "0,30,0,0"
+    },
+    {
+      "type": "select",
+      "id": "display",
+      "label": "Display Visibility",
+      "options": [
+        { "value": "", "label": "All Devices" },
+        { "value": "show-for-large", "label": "Desktop Only" },
+        { "value": "hide-for-large", "label": "Mobile Only" }
+      ],
+      "default": ""
+    },
+    {
+      "type": "color",
+      "id": "color",
+      "label": "Background Color",
+      "default": "#ffffff"
+    },
+    {
+      "type": "number",
+      "id": "limit",
+      "label": "Number of Products to Show",
+      "default": 6
+    }
+  ],
+  "blocks": [
+    {
+      "type": "tab",
+      "name": "Collection Tab",
+      "settings": [
+        {
+          "type": "text",
+          "id": "title",
+          "label": "Tab Title"
+        },
+        {
+          "type": "collection",
+          "id": "collection",
+          "label": "Collection"
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Products Tab - Grid Custom",
+      "category": "Products",
+      "blocks": [
+        { "type": "tab" },
+        { "type": "tab" }
+      ]
+    }
+  ]
+}
+{% endschema %}

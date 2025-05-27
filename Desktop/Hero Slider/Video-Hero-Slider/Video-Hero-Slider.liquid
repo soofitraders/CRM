@@ -1,0 +1,200 @@
+{%- comment -%}
+  Hero Banner Slider
+  © 2025 Azfar Ul Hussain. All rights reserved.
+{%- endcomment -%}
+
+
+{% schema %}
+{
+  "name": "Video Hero Banner Slider",
+  "tag": "section",
+  "class": "hero-slider",
+  "settings": [
+    {
+      "type": "checkbox",
+      "id": "adapt_image",
+      "label": "Adapt to image size",
+      "default": false
+    }
+  ],
+  "blocks": [
+    {
+      "type": "slide",
+      "name": "Slide",
+      "settings": [
+        {
+          "type": "image_picker",
+          "id": "image_desktop",
+          "label": "Desktop Image"
+        },
+        {
+          "type": "image_picker",
+          "id": "image_mobile",
+          "label": "Mobile Image"
+        },
+        {
+          "type": "url",
+          "id": "video_desktop",
+          "label": "Desktop Video URL (.mp4)"
+        },
+        {
+          "type": "url",
+          "id": "video_mobile",
+          "label": "Mobile Video URL (.mp4)"
+        },
+        {
+          "type": "text",
+          "id": "heading",
+          "label": "Heading"
+        },
+        {
+          "type": "text",
+          "id": "subheading",
+          "label": "Subheading"
+        },
+        {
+          "type": "url",
+          "id": "link",
+          "label": "Link URL"
+        }
+      ]
+    }
+  ],
+  "max_blocks": 10,
+  "presets": [
+    {
+      "name": "Hero Banner Slider",
+      "category": "Image"
+    }
+  ]
+}
+{% endschema %}
+
+<div class="hero-slider-wrapper {% if section.settings.adapt_image %}adapt-image{% endif %}" id="hero-slider-{{ section.id }}">
+  <div class="hero-slider">
+    {% for block in section.blocks %}
+      {% if block.settings.link %}
+        <a href="{{ block.settings.link }}" class="hero-slide" data-index="{{ forloop.index0 }}">
+      {% else %}
+        <div class="hero-slide" data-index="{{ forloop.index0 }}">
+      {% endif %}
+
+        {% if block.settings.video_mobile or block.settings.video_desktop %}
+          <video class="hero-slide__video" autoplay loop muted playsinline>
+            {% if block.settings.video_mobile %}
+              <source src="{{ block.settings.video_mobile }}" media="(max-width: 749px)" type="video/mp4">
+            {% endif %}
+            {% if block.settings.video_desktop %}
+              <source src="{{ block.settings.video_desktop }}" type="video/mp4">
+            {% endif %}
+            Your browser does not support the video tag.
+          </video>
+        {% else %}
+          <picture>
+            {% if block.settings.image_mobile %}
+              <source media="(max-width: 749px)" srcset="{{ block.settings.image_mobile | image_url }}">
+            {% endif %}
+            {% if block.settings.image_desktop %}
+              <img 
+                src="{{ block.settings.image_desktop | image_url }}" 
+                alt="{{ block.settings.heading | escape }}"
+                loading="lazy"
+                class="hero-slide__image">
+            {% endif %}
+          </picture>
+        {% endif %}
+
+        {% if block.settings.heading or block.settings.subheading %}
+          <div class="hero-slide__content">
+            {% if block.settings.heading %}<h2>{{ block.settings.heading }}</h2>{% endif %}
+            {% if block.settings.subheading %}<p>{{ block.settings.subheading }}</p>{% endif %}
+          </div>
+        {% endif %}
+
+      {% if block.settings.link %}
+        </a>
+      {% else %}
+        </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  {% if section.blocks.size > 1 %}
+    <button class="hero-arrow left" onclick="prevSlide()">&#10094;</button>
+    <button class="hero-arrow right" onclick="nextSlide()">&#10095;</button>
+  {% endif %}
+</div>
+
+<style>
+.hero-slider-wrapper {
+  position: relative;
+  overflow: hidden;
+}
+.hero-slider {
+  display: flex;
+  transition: transform 0.4s ease;
+  width: 100%;
+}
+.hero-slide {
+  flex: 0 0 100%;
+  position: relative;
+  text-decoration: none;
+  color: inherit;
+}
+.hero-slide__image,
+.hero-slide__video {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: cover;
+}
+.hero-slider-wrapper.adapt-image .hero-slide__image,
+.hero-slider-wrapper.adapt-image .hero-slide__video {
+  object-fit: contain;
+}
+.hero-slide__content {
+  position: absolute;
+  bottom: 15%;
+  left: 10%;
+  color: white;
+  z-index: 2;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+.hero-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.4);
+  color: white;
+  border: none;
+  padding: 15px;
+  cursor: pointer;
+  z-index: 3;
+}
+.hero-arrow.left { left: 10px; }
+.hero-arrow.right { right: 10px; }
+</style>
+
+<script>
+  let currentIndex = 0;
+  const slides = document.querySelectorAll('#hero-slider-{{ section.id }} .hero-slide');
+
+  function updateSlider() {
+    const slider = document.querySelector('#hero-slider-{{ section.id }} .hero-slider');
+    slider.style.transform = `translateX(-${currentIndex * 100}%)`;
+  }
+
+  function nextSlide() {
+    currentIndex = (currentIndex + 1) % slides.length;
+    updateSlider();
+  }
+
+  function prevSlide() {
+    currentIndex = (currentIndex - 1 + slides.length) % slides.length;
+    updateSlider();
+  }
+
+  setInterval(() => {
+    nextSlide();
+  }, 5000);
+</script>

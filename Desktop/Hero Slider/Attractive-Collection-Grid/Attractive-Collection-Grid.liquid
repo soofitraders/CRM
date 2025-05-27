@@ -1,0 +1,200 @@
+{% comment %} Include section and component styles {% endcomment %}
+{%- comment -%}
+  Hero Banner Slider
+  © 2025 Azfar Ul Hussain. All rights reserved.
+{%- endcomment -%}
+
+{{ 'section-collection-list.css' | asset_url | stylesheet_tag }}
+{{ 'component-card.css' | asset_url | stylesheet_tag }}
+{{ 'component-slider.css' | asset_url | stylesheet_tag }}
+
+{%- style -%}
+  .section-{{ section.id }}-padding {
+    padding-top: {{ section.settings.padding_top | times: 0.75 | round: 0 }}px;
+    padding-bottom: {{ section.settings.padding_bottom | times: 0.75 | round: 0 }}px;
+  }
+
+  @media screen and (min-width: 750px) {
+    .section-{{ section.id }}-padding {
+      padding-top: {{ section.settings.padding_top }}px;
+      padding-bottom: {{ section.settings.padding_bottom }}px;
+    }
+  }
+
+  .custom-collection-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 0;
+  }
+  .custom-card-link {
+    text-decoration: none;
+    display: block;
+    position: relative;
+    color: white;
+  }
+  .custom-card-image-wrapper {
+    position: relative;
+  }
+  .custom-card-image {
+    width: 100%;        /* Ensures the image fills the container's width */
+    height: 400px;      /* Fixed height for all images */
+    object-fit: cover;  /* Ensures the image fills the space without distortion */
+    display: block;
+  }
+  .custom-card-overlay {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    background: linear-gradient(0deg, rgba(0,0,0,0.7), rgba(0,0,0,0.3) 40%, transparent);
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    height: 100%;
+    flex-direction: row;
+    box-sizing: border-box;
+  }
+  .custom-card-text {
+    color: white;
+    font-size: 18px;
+    font-weight: 600;
+    font-family: 'Assistant', sans-serif;
+  }
+  .custom-card-arrow {
+    font-size: 24px;
+    transition: transform 0.3s ease;
+    color: white;
+  }
+  .custom-card-link:hover .custom-card-arrow {
+    transform: translateX(4px);
+  }
+  .section-collection-list{
+    padding:10px;
+  }
+{%- endstyle -%}
+
+
+<div class="color-{{ section.settings.color_scheme }} gradient">
+  <div class="collection-list-wrapper page-width section-{{ section.id }}-padding">
+    {%- unless section.settings.title == blank -%}
+      <div class="title-wrapper-with-link">
+        <h2 id="SectionHeading-{{ section.id }}" class="collection-list-title inline-richtext {{ section.settings.heading_size }}">
+          {{ section.settings.title }}
+        </h2>
+      </div>
+    {%- endunless -%}
+
+    <div class="grid grid--{{ section.settings.columns_desktop }}-col-desktop grid--{{ section.settings.columns_mobile }}-col-tablet-down">
+      {%- for block in section.blocks -%}
+        <div class="grid__item custom-collection-card">
+          {%- assign collection = block.settings.collection -%}
+          <a href="{{ collection.url }}" class="custom-card-link">
+            <div class="custom-card-image-wrapper">
+              {% if collection.featured_image %}
+                <img src="{{ collection.featured_image | img_url: '800x' }}" alt="{{ collection.title }}" class="custom-card-image">
+              {% endif %}
+              <div class="custom-card-overlay">
+                <div class="custom-card-text">{{ collection.title }}</div>
+                <div class="custom-card-arrow">↗</div>
+              </div>
+            </div>
+          </a>
+        </div>
+      {%- endfor -%}
+    </div>
+  </div>
+</div>
+
+{% schema %}
+{
+  "name": "Custom Collection List",
+  "tag": "section",
+  "class": "section section-collection-list",
+  "settings": [
+    {
+      "type": "inline_richtext",
+      "id": "title",
+      "default": "Featured Collections",
+      "label": "Title"
+    },
+    {
+      "type": "select",
+      "id": "heading_size",
+      "options": [
+        { "value": "h2", "label": "H2" },
+        { "value": "h1", "label": "H1" }
+      ],
+      "default": "h2",
+      "label": "Heading size"
+    },
+    {
+      "type": "range",
+      "id": "columns_desktop",
+      "min": 1,
+      "max": 6,
+      "step": 1,
+      "default": 3,
+      "label": "Number of columns on desktop"
+    },
+    {
+      "type": "select",
+      "id": "columns_mobile",
+      "options": [
+        { "value": "1", "label": "1 column" },
+        { "value": "2", "label": "2 columns" }
+      ],
+      "default": "1",
+      "label": "Number of columns on mobile"
+    },
+    {
+      "type": "color_scheme",
+      "id": "color_scheme",
+      "label": "Color scheme",
+      "default": "scheme-1"
+    },
+    {
+      "type": "range",
+      "id": "padding_top",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "label": "Top padding",
+      "default": 36
+    },
+    {
+      "type": "range",
+      "id": "padding_bottom",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "label": "Bottom padding",
+      "default": 36
+    }
+  ],
+  "blocks": [
+    {
+      "type": "featured_collection",
+      "name": "Collection",
+      "settings": [
+        {
+          "type": "collection",
+          "id": "collection",
+          "label": "Choose collection"
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Custom Collection List",
+      "blocks": [
+        { "type": "featured_collection" },
+        { "type": "featured_collection" },
+        { "type": "featured_collection" }
+      ]
+    }
+  ]
+}
+{% endschema %}
