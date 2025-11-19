@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Design System Color Palette */
+  --sidebar-bg: #05070A;
+  --sidebar-active-bg: #F2B233;
+  --sidebar-text: #F9FAFB;
+  --sidebar-muted: #9CA3AF;
+  --page-bg: #F5F5F7;
+  --card-bg: #FFFFFF;
+  --border-soft: #E5E7EB;
+  --heading-text: #111827;
+  --body-text: #4B5563;
+  --success: #16A34A;
+  --warning: #F59E0B;
+  --danger: #EF4444;
+}
+
+@layer base {
+  * {
+    @apply border-borderSoft;
+  }
+
+  body {
+    @apply bg-pageBg text-bodyText;
+    font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-headingText font-semibold;
+  }
+
+  h1 {
+    @apply text-3xl;
+  }
+
+  h2 {
+    @apply text-2xl;
+  }
+
+  h3 {
+    @apply text-xl;
+  }
+
+  h4 {
+    @apply text-lg;
+  }
+
+  /* Custom Scrollbar Styles */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-pageBg;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-borderSoft rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-sidebarMuted;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}

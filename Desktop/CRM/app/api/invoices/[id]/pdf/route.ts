@@ -1,0 +1,67 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '@/lib/authOptions'
+
+// GET - Generate and download invoice as PDF
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    console.log('[PDF] PDF export request for invoice:', params.id)
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      console.log('[PDF] Unauthorized - no session')
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const invoiceId = params.id
+
+    console.log('[PDF] Starting PDF generation...')
+    
+    // Set a timeout for PDF generation (30 seconds)
+    const pdfGenerationPromise = (async () => {
+      // Dynamically import PDF service to avoid loading PDFKit on page load
+      const { generateInvoicePDF } = await import('@/lib/services/pdfService')
+      
+      // Generate PDF
+      return await generateInvoicePDF(invoiceId)
+    })()
+
+    // Race between PDF generation and timeout
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('PDF generation timeout after 30 seconds')), 30000)
+    })
+
+    const pdfBuffer = await Promise.race([pdfGenerationPromise, timeoutPromise]) as Buffer
+
+    console.log('[PDF] PDF generated successfully, size:', pdfBuffer.length, 'bytes')
+
+    // Return PDF as response
+    return new NextResponse(pdfBuffer, {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="invoice-${invoiceId}.pdf"`,
+        'Content-Length': pdfBuffer.length.toString(),
+      },
+    })
+  } catch (error: any) {
+    console.error('[PDF] Error generating invoice PDF:', error)
+    console.error('[PDF] Error stack:', error.stack)
+    console.error('[PDF] Error details:', {
+      message: error.message,
+      code: error.code,
+      name: error.name,
+    })
+    
+    // Return error response instead of crashing
+    return NextResponse.json(
+      { 
+        error: error.message || 'Failed to generate PDF',
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
+      { status: 500 }
+    )
+  }
+}
+

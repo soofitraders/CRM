@@ -1,0 +1,26 @@
+// Export all models from a single file for easier imports
+export { default as User } from './User'
+export { default as Vehicle } from './Vehicle'
+export { default as CustomerProfile } from './CustomerProfile'
+export { default as InvestorProfile } from './InvestorProfile'
+export { default as Booking } from './Booking'
+export { default as Payment } from './Payment'
+export { default as Invoice } from './Invoice'
+export { default as MaintenanceRecord } from './MaintenanceRecord'
+export { default as FineOrPenalty } from './FineOrPenalty'
+export { default as Document } from './Document'
+export { default as Notification } from './Notification'
+
+// Export types
+export type { IUser, UserRole, UserStatus } from './User'
+export type { IVehicle, VehicleCategory, OwnershipType, VehicleStatus, FuelType, Transmission } from './Vehicle'
+export type { ICustomerProfile } from './CustomerProfile'
+export type { IInvestorProfile, InvestorType, PayoutFrequency } from './InvestorProfile'
+export type { IBooking, BookingStatus, RentalType, DepositStatus, PaymentStatus as BookingPaymentStatus } from './Booking'
+export type { IPayment, PaymentMethod, PaymentStatus } from './Payment'
+export type { IInvoice, InvoiceStatus, InvoiceItem } from './Invoice'
+export type { IMaintenanceRecord, MaintenanceType, MaintenanceStatus } from './MaintenanceRecord'
+export type { IFineOrPenalty, FineStatus } from './FineOrPenalty'
+export type { IDocument, DocumentOwnerType } from './Document'
+export type { INotification, NotificationType } from './Notification'
+
