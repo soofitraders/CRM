@@ -6,6 +6,7 @@ services:
     region: oregon
     buildCommand: npm install && npm run build
     startCommand: node server.js
+    dockerfilePath: ""
     autoDeploy: true
     nodeVersion: 20
     envVars:
