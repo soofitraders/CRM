@@ -4,7 +4,8 @@ const nextConfig = {
   compress: true,
   
   // Output configuration for Render
-  output: 'standalone',
+  // Use standalone for better deployment, but ensure PORT is used
+  output: process.env.NODE_ENV === 'production' ? 'standalone' : undefined,
   
   // Optimize images
   images: {
