@@ -1,61 +1,77 @@
 /**
- * Server entry point for Render deployment
- * Uses Next.js production server with explicit port binding
+ * Custom server for Render - ensures proper port binding
+ * This server explicitly binds to 0.0.0.0 and the PORT env variable
  */
 
-// Ensure PORT is set (Render provides this)
-const port = process.env.PORT || 3000
-const hostname = '0.0.0.0'
-
-// Set NODE_ENV to production if not set (Render should set this, but ensure it)
-if (!process.env.NODE_ENV) {
-  process.env.NODE_ENV = 'production'
-}
-
-console.log(`[Server] Starting Next.js server...`)
-console.log(`[Server] PORT: ${port}`)
-console.log(`[Server] HOSTNAME: ${hostname}`)
-console.log(`[Server] NODE_ENV: ${process.env.NODE_ENV}`)
-
-// Use Next.js built-in production server
-// This is more reliable than custom server for Render
 const { createServer } = require('http')
 const { parse } = require('url')
 const next = require('next')
 
+// Get port - Render provides this via environment variable
+const port = parseInt(process.env.PORT || '3000', 10)
+const hostname = '0.0.0.0' // Must bind to 0.0.0.0 for Render
+
+console.log('='.repeat(50))
+console.log('[Server] Initializing...')
+console.log(`[Server] PORT: ${port}`)
+console.log(`[Server] HOSTNAME: ${hostname}`)
+console.log(`[Server] NODE_ENV: ${process.env.NODE_ENV || 'production'}`)
+console.log('='.repeat(50))
+
+// Initialize Next.js in production mode
 const app = next({
-  dev: false, // Always use production mode on Render
+  dev: false,
   hostname,
-  port: parseInt(port, 10),
+  port,
+  dir: __dirname,
 })
 
 const handle = app.getRequestHandler()
 
-app.prepare()
+// Prepare and start server
+app
+  .prepare()
   .then(() => {
-    console.log(`[Server] Next.js app prepared`)
+    console.log('[Server] Next.js prepared successfully')
     
     const server = createServer((req, res) => {
       const parsedUrl = parse(req.url, true)
-      handle(req, res, parsedUrl)
+      handle(req, res, parsedUrl).catch((err) => {
+        console.error('[Server] Request error:', err)
+        res.statusCode = 500
+        res.end('Internal Server Error')
+      })
     })
 
-    server.listen(parseInt(port, 10), hostname, (err) => {
-      if (err) {
-        console.error('[Server] Failed to start:', err)
-        process.exit(1)
-      }
-      console.log(`[Server] ✓ Server started successfully`)
+    // Bind to port and hostname
+    server.listen(port, hostname, () => {
+      console.log('='.repeat(50))
+      console.log(`[Server] ✓ SERVER STARTED SUCCESSFULLY`)
       console.log(`[Server] ✓ Listening on http://${hostname}:${port}`)
-      console.log(`[Server] ✓ Ready to accept connections`)
+      console.log(`[Server] ✓ Port ${port} is OPEN and ready for connections`)
+      console.log('='.repeat(50))
     })
 
+    // Error handling
     server.on('error', (err) => {
-      console.error('[Server] Server error:', err)
+      console.error('[Server] ✗ Server error:', err)
+      if (err.code === 'EADDRINUSE') {
+        console.error(`[Server] ✗ Port ${port} is already in use`)
+      }
       process.exit(1)
+    })
+
+    // Graceful shutdown
+    process.on('SIGTERM', () => {
+      console.log('[Server] SIGTERM received, shutting down...')
+      server.close(() => {
+        console.log('[Server] Server closed')
+        process.exit(0)
+      })
     })
   })
   .catch((err) => {
-    console.error('[Server] Failed to prepare app:', err)
+    console.error('[Server] ✗ Failed to prepare Next.js:', err)
+    console.error('[Server] Error details:', err.stack)
     process.exit(1)
   })
