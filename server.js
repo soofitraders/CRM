@@ -1,75 +1,61 @@
 /**
  * Server entry point for Render deployment
- * Explicitly binds to PORT environment variable on 0.0.0.0
+ * Uses Next.js production server with explicit port binding
  */
 
+// Ensure PORT is set (Render provides this)
+const port = process.env.PORT || 3000
+const hostname = '0.0.0.0'
+
+// Set NODE_ENV to production if not set (Render should set this, but ensure it)
+if (!process.env.NODE_ENV) {
+  process.env.NODE_ENV = 'production'
+}
+
+console.log(`[Server] Starting Next.js server...`)
+console.log(`[Server] PORT: ${port}`)
+console.log(`[Server] HOSTNAME: ${hostname}`)
+console.log(`[Server] NODE_ENV: ${process.env.NODE_ENV}`)
+
+// Use Next.js built-in production server
+// This is more reliable than custom server for Render
 const { createServer } = require('http')
 const { parse } = require('url')
 const next = require('next')
 
-// Get port from environment (Render provides this)
-const port = parseInt(process.env.PORT, 10) || 3000
-const hostname = '0.0.0.0' // Bind to all interfaces
-
-console.log(`[Server] Initializing Next.js application...`)
-console.log(`[Server] Port: ${port}`)
-console.log(`[Server] Hostname: ${hostname}`)
-console.log(`[Server] NODE_ENV: ${process.env.NODE_ENV || 'production'}`)
-console.log(`[Server] Production mode: ${isProduction}`)
-
-// Determine if we're in production mode
-const isProduction = process.env.NODE_ENV === 'production' || !process.env.NODE_ENV
-
 const app = next({
-  dev: !isProduction,
+  dev: false, // Always use production mode on Render
   hostname,
-  port,
+  port: parseInt(port, 10),
 })
 
 const handle = app.getRequestHandler()
 
-// Start the server
 app.prepare()
   .then(() => {
-    console.log(`[Server] Next.js app prepared successfully`)
+    console.log(`[Server] Next.js app prepared`)
     
-    const server = createServer(async (req, res) => {
-      try {
-        const parsedUrl = parse(req.url, true)
-        await handle(req, res, parsedUrl)
-      } catch (err) {
-        console.error('[Server] Error handling request:', err)
-        res.statusCode = 500
-        res.end('internal server error')
-      }
+    const server = createServer((req, res) => {
+      const parsedUrl = parse(req.url, true)
+      handle(req, res, parsedUrl)
     })
 
-    // Listen on the port
-    server.listen(port, hostname, () => {
-      console.log(`[Server] ✓ Server is ready`)
+    server.listen(parseInt(port, 10), hostname, (err) => {
+      if (err) {
+        console.error('[Server] Failed to start:', err)
+        process.exit(1)
+      }
+      console.log(`[Server] ✓ Server started successfully`)
       console.log(`[Server] ✓ Listening on http://${hostname}:${port}`)
-      console.log(`[Server] ✓ Port ${port} is now open and accessible`)
+      console.log(`[Server] ✓ Ready to accept connections`)
     })
 
-    // Handle server errors
     server.on('error', (err) => {
-      console.error('[Server] ✗ Server error:', err)
-      if (err.code === 'EADDRINUSE') {
-        console.error(`[Server] ✗ Port ${port} is already in use`)
-      }
+      console.error('[Server] Server error:', err)
       process.exit(1)
-    })
-
-    // Handle process termination
-    process.on('SIGTERM', () => {
-      console.log('[Server] SIGTERM received, shutting down gracefully')
-      server.close(() => {
-        console.log('[Server] Server closed')
-        process.exit(0)
-      })
     })
   })
   .catch((err) => {
-    console.error('[Server] ✗ Failed to prepare Next.js app:', err)
+    console.error('[Server] Failed to prepare app:', err)
     process.exit(1)
   })
