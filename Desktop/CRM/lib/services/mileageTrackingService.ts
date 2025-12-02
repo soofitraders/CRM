@@ -160,36 +160,33 @@ async function sendMileageWarningNotification(
   const vehicle = await Vehicle.findById(vehicleId).lean()
   if (!vehicle) return
 
-  // Get admin and manager users
+  // Get admin and manager user IDs
   const admins = await User.find({
     role: { $in: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'] },
-  }).lean()
+  })
+    .select('_id')
+    .lean()
 
-  // Create notification records (you can extend this to send emails/SMS)
-  const Notification = (await import('@/lib/models/Notification')).default
-  const notifications = admins.map((admin) => ({
-    user: admin._id,
-    type: 'MILEAGE_WARNING',
-    title: 'Vehicle Approaching Maintenance Threshold',
-    message: `Vehicle ${(vehicle as any).plateNumber} (${(vehicle as any).brand} ${(vehicle as any).model}) is approaching maintenance threshold. Current mileage: ${currentMileage} km. ${remainingKm} km remaining until ${MILEAGE_CAP} km.`,
-    data: {
-      vehicleId,
-      vehiclePlate: (vehicle as any).plateNumber,
-      currentMileage,
-      remainingKm,
-      threshold: MILEAGE_WARNING_THRESHOLD,
-    },
-    read: false,
-  }))
+  const adminIds = admins.map((admin) => admin._id.toString())
 
-  try {
-    await Notification.insertMany(notifications)
-  } catch (error) {
-    console.error('Error creating notifications:', error)
+  if (adminIds.length > 0) {
+    // Create notifications with email support
+    const { createNotification } = await import('./notificationService')
+    await createNotification({
+      userId: adminIds,
+      type: 'MILEAGE_WARNING',
+      title: 'Vehicle Approaching Maintenance Threshold',
+      message: `Vehicle ${(vehicle as any).plateNumber} (${(vehicle as any).brand} ${(vehicle as any).model}) is approaching maintenance threshold. Current mileage: ${currentMileage} km. ${remainingKm} km remaining until ${MILEAGE_CAP} km.`,
+      data: {
+        vehicleId,
+        vehiclePlate: (vehicle as any).plateNumber,
+        currentMileage,
+        remainingKm,
+        threshold: MILEAGE_WARNING_THRESHOLD,
+      },
+      sendEmail: true,
+    })
   }
-
-  // TODO: Send email notifications
-  // await sendEmailNotifications(admins, vehicle, currentMileage, remainingKm)
 }
 
 /**
@@ -205,35 +202,32 @@ async function sendMaintenanceRequiredNotification(
   const vehicle = await Vehicle.findById(vehicleId).lean()
   if (!vehicle) return
 
-  // Get admin and manager users
+  // Get admin and manager user IDs
   const admins = await User.find({
     role: { $in: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'] },
-  }).lean()
+  })
+    .select('_id')
+    .lean()
 
-  // Create notification records
-  const Notification = (await import('@/lib/models/Notification')).default
-  const notifications = admins.map((admin) => ({
-    user: admin._id,
-    type: 'MAINTENANCE_REQUIRED',
-    title: 'Maintenance Required - Vehicle Reached 10,000 km',
-    message: `Vehicle ${(vehicle as any).plateNumber} (${(vehicle as any).brand} ${(vehicle as any).model}) has reached ${MILEAGE_CAP} km and requires immediate maintenance. Vehicle status has been set to IN_MAINTENANCE.`,
-    data: {
-      vehicleId,
-      vehiclePlate: (vehicle as any).plateNumber,
-      currentMileage,
-      maintenanceRecordId,
-    },
-    read: false,
-  }))
+  const adminIds = admins.map((admin) => admin._id.toString())
 
-  try {
-    await Notification.insertMany(notifications)
-  } catch (error) {
-    console.error('Error creating notifications:', error)
+  if (adminIds.length > 0) {
+    // Create notifications with email support
+    const { createNotification } = await import('./notificationService')
+    await createNotification({
+      userId: adminIds,
+      type: 'MAINTENANCE_REQUIRED',
+      title: 'Maintenance Required - Vehicle Reached 10,000 km',
+      message: `Vehicle ${(vehicle as any).plateNumber} (${(vehicle as any).brand} ${(vehicle as any).model}) has reached ${MILEAGE_CAP} km and requires immediate maintenance. Vehicle status has been set to IN_MAINTENANCE.`,
+      data: {
+        vehicleId,
+        vehiclePlate: (vehicle as any).plateNumber,
+        currentMileage,
+        maintenanceRecordId,
+      },
+      sendEmail: true,
+    })
   }
-
-  // TODO: Send email notifications
-  // await sendEmailNotifications(admins, vehicle, currentMileage)
 }
 
 /**

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { cacheInvalidation } from '@/lib/utils/cacheInvalidation'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/authOptions'
 import connectDB from '@/lib/db'
@@ -168,6 +169,13 @@ export async function PATCH(
     } else {
       await invoice.save()
     }
+
+    // Invalidate caches
+    cacheInvalidation.invoices.byId(params.id)
+    if (invoice.booking) {
+      cacheInvalidation.bookings.byId(invoice.booking.toString())
+    }
+    cacheInvalidation.dashboard.all()
 
     // Fetch the updated invoice with populated relations
     const updatedInvoice = await Invoice.findById(invoice._id)

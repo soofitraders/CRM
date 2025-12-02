@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/authOptions'
-import connectDB from '@/lib/db'
 import Vehicle from '@/lib/models/Vehicle'
 import { vehicleQuerySchema, createVehicleSchema } from '@/lib/validation/vehicle'
 import { hasRole, getCurrentUser } from '@/lib/auth'
+import { cachedQuery, cacheKeys } from '@/lib/utils/dbCache'
+import { jsonResponse } from '@/lib/utils/apiResponse'
+import { CACHE_DURATIONS, CACHE_TAGS } from '@/lib/utils/apiCache'
+
+// Cache for 3 minutes (vehicle data changes less frequently)
+export const revalidate = 180
 
 // GET - List vehicles with filters
 export async function GET(request: NextRequest) {
@@ -13,8 +18,6 @@ export async function GET(request: NextRequest) {
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-
-    await connectDB()
 
     const searchParams = request.nextUrl.searchParams
     const query = vehicleQuerySchema.parse({
@@ -49,24 +52,40 @@ export async function GET(request: NextRequest) {
       ]
     }
 
-    const skip = (query.page - 1) * query.limit
-    const vehicles = await Vehicle.find(filter)
-      .populate('investor', 'user')
-      .sort({ plateNumber: 1 })
-      .skip(skip)
-      .limit(query.limit)
-      .lean()
+    const cacheKey = cacheKeys.vehicles({ ...query, filter })
 
-    const total = await Vehicle.countDocuments(filter)
+    const result = await cachedQuery(
+      cacheKey,
+      async () => {
+        const skip = (query.page - 1) * query.limit
+        const vehicles = await Vehicle.find(filter)
+          .populate('investor', 'user')
+          .sort({ plateNumber: 1 })
+          .skip(skip)
+          .limit(query.limit)
+          .lean()
 
-    return NextResponse.json({
-      vehicles,
-      pagination: {
-        page: query.page,
-        limit: query.limit,
-        total,
-        pages: Math.ceil(total / query.limit),
+        const total = await Vehicle.countDocuments(filter)
+
+        return {
+          vehicles,
+          pagination: {
+            page: query.page,
+            limit: query.limit,
+            total,
+            pages: Math.ceil(total / query.limit),
+          },
+        }
       },
+      {
+        ttl: 3 * 60 * 1000, // 3 minutes
+        tags: [CACHE_TAGS.VEHICLES],
+      }
+    )
+
+    return jsonResponse(result, 200, {
+      cache: CACHE_DURATIONS.MEDIUM,
+      tags: [CACHE_TAGS.VEHICLES],
     })
   } catch (error: any) {
     console.error('Error fetching vehicles:', error)

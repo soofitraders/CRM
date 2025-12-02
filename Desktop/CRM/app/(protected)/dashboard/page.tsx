@@ -13,48 +13,73 @@ import DashboardErrorBoundary from '@/components/dashboard/DashboardErrorBoundar
 import CustomMetricsSection from '@/components/dashboard/CustomMetricsSection'
 
 export default function DashboardPage() {
-  // Fetch dashboard summary
+  // Fetch dashboard summary with optimized caching
   const { data: summary, isLoading: summaryLoading } = useQuery({
     queryKey: ['dashboard-summary'],
     queryFn: async () => {
-      const response = await fetch('/api/dashboard/summary')
+      const response = await fetch('/api/dashboard/summary', {
+        cache: 'force-cache',
+      })
       if (!response.ok) throw new Error('Failed to fetch summary')
       return response.json()
     },
+    staleTime: 60000, // 1 minute
+    gcTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   })
 
-  // Fetch today's bookings
+  // Fetch today's bookings with optimized caching
   const { data: todayBookings, isLoading: bookingsLoading } = useQuery({
     queryKey: ['today-bookings'],
     queryFn: async () => {
-      const response = await fetch('/api/dashboard/today-bookings')
+      const response = await fetch('/api/dashboard/today-bookings', {
+        cache: 'force-cache',
+      })
       if (!response.ok) throw new Error('Failed to fetch bookings')
       return response.json()
     },
+    staleTime: 60000, // 1 minute
+    gcTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   })
 
-  // Fetch urgent maintenance
+  // Fetch urgent maintenance with optimized caching
   const { data: urgentMaintenance, isLoading: maintenanceLoading } = useQuery({
     queryKey: ['urgent-maintenance'],
     queryFn: async () => {
-      const response = await fetch('/api/dashboard/urgent-maintenance')
+      const response = await fetch('/api/dashboard/urgent-maintenance', {
+        cache: 'force-cache',
+      })
       if (!response.ok) throw new Error('Failed to fetch maintenance')
       return response.json()
     },
+    staleTime: 60000, // 1 minute
+    gcTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   })
 
-  // Fetch calendar events
+  // Fetch calendar events with optimized caching
   const { data: calendarEvents } = useQuery({
     queryKey: ['calendar-events'],
     queryFn: async () => {
       const currentDate = new Date()
       const response = await fetch(
-        `/api/dashboard/calendar-events?year=${currentDate.getFullYear()}&month=${currentDate.getMonth()}`
+        `/api/dashboard/calendar-events?year=${currentDate.getFullYear()}&month=${currentDate.getMonth()}`,
+        {
+          cache: 'force-cache',
+        }
       )
       if (!response.ok) return []
       const result = await response.json()
       return result.events || []
     },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   })
 
   const getStatusVariant = (status: string): 'yellow' | 'green' | 'red' => {

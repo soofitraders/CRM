@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useQuery } from '@tanstack/react-query'
 import SectionCard from '@/components/ui/SectionCard'
 import Table, { TableRow, TableCell } from '@/components/ui/Table'
 import StatusChip from '@/components/ui/StatusChip'
-import { Search, Filter, ChevronLeft, ChevronRight, Edit } from 'lucide-react'
+import { Search, ChevronLeft, ChevronRight, Edit, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import ExportButtonGroup from '@/components/export/ExportButtonGroup'
 
@@ -41,12 +42,9 @@ interface BookingsResponse {
 export default function BookingsList() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [bookings, setBookings] = useState<Booking[]>([])
   const [pagination, setPagination] = useState({
-    page: 1,
+    page: parseInt(searchParams.get('page') || '1'),
     limit: 10,
-    total: 0,
-    pages: 0,
   })
   const [filters, setFilters] = useState({
     status: searchParams.get('status') || '',
@@ -54,66 +52,42 @@ export default function BookingsList() {
     dateTo: searchParams.get('dateTo') || '',
     search: searchParams.get('search') || '',
   })
-  const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    fetchBookings()
-  }, [filters, pagination.page])
+  // Build query params
+  const queryParams = useMemo(() => {
+    const params = new URLSearchParams()
+    if (filters.status) params.append('status', filters.status)
+    if (filters.dateFrom) params.append('dateFrom', filters.dateFrom)
+    if (filters.dateTo) params.append('dateTo', filters.dateTo)
+    if (filters.search) params.append('search', filters.search)
+    params.append('page', pagination.page.toString())
+    params.append('limit', pagination.limit.toString())
+    return params.toString()
+  }, [filters, pagination.page, pagination.limit])
 
-  const fetchBookings = async () => {
-    setIsLoading(true)
-    try {
-      const params = new URLSearchParams()
-      if (filters.status) params.append('status', filters.status)
-      if (filters.dateFrom) params.append('dateFrom', filters.dateFrom)
-      if (filters.dateTo) params.append('dateTo', filters.dateTo)
-      if (filters.search) params.append('search', filters.search)
-      params.append('page', pagination.page.toString())
-      params.append('limit', pagination.limit.toString())
-
-      console.log('[Bookings] Fetching bookings with params:', params.toString())
-      const response = await fetch(`/api/bookings?${params.toString()}`)
-      
-      console.log('[Bookings] Response status:', response.status)
-      
+  // Use React Query for data fetching with caching
+  const { data, isLoading, error } = useQuery<BookingsResponse>({
+    queryKey: ['bookings', queryParams],
+    queryFn: async () => {
+      const response = await fetch(`/api/bookings?${queryParams}`)
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
-        console.error('[Bookings] Error response:', errorData)
-        alert(`Failed to load bookings: ${errorData.error || 'Unknown error'}`)
-        setBookings([])
-        return
+        throw new Error(errorData.error || 'Failed to fetch bookings')
       }
-      
-      const data: BookingsResponse = await response.json()
-      console.log('[Bookings] Bookings loaded:', data.bookings?.length || 0, 'bookings')
-      
-      // Ensure bookings is always an array and clean up any invalid entries
-      let bookingsArray: Booking[] = []
-      if (Array.isArray(data.bookings)) {
-        bookingsArray = data.bookings.filter((booking: any) => {
-          if (!booking || typeof booking !== 'object') return false
-          return booking._id != null
-        })
-      }
-      
-      setBookings(bookingsArray)
-      setPagination(data.pagination || {
-        page: 1,
-        limit: 10,
-        total: 0,
-        pages: 0,
-      })
-    } catch (error: any) {
-      console.error('[Bookings] Error fetching bookings:', error)
-      console.error('[Bookings] Error details:', {
-        message: error.message,
-        stack: error.stack,
-      })
-      alert(`Failed to load bookings: ${error.message || 'Network error'}`)
-      setBookings([])
-    } finally {
-      setIsLoading(false)
-    }
+      return response.json()
+    },
+    staleTime: 30000, // 30 seconds - data is fresh for 30s
+    gcTime: 5 * 60 * 1000, // 5 minutes cache
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+  })
+
+  const bookings = data?.bookings || []
+  const paginationData = data?.pagination || {
+    page: 1,
+    limit: 10,
+    total: 0,
+    pages: 0,
   }
 
   const handleFilterChange = (key: string, value: string) => {
@@ -125,6 +99,13 @@ export default function BookingsList() {
     } else {
       params.delete(key)
     }
+    router.push(`/bookings?${params.toString()}`)
+  }
+
+  const handlePageChange = (newPage: number) => {
+    setPagination((prev) => ({ ...prev, page: newPage }))
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('page', newPage.toString())
     router.push(`/bookings?${params.toString()}`)
   }
 
@@ -146,6 +127,29 @@ export default function BookingsList() {
       month: 'short',
       day: 'numeric',
     })
+  }
+
+  // Show loading state
+  if (isLoading && !data) {
+    return (
+      <SectionCard>
+        <div className="p-8 text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto text-sidebarMuted" />
+          <p className="text-bodyText mt-4">Loading bookings...</p>
+        </div>
+      </SectionCard>
+    )
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <SectionCard>
+        <div className="p-8 text-center">
+          <p className="text-danger">Error loading bookings: {(error as Error).message}</p>
+        </div>
+      </SectionCard>
+    )
   }
 
   return (
@@ -193,9 +197,7 @@ export default function BookingsList() {
         </div>
       }
     >
-      {isLoading ? (
-        <div className="text-center py-8 text-bodyText">Loading...</div>
-      ) : bookings.length === 0 ? (
+      {bookings.length === 0 ? (
         <div className="text-center py-8 text-bodyText">No bookings found</div>
       ) : (
         <>
@@ -211,20 +213,13 @@ export default function BookingsList() {
               'Actions',
             ]}
           >
-            {(Array.isArray(bookings) ? bookings : []).map((booking: any) => {
-              // Safety check for booking ID
-              let bookingIdDisplay = 'N/A'
-              try {
-                if (booking._id) {
-                  const idStr = String(booking._id)
-                  bookingIdDisplay = idStr.length >= 6 ? idStr.slice(-6).toUpperCase() : idStr.toUpperCase()
-                }
-              } catch (error) {
-                console.error('[Bookings] Error processing booking ID:', error)
-              }
-              
+            {bookings.map((booking) => {
+              const bookingIdDisplay = booking._id
+                ? String(booking._id).slice(-6).toUpperCase()
+                : 'N/A'
+
               return (
-                <TableRow key={booking._id || `booking-${Math.random()}`}>
+                <TableRow key={booking._id}>
                   <TableCell className="font-medium text-headingText">
                     #{bookingIdDisplay}
                   </TableCell>
@@ -272,7 +267,8 @@ export default function BookingsList() {
                   </TableCell>
                   <TableCell>
                     <Link
-                      href={`/bookings/${booking._id || ''}`}
+                      href={`/bookings/${booking._id}`}
+                      prefetch={true}
                       className="text-sidebarActiveBg hover:text-sidebarActiveBg/80 font-medium text-sm flex items-center gap-1"
                     >
                       <Edit className="w-4 h-4" />
@@ -285,31 +281,27 @@ export default function BookingsList() {
           </Table>
 
           {/* Pagination */}
-          {pagination.pages > 1 && (
+          {paginationData.pages > 1 && (
             <div className="flex items-center justify-between mt-4 pt-4 border-t border-borderSoft">
               <div className="text-sm text-bodyText">
-                Showing {(pagination.page - 1) * pagination.limit + 1} to{' '}
-                {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
-                {pagination.total} bookings
+                Showing {(paginationData.page - 1) * paginationData.limit + 1} to{' '}
+                {Math.min(paginationData.page * paginationData.limit, paginationData.total)} of{' '}
+                {paginationData.total} bookings
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() =>
-                    setPagination((prev) => ({ ...prev, page: prev.page - 1 }))
-                  }
-                  disabled={pagination.page === 1}
+                  onClick={() => handlePageChange(paginationData.page - 1)}
+                  disabled={paginationData.page === 1}
                   className="p-2 bg-pageBg border border-borderSoft rounded-lg hover:bg-borderSoft transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
                 <span className="text-sm text-bodyText px-2">
-                  Page {pagination.page} of {pagination.pages}
+                  Page {paginationData.page} of {paginationData.pages}
                 </span>
                 <button
-                  onClick={() =>
-                    setPagination((prev) => ({ ...prev, page: prev.page + 1 }))
-                  }
-                  disabled={pagination.page === pagination.pages}
+                  onClick={() => handlePageChange(paginationData.page + 1)}
+                  disabled={paginationData.page === paginationData.pages}
                   className="p-2 bg-pageBg border border-borderSoft rounded-lg hover:bg-borderSoft transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <ChevronRight className="w-4 h-4" />
@@ -322,4 +314,3 @@ export default function BookingsList() {
     </SectionCard>
   )
 }
-

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { getCacheHeaders, getNoCacheHeaders, CACHE_DURATIONS } from './apiCache'
 
 /**
  * Create a JSON response with optional caching headers
@@ -9,6 +10,7 @@ export function jsonResponse(
   options: {
     cache?: 'no-store' | 'no-cache' | 'force-cache' | number // number = max-age in seconds
     revalidate?: number // For ISR
+    tags?: string[] // Cache tags for revalidation
   } = {}
 ): NextResponse {
   const headers: HeadersInit = {
@@ -17,16 +19,21 @@ export function jsonResponse(
 
   // Add cache control headers
   if (options.cache === 'no-store') {
-    headers['Cache-Control'] = 'no-store, must-revalidate'
+    Object.assign(headers, getNoCacheHeaders())
   } else if (options.cache === 'no-cache') {
     headers['Cache-Control'] = 'no-cache, must-revalidate'
   } else if (options.cache === 'force-cache') {
     headers['Cache-Control'] = 'public, max-age=31536000, immutable'
   } else if (typeof options.cache === 'number') {
-    headers['Cache-Control'] = `public, max-age=${options.cache}, must-revalidate`
+    Object.assign(headers, getCacheHeaders(options.cache))
   } else {
-    // Default: short cache for dynamic content
-    headers['Cache-Control'] = 'private, no-cache, no-store, must-revalidate'
+    // Default: short cache for dynamic content (1 minute)
+    Object.assign(headers, getCacheHeaders(CACHE_DURATIONS.SHORT))
+  }
+
+  // Add cache tags if provided
+  if (options.tags && options.tags.length > 0) {
+    headers['Cache-Tags'] = options.tags.join(',')
   }
 
   return NextResponse.json(data, { status, headers })

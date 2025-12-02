@@ -2,12 +2,10 @@ import { Suspense } from 'react'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/authOptions'
 import { redirect } from 'next/navigation'
-import SectionCard from '@/components/ui/SectionCard'
-import Table, { TableRow, TableCell } from '@/components/ui/Table'
-import StatusChip from '@/components/ui/StatusChip'
-import { Plus, Search, Filter } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import Link from 'next/link'
 import BookingsList from '@/components/bookings/BookingsList'
+import PageLoader from '@/components/ui/PageLoader'
 
 export default async function BookingsPage() {
   const session = await getServerSession(authOptions)
@@ -33,7 +31,7 @@ export default async function BookingsPage() {
       </div>
 
       {/* Bookings List */}
-      <Suspense fallback={<div className="text-bodyText">Loading...</div>}>
+      <Suspense fallback={<PageLoader />}>
         <BookingsList />
       </Suspense>
     </div>

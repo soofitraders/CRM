@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
+import { safeFormatDate } from '@/lib/utils/safeDate'
 import SectionCard from '@/components/ui/SectionCard'
 import Table, { TableRow, TableCell } from '@/components/ui/Table'
 import ExportButtonGroup from '@/components/export/ExportButtonGroup'
@@ -181,7 +182,7 @@ export default function ExpensesPage() {
       description: expense.description,
       amount: expense.amount.toString(),
       currency: expense.currency,
-      dateIncurred: format(new Date(expense.dateIncurred), 'yyyy-MM-dd'),
+      dateIncurred: safeFormatDate(expense.dateIncurred, 'yyyy-MM-dd', format(new Date(), 'yyyy-MM-dd')),
       branchId: expense.branchId || '',
       investor: (expense as any).investor?._id || '',
     })
@@ -317,7 +318,7 @@ export default function ExpensesPage() {
 
               return (
                 <TableRow key={expense._id}>
-                  <TableCell>{format(new Date(expense.dateIncurred), 'MMM dd, yyyy')}</TableCell>
+                  <TableCell>{safeFormatDate(expense.dateIncurred, 'MMM dd, yyyy')}</TableCell>
                   <TableCell>
                     {expense.category.name} <span className="text-sidebarMuted">({expense.category.type})</span>
                   </TableCell>
@@ -349,7 +350,7 @@ export default function ExpensesPage() {
                         href={`/financials/management/investor-payouts/${expense.investorPayout._id}`}
                         className="inline-flex items-center gap-1 px-2 py-1 bg-purple-50 text-purple-700 rounded text-xs hover:bg-purple-100"
                       >
-                        Payout • {format(new Date(expense.investorPayout.periodFrom), 'MMM yyyy')}
+                        Payout • {safeFormatDate(expense.investorPayout.periodFrom, 'MMM yyyy')}
                       </a>
                     ) : (
                       <span className="text-sidebarMuted">—</span>

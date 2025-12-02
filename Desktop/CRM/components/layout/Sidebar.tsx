@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
+import { prefetchRouteData } from '@/lib/utils/routePrefetch'
 import {
   LayoutDashboard,
   Calendar,
@@ -13,8 +14,6 @@ import {
   UserCog,
   Shield,
   Settings,
-  HelpCircle,
-  LogOut,
   BarChart3,
   Receipt,
   Wallet,
@@ -30,7 +29,6 @@ import {
   CreditCard,
   TrendingDown,
   User,
-  Bell,
   Home,
   ClipboardList,
 } from 'lucide-react'
@@ -182,17 +180,17 @@ export default function Sidebar() {
   const filteredSections = menuSections.filter(isSectionVisible)
 
   return (
-    <aside className="w-64 bg-sidebarBg min-h-screen flex flex-col fixed left-0 top-0 z-50 shadow-lg">
-      {/* Logo */}
-      <div className="p-6 border-b border-sidebarMuted/20">
+    <aside className="w-64 bg-sidebarBg h-screen flex flex-col fixed left-0 top-0 z-50 shadow-lg overflow-hidden">
+      {/* Logo - Fixed Header */}
+      <div className="p-6 border-b border-sidebarMuted/20 flex-shrink-0">
         <h1 className="text-sidebarText text-xl font-bold leading-tight tracking-tight">
           MISTERWHEELS
         </h1>
         <p className="text-sidebarMuted text-xs mt-1.5 font-medium">RENT A CAR LLC</p>
       </div>
 
-      {/* Navigation Menu */}
-      <nav className="flex-1 py-4 overflow-y-auto custom-scrollbar">
+      {/* Navigation Menu - Scrollable Middle Section */}
+      <nav className="flex-1 min-h-0 py-4 overflow-y-auto overflow-x-hidden custom-scrollbar">
         <div className="px-3 space-y-1">
           {filteredSections.map((section) => {
             const SectionIcon = section.icon
@@ -237,11 +235,18 @@ export default function Sidebar() {
                         <Link
                           key={item.path}
                           href={item.path}
+                          prefetch={true}
                           className={`flex items-center px-3 py-2 text-sm font-medium transition-all duration-200 rounded-lg group ${
                             active
                               ? 'bg-sidebarActiveBg text-white shadow-md'
                               : 'text-sidebarMuted hover:bg-sidebarMuted/10 hover:text-sidebarText'
                           }`}
+                          onMouseEnter={() => {
+                            // Prefetch route and API data on hover
+                            if (typeof window !== 'undefined') {
+                              prefetchRouteData(item.path)
+                            }
+                          }}
                         >
                           <ItemIcon className={`w-4 h-4 mr-2 flex-shrink-0 ${
                             active ? 'text-white' : 'text-sidebarMuted group-hover:text-sidebarText'
@@ -257,31 +262,6 @@ export default function Sidebar() {
           })}
         </div>
       </nav>
-
-      {/* Fixed Bottom Section */}
-      <div className="p-4 border-t border-sidebarMuted/20 space-y-1">
-        <Link
-          href="/notifications"
-          className="flex items-center px-4 py-2.5 text-sm font-medium text-sidebarMuted hover:bg-sidebarMuted/10 hover:text-sidebarText transition-all duration-200 rounded-lg group"
-        >
-          <Bell className="w-5 h-5 mr-3 flex-shrink-0 text-sidebarMuted group-hover:text-sidebarText" />
-          <span>Notifications</span>
-        </Link>
-        <Link
-          href="/support"
-          className="flex items-center px-4 py-2.5 text-sm font-medium text-sidebarMuted hover:bg-sidebarMuted/10 hover:text-sidebarText transition-all duration-200 rounded-lg group"
-        >
-          <HelpCircle className="w-5 h-5 mr-3 flex-shrink-0 text-sidebarMuted group-hover:text-sidebarText" />
-          <span>Support</span>
-        </Link>
-        <Link
-          href="/login"
-          className="flex items-center px-4 py-2.5 text-sm font-medium text-sidebarMuted hover:bg-sidebarMuted/10 hover:text-sidebarText transition-all duration-200 rounded-lg group"
-        >
-          <LogOut className="w-5 h-5 mr-3 flex-shrink-0 text-sidebarMuted group-hover:text-sidebarText" />
-          <span>Logout</span>
-        </Link>
-      </div>
     </aside>
   )
 }

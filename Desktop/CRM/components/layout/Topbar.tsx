@@ -1,13 +1,10 @@
 'use client'
 
-import { Bell, Search, User } from 'lucide-react'
-import { useSession } from 'next-auth/react'
+import { Search } from 'lucide-react'
+import NotificationDropdown from '@/components/notifications/NotificationDropdown'
+import UserProfileDropdown from './UserProfileDropdown'
 
 export default function Topbar() {
-  const { data: session } = useSession()
-  const userName = session?.user?.name || 'Admin User'
-  const userEmail = session?.user?.email || 'admin@misterwheels.com'
-
   return (
     <header className="h-20 bg-cardBg border-b border-borderSoft flex items-center justify-between px-8 sticky top-0 z-40 shadow-sm backdrop-blur-sm bg-cardBg/95">
       {/* Search Bar */}
@@ -24,22 +21,11 @@ export default function Topbar() {
 
       {/* Right Side Actions */}
       <div className="flex items-center gap-5">
-        {/* Notifications */}
-        <button className="relative p-2.5 text-bodyText hover:bg-pageBg rounded-xl transition-all hover:scale-105">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-2 right-2 w-2 h-2 bg-danger rounded-full ring-2 ring-cardBg"></span>
-        </button>
+        {/* Notifications Dropdown */}
+        <NotificationDropdown />
 
-        {/* User Profile */}
-        <div className="flex items-center gap-3 pl-5 border-l border-borderSoft">
-          <div className="w-10 h-10 bg-sidebarActiveBg rounded-full flex items-center justify-center shadow-sm">
-            <User className="w-5 h-5 text-white" />
-          </div>
-          <div className="hidden md:block">
-            <p className="text-sm font-semibold text-headingText">{userName}</p>
-            <p className="text-xs text-bodyText">{userEmail}</p>
-          </div>
-        </div>
+        {/* User Profile Dropdown */}
+        <UserProfileDropdown />
       </div>
     </header>
   )

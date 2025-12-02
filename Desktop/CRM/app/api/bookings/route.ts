@@ -9,6 +9,11 @@ import { createBookingSchema, bookingQuerySchema } from '@/lib/validation/bookin
 import { hasRole } from '@/lib/auth'
 import { UserRole } from '@/lib/models/User'
 import { jsonResponse } from '@/lib/utils/apiResponse'
+import { cachedQuery, cacheKeys, invalidateCache } from '@/lib/utils/dbCache'
+import { CACHE_DURATIONS, CACHE_TAGS } from '@/lib/utils/apiCache'
+
+// Cache for 1 minute (booking data changes frequently)
+export const revalidate = 60
 
 // GET - List bookings with filters
 export async function GET(request: NextRequest) {
@@ -113,18 +118,34 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const total = await Booking.countDocuments(filter)
-    console.log('[API] Bookings: Total count:', total)
+    const cacheKey = cacheKeys.bookings({ ...query, filter })
 
-    return jsonResponse({
-      bookings,
-      pagination: {
-        page: query.page,
-        limit: query.limit,
-        total,
-        pages: Math.ceil(total / query.limit),
+    const result = await cachedQuery(
+      cacheKey,
+      async () => {
+        const total = await Booking.countDocuments(filter)
+        console.log('[API] Bookings: Total count:', total)
+
+        return {
+          bookings,
+          pagination: {
+            page: query.page,
+            limit: query.limit,
+            total,
+            pages: Math.ceil(total / query.limit),
+          },
+        }
       },
-    }, 200, { cache: 'no-cache' }) // Dynamic data, no cache
+      {
+        ttl: 1 * 60 * 1000, // 1 minute (bookings change frequently)
+        tags: [CACHE_TAGS.BOOKINGS],
+      }
+    )
+
+    return jsonResponse(result, 200, {
+      cache: CACHE_DURATIONS.SHORT,
+      tags: [CACHE_TAGS.BOOKINGS],
+    })
   } catch (error: any) {
     console.error('Error fetching bookings:', error)
     return NextResponse.json(
@@ -183,6 +204,9 @@ export async function POST(request: NextRequest) {
     })
 
     await booking.save()
+
+    // Invalidate bookings cache
+    invalidateCache('^bookings:')
 
     // Log activity
     try {
