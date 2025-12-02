@@ -13,7 +13,7 @@ const hostname = '0.0.0.0'
 console.log(`Starting server on ${hostname}:${port}`)
 
 const app = next({
-  dev: false,
+  dev: process.env.NODE_ENV !== 'production',
   hostname,
   port,
 })
