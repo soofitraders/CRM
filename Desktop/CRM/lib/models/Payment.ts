@@ -4,7 +4,7 @@ export type PaymentMethod = 'CASH' | 'CARD' | 'BANK_TRANSFER' | 'ONLINE'
 export type PaymentStatus = 'PENDING' | 'SUCCESS' | 'FAILED' | 'REFUNDED'
 
 export interface IPayment extends Document {
-  booking: mongoose.Types.ObjectId
+  booking?: mongoose.Types.ObjectId // Made optional to support investor payouts
   amount: number
   method: PaymentMethod
   status: PaymentStatus
@@ -20,7 +20,7 @@ const PaymentSchema = new Schema<IPayment>(
     booking: {
       type: Schema.Types.ObjectId,
       ref: 'Booking',
-      required: [true, 'Booking is required'],
+      required: false, // Made optional to support investor payouts
     },
     amount: {
       type: Number,

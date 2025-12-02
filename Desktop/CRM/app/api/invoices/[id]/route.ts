@@ -133,6 +133,7 @@ export async function PATCH(
     }
 
     // Update status if provided
+    const oldStatus = invoice.status
     if (data.status !== undefined) {
       // Only allow updating to PAID or VOID
       if (data.status !== 'PAID' && data.status !== 'VOID') {
@@ -188,6 +189,50 @@ export async function PATCH(
         ],
       })
       .lean()
+
+    // Log activity and audit for status changes
+    try {
+      const { logActivity } = await import('@/lib/services/activityLogService')
+      const { logAudit } = await import('@/lib/services/auditLogService')
+
+      if (oldStatus !== invoice.status) {
+        await logActivity({
+          activityType: invoice.status === 'PAID' ? 'INVOICE_PAID' : 'INVOICE_UPDATED',
+          module: 'INVOICES',
+          action: 'UPDATE',
+          description: `Invoice ${invoice.invoiceNumber} status changed from ${oldStatus} to ${invoice.status}`,
+          entityType: 'Invoice',
+          entityId: invoice._id.toString(),
+          changes: [
+            { field: 'status', oldValue: oldStatus, newValue: invoice.status },
+          ],
+          userId: user._id.toString(),
+        })
+
+        // Log audit for financial transactions
+        if (invoice.status === 'PAID') {
+          await logAudit({
+            auditType: 'INVOICE_PAID',
+            severity: 'HIGH',
+            title: 'Invoice Paid',
+            description: `Invoice ${invoice.invoiceNumber} was marked as paid`,
+            entityType: 'Invoice',
+            entityId: invoice._id.toString(),
+            financialAmount: invoice.total,
+            currency: 'AED',
+            beforeState: { status: oldStatus },
+            afterState: { status: invoice.status },
+            metadata: {
+              invoiceNumber: invoice.invoiceNumber,
+            },
+            userId: user._id.toString(),
+          })
+        }
+      }
+    } catch (logError) {
+      console.error('Error logging invoice activity:', logError)
+      // Don't fail invoice update if logging fails
+    }
 
     return NextResponse.json({ invoice: updatedInvoice })
   } catch (error: any) {

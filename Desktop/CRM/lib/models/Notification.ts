@@ -1,14 +1,23 @@
 import mongoose, { Schema, Document, Model } from 'mongoose'
 
-export type NotificationType = 'SYSTEM' | 'BOOKING' | 'PAYMENT' | 'MAINTENANCE' | 'COMPLIANCE'
+export type NotificationType =
+  | 'MILEAGE_WARNING'
+  | 'MAINTENANCE_REQUIRED'
+  | 'BOOKING_REMINDER'
+  | 'PAYMENT_DUE'
+  | 'SYSTEM_ALERT'
+  | 'GENERAL'
 
 export interface INotification extends Document {
   user: mongoose.Types.ObjectId
+  type: NotificationType
   title: string
   message: string
-  type: NotificationType
+  data?: any
   read: boolean
+  readAt?: Date
   createdAt: Date
+  updatedAt: Date
 }
 
 const NotificationSchema = new Schema<INotification>(
@@ -17,6 +26,18 @@ const NotificationSchema = new Schema<INotification>(
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: [true, 'User is required'],
+    },
+    type: {
+      type: String,
+      enum: [
+        'MILEAGE_WARNING',
+        'MAINTENANCE_REQUIRED',
+        'BOOKING_REMINDER',
+        'PAYMENT_DUE',
+        'SYSTEM_ALERT',
+        'GENERAL',
+      ],
+      required: [true, 'Notification type is required'],
     },
     title: {
       type: String,
@@ -28,16 +49,15 @@ const NotificationSchema = new Schema<INotification>(
       required: [true, 'Message is required'],
       trim: true,
     },
-    type: {
-      type: String,
-      enum: ['SYSTEM', 'BOOKING', 'PAYMENT', 'MAINTENANCE', 'COMPLIANCE'],
-      required: [true, 'Notification type is required'],
-      default: 'SYSTEM',
+    data: {
+      type: Schema.Types.Mixed,
     },
     read: {
       type: Boolean,
-      required: true,
       default: false,
+    },
+    readAt: {
+      type: Date,
     },
   },
   {
@@ -49,9 +69,10 @@ const NotificationSchema = new Schema<INotification>(
 NotificationSchema.index({ user: 1, read: 1 })
 NotificationSchema.index({ user: 1, createdAt: -1 })
 NotificationSchema.index({ type: 1 })
-NotificationSchema.index({ createdAt: -1 })
+NotificationSchema.index({ read: 1 })
 
-const Notification: Model<INotification> = mongoose.models.Notification || mongoose.model<INotification>('Notification', NotificationSchema)
+const Notification: Model<INotification> =
+  mongoose.models.Notification ||
+  mongoose.model<INotification>('Notification', NotificationSchema)
 
 export default Notification
-

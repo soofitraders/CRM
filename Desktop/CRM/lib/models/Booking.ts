@@ -22,6 +22,7 @@ export interface IBooking extends Document {
   depositAmount: number
   depositStatus: DepositStatus
   paymentStatus: PaymentStatus
+  mileageAtBooking?: number
   notes?: string
   createdAt: Date
   updatedAt: Date
@@ -115,6 +116,10 @@ const BookingSchema = new Schema<IBooking>(
       enum: ['UNPAID', 'PARTIALLY_PAID', 'PAID'],
       required: true,
       default: 'UNPAID',
+    },
+    mileageAtBooking: {
+      type: Number,
+      min: [0, 'Mileage cannot be negative'],
     },
     notes: {
       type: String,

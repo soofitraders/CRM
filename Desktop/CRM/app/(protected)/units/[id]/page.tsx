@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import VehicleForm from '@/components/units/VehicleForm'
 import SectionCard from '@/components/ui/SectionCard'
 import StatusChip from '@/components/ui/StatusChip'
+import MileageTracker from '@/components/vehicles/MileageTracker'
 import { CreateVehicleInput, UpdateVehicleInput } from '@/lib/validation/vehicle'
 
 interface Vehicle {
@@ -154,6 +155,15 @@ export default function EditVehiclePage() {
           </div>
         </div>
       </SectionCard>
+
+      {/* Mileage Tracker */}
+      <MileageTracker
+        vehicleId={vehicleId}
+        currentMileage={vehicle.mileage}
+        onMileageUpdate={(newMileage) => {
+          setVehicle({ ...vehicle, mileage: newMileage })
+        }}
+      />
 
       {/* Vehicle Details Form */}
       {canEdit ? (

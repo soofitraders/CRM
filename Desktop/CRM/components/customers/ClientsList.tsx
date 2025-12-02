@@ -7,6 +7,7 @@ import Table, { TableRow, TableCell } from '@/components/ui/Table'
 import { Search, Edit } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
+import ExportButtonGroup from '@/components/export/ExportButtonGroup'
 
 interface Customer {
   _id: string
@@ -107,6 +108,7 @@ export default function ClientsList() {
               className="pl-9 pr-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50 w-64"
             />
           </div>
+          <ExportButtonGroup module="CLIENTS" filters={{ search, activeOnly: false }} />
         </div>
       }
     >

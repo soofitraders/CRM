@@ -10,21 +10,21 @@ export default function Table({ headers, children }: TableProps) {
   const safeHeaders = Array.isArray(headers) ? headers : []
   
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto rounded-lg border border-borderSoft">
       <table className="w-full">
-        <thead>
-          <tr className="border-b border-borderSoft">
+        <thead className="bg-pageBg">
+          <tr>
             {safeHeaders.map((header, index) => (
               <th
                 key={index}
-                className="text-left py-3 px-4 text-sm font-semibold text-headingText"
+                className="text-left py-4 px-6 text-xs font-semibold text-headingText uppercase tracking-wider"
               >
                 {header || ''}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody>{children}</tbody>
+        <tbody className="bg-cardBg divide-y divide-borderSoft">{children}</tbody>
       </table>
     </div>
   )
@@ -38,7 +38,7 @@ interface TableRowProps {
 export function TableRow({ children, onClick }: TableRowProps) {
   return (
     <tr
-      className={`border-b border-borderSoft hover:bg-pageBg transition-colors ${
+      className={`hover:bg-pageBg/50 transition-colors ${
         onClick ? 'cursor-pointer' : ''
       }`}
       onClick={onClick}
@@ -55,7 +55,7 @@ interface TableCellProps {
 
 export function TableCell({ children, className = '' }: TableCellProps) {
   return (
-    <td className={`py-3 px-4 text-sm text-bodyText ${className}`}>
+    <td className={`py-4 px-6 text-sm text-bodyText ${className}`}>
       {children}
     </td>
   )

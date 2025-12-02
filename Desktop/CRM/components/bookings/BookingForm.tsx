@@ -18,6 +18,7 @@ interface Vehicle {
   plateNumber: string
   brand: string
   model: string
+  mileage?: number
 }
 
 interface Customer {
@@ -37,6 +38,8 @@ export default function BookingForm({
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [calculatedTotal, setCalculatedTotal] = useState(0)
+  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null)
+  const [currentMileage, setCurrentMileage] = useState<number | null>(null)
 
   const {
     register,
@@ -57,6 +60,7 @@ export default function BookingForm({
   const baseRate = watch('baseRate') || 0
   const discounts = watch('discounts') || 0
   const taxPercent = watch('taxPercent') || 0
+  const selectedVehicleId = watch('vehicle')
 
   // Calculate total whenever rates change
   useEffect(() => {
@@ -66,12 +70,37 @@ export default function BookingForm({
     setCalculatedTotal(total)
   }, [baseRate, discounts, taxPercent])
 
+  // Fetch vehicle details when vehicle is selected
+  useEffect(() => {
+    if (selectedVehicleId) {
+      const vehicle = vehicles.find((v) => v._id === selectedVehicleId)
+      if (vehicle) {
+        setSelectedVehicle(vehicle)
+        setCurrentMileage(vehicle.mileage || null)
+      } else {
+        // Fetch vehicle details if not in list
+        fetch(`/api/vehicles/${selectedVehicleId}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.vehicle) {
+              setSelectedVehicle(data.vehicle)
+              setCurrentMileage(data.vehicle.mileage || null)
+            }
+          })
+          .catch((err) => console.error('Error fetching vehicle:', err))
+      }
+    } else {
+      setSelectedVehicle(null)
+      setCurrentMileage(null)
+    }
+  }, [selectedVehicleId, vehicles])
+
   // Fetch vehicles and customers
   useEffect(() => {
     async function fetchData() {
       try {
         // Fetch available vehicles
-        const vehiclesRes = await fetch('/api/vehicles?status=AVAILABLE')
+        const vehiclesRes = await fetch('/api/vehicles?status=AVAILABLE&limit=1000')
         if (vehiclesRes.ok) {
           const vehiclesData = await vehiclesRes.json()
           setVehicles(vehiclesData.vehicles || [])
@@ -91,7 +120,13 @@ export default function BookingForm({
   }, [])
 
   const onFormSubmit = async (data: CreateBookingInput) => {
-    await onSubmit(data)
+    // Include mileage in the submission
+    const formData = { ...data } as any
+    const mileageInput = document.querySelector<HTMLInputElement>('input[type="number"][min]')
+    if (mileageInput && mileageInput.value) {
+      formData.mileageAtBooking = parseInt(mileageInput.value)
+    }
+    await onSubmit(formData)
   }
 
   return (
@@ -117,6 +152,36 @@ export default function BookingForm({
             <p className="text-danger text-xs mt-1">{errors.vehicle.message}</p>
           )}
         </div>
+
+        {/* Mileage at Booking */}
+        {selectedVehicle && (
+          <div>
+            <label className="block text-sm font-medium text-headingText mb-2">
+              Current Mileage (km)
+            </label>
+            <div className="space-y-2">
+              <div className="text-xs text-sidebarMuted">
+                Current: {currentMileage !== null ? `${currentMileage.toLocaleString()} km` : 'N/A'}
+              </div>
+              <input
+                type="number"
+                step="1"
+                min={currentMileage || 0}
+                placeholder={currentMileage?.toString() || 'Enter mileage'}
+                onChange={(e) => {
+                  const value = e.target.value ? parseInt(e.target.value) : null
+                  if (value !== null) {
+                    setValue('mileageAtBooking' as any, value)
+                  }
+                }}
+                className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+              />
+              <p className="text-xs text-sidebarMuted">
+                Update vehicle mileage when creating this booking
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Customer */}
         <div>

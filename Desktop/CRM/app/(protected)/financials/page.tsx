@@ -7,6 +7,7 @@ import Table, { TableRow, TableCell } from '@/components/ui/Table'
 import StatusChip from '@/components/ui/StatusChip'
 import { Search, Filter, Eye, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import Link from 'next/link'
+import ExportButtonGroup from '@/components/export/ExportButtonGroup'
 
 interface Invoice {
   _id: string
@@ -421,6 +422,7 @@ export default function FinancialsPage() {
                   placeholder="To"
                   className="px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
                 />
+                <ExportButtonGroup module="INVOICES" filters={invoiceFilters} />
               </div>
             }
           >

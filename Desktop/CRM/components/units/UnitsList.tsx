@@ -9,6 +9,7 @@ import { Search, Edit, AlertTriangle } from 'lucide-react'
 import Link from 'next/link'
 import { isExpiringSoon, daysLeft, formatDaysLeft } from '@/lib/utils/compliance'
 import { format } from 'date-fns'
+import ExportButtonGroup from '@/components/export/ExportButtonGroup'
 
 interface Vehicle {
   _id: string
@@ -144,6 +145,7 @@ export default function UnitsList() {
             <option value="COMPANY">Company</option>
             <option value="INVESTOR">Investor</option>
           </select>
+          <ExportButtonGroup module="VEHICLES" filters={filters} />
         </div>
       }
     >

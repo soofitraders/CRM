@@ -17,6 +17,8 @@ export interface IUser extends Document {
   email: string
   passwordHash: string
   role: UserRole
+  customRole?: mongoose.Types.ObjectId // Reference to custom Role
+  branchId?: string // For branch-restricted access
   status: UserStatus
   emailNotifications?: boolean
   smsNotifications?: boolean
@@ -55,6 +57,14 @@ const UserSchema = new Schema<IUser>(
       ],
       required: [true, 'Role is required'],
       default: 'CUSTOMER',
+    },
+    customRole: {
+      type: Schema.Types.ObjectId,
+      ref: 'Role',
+    },
+    branchId: {
+      type: String,
+      trim: true,
     },
     status: {
       type: String,

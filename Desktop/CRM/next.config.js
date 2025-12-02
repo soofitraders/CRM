@@ -14,6 +14,22 @@ const nextConfig = {
   // Optimize production builds
   swcMinify: true,
   
+  // Webpack configuration for server-side PDF generation
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      // Fix for PDFKit on server-side
+      config.resolve.alias = config.resolve.alias || {}
+      config.resolve.alias.canvas = false
+      config.resolve.alias.encoding = false
+      
+      // Prevent bundling of native modules
+      config.externals = config.externals || []
+      config.externals.push('canvas', 'bufferutil', 'utf-8-validate')
+    }
+    
+    return config
+  },
+  
   // Experimental features for better performance
   // Temporarily disabled optimizeCss as it may cause static file serving issues
   // experimental: {

@@ -1,10 +1,7 @@
-// Don't import PDFKit at module level to avoid initialization issues
-// We'll import it dynamically when needed
 import connectDB from '@/lib/db'
 import Invoice from '@/lib/models/Invoice'
-
-// Note: PDFKit polyfill is loaded dynamically before PDFKit import
-// This prevents font file access errors in Next.js serverless environment
+import InvestorPayout from '@/lib/models/InvestorPayout'
+import { format } from 'date-fns'
 
 interface InvoiceData {
   invoice: {
@@ -37,7 +34,7 @@ interface InvoiceData {
 }
 
 /**
- * Generate PDF buffer for an invoice
+ * Generate PDF buffer for an invoice using jsPDF
  */
 export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
   try {
@@ -84,279 +81,478 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
     throw new Error('Invoice not found')
   }
 
-  return new Promise(async (resolve, reject) => {
-    try {
-      console.log('[PDF] Starting PDF generation for invoice:', invoiceId)
-      
-      // CRITICAL: Load polyfill FIRST and ensure it's executed
-      // This must happen before PDFKit is imported
-      try {
-        console.log('[PDF] Loading polyfill...')
-        // Force the polyfill module to execute by importing it
-        const polyfillModule = await import('@/lib/utils/pdfkit-polyfill')
-        // Give it a moment to set up
-        await new Promise(resolve => setTimeout(resolve, 100))
-        console.log('[PDF] Polyfill loaded and initialized')
-      } catch (polyfillError: any) {
-        console.error('[PDF] CRITICAL: Could not load polyfill:', polyfillError)
-        console.error('[PDF] Polyfill error stack:', polyfillError.stack)
-        // Don't continue if polyfill fails - it's critical for PDFKit to work
-        reject(new Error('Failed to initialize PDF polyfill: ' + polyfillError.message))
-        return
-      }
-      
-      // Dynamically import PDFKit only when generating PDF
-      // This prevents it from loading during page initialization
-      let PDFDocument
-      try {
-        console.log('[PDF] Importing PDFKit (polyfill should be active)...')
-        // Import PDFKit in a way that allows polyfill to intercept
-        const pdfkitModule = await import('pdfkit')
-        PDFDocument = pdfkitModule.default
-        console.log('[PDF] PDFKit imported successfully')
-      } catch (importError: any) {
-        console.error('[PDF] Error importing PDFKit:', importError)
-        console.error('[PDF] Import error name:', importError.name)
-        console.error('[PDF] Import error message:', importError.message)
-        console.error('[PDF] Import error code:', importError.code)
-        console.error('[PDF] Import error stack:', importError.stack)
-        reject(new Error('Failed to load PDF library: ' + importError.message))
-        return
-      }
-      
-      // Create PDF document with error handling
-      let doc
-      try {
-        doc = new PDFDocument({ margin: 50, size: 'A4' })
-      } catch (docError: any) {
-        console.error('Error creating PDF document:', docError)
-        // If it's a font-related error, try to continue anyway
-        if (docError.message && docError.message.includes('font')) {
-          console.warn('Font error detected, attempting to continue with default fonts')
-          doc = new PDFDocument({ margin: 50, size: 'A4' })
-        } else {
-          reject(new Error('Failed to create PDF document: ' + docError.message))
-          return
-        }
-      }
-      
-      const buffers: Buffer[] = []
+  try {
+    console.log('[PDF] Starting PDF generation for invoice:', invoiceId)
+    console.log('[PDF] Loading jsPDF...')
 
-      doc.on('data', (chunk: Buffer) => {
-        buffers.push(chunk)
-      })
-      
-      doc.on('end', () => {
-        try {
-          const pdfBuffer = Buffer.concat(buffers)
-          if (pdfBuffer.length === 0) {
-            reject(new Error('Generated PDF is empty'))
-            return
-          }
-          console.log(`PDF generated successfully: ${pdfBuffer.length} bytes`)
-          resolve(pdfBuffer)
-        } catch (error: any) {
-          console.error('Error concatenating PDF buffers:', error)
-          reject(new Error('Failed to finalize PDF: ' + error.message))
-        }
-      })
-      
-      doc.on('error', (error: Error) => {
-        console.error('PDF document error:', error)
-        reject(new Error('PDF generation error: ' + error.message))
-      })
+    // Dynamic imports
+    const { jsPDF } = await import('jspdf')
+    // Import autoTable - in v5 it can be used as a function or extends prototype
+    const autoTableModule = await import('jspdf-autotable')
+    const autoTable = (autoTableModule as any).default || autoTableModule
 
-      // Helper function to format currency
-      const formatCurrency = (amount: number): string => {
-        return `AED ${amount.toLocaleString('en-US', {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}`
-      }
+    console.log('[PDF] jsPDF loaded successfully')
 
-      // Helper function to format date
-      const formatDate = (date: string | Date): string => {
-        const d = new Date(date)
-        return d.toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-        })
-      }
+    // Create PDF document in portrait A4
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
+    })
 
-      // Header
-      // Use standard fonts that don't require external files
-      doc
-        .fontSize(24)
-        .font('Helvetica-Bold')
-        .text('INVOICE', 50, 50)
-        .fontSize(10)
-        .font('Helvetica')
-        .text('MisterWheels CRM', 50, 80)
-        .text('Car Rental Services', 50, 95)
+    // Try to get autoTable function
+    let autoTableFn: any = null
 
-      // Invoice details (right side)
-      const invoiceData = invoice as any
-      const invoiceNumber = invoiceData.invoiceNumber || 'N/A'
-      const issueDate = formatDate(invoiceData.issueDate)
-      const dueDate = formatDate(invoiceData.dueDate)
-      const status = invoiceData.status || 'ISSUED'
-
-      doc
-        .fontSize(10)
-        .font('Helvetica')
-        .text(`Invoice #: ${invoiceNumber}`, 400, 50, { align: 'right' })
-        .text(`Issue Date: ${issueDate}`, 400, 65, { align: 'right' })
-        .text(`Due Date: ${dueDate}`, 400, 80, { align: 'right' })
-        .text(`Status: ${status}`, 400, 95, { align: 'right' })
-
-      // Customer Information
-      const booking = invoiceData.booking
-      const customer = booking?.customer?.user
-      const vehicle = booking?.vehicle
-
-      let yPos = 140
-
-      doc
-        .fontSize(12)
-        .font('Helvetica-Bold')
-        .text('Bill To:', 50, yPos)
-        .fontSize(10)
-        .font('Helvetica')
-        .text(customer?.name || 'N/A', 50, yPos + 20)
-        .text(customer?.email || '', 50, yPos + 35)
-        if (customer?.phone) {
-          doc.text(customer.phone, 50, yPos + 50)
-        }
-
-      // Vehicle Information
-      if (vehicle) {
-        doc
-          .fontSize(12)
-          .font('Helvetica-Bold')
-          .text('Vehicle:', 300, yPos)
-          .fontSize(10)
-          .font('Helvetica')
-          .text(
-            `${vehicle.plateNumber} - ${vehicle.brand} ${vehicle.model}${vehicle.year ? ` (${vehicle.year})` : ''}`,
-            300,
-            yPos + 20
-          )
-      }
-
-      // Line items table
-      yPos = 250
-      const items = invoiceData.items || []
-      const tableTop = yPos
-      const itemHeight = 25
-
-      // Table header
-      doc
-        .fontSize(10)
-        .font('Helvetica-Bold')
-        .text('Description', 50, tableTop)
-        .text('Amount', 450, tableTop, { align: 'right' })
-
-      // Draw line under header
-      doc
-        .moveTo(50, tableTop + 15)
-        .lineTo(550, tableTop + 15)
-        .stroke()
-
-      // Table rows
-      let currentY = tableTop + 25
-      items.forEach((item: { label: string; amount: number }) => {
-        const isNegative = item.amount < 0
-        const isDeposit = item.label.toLowerCase().includes('deposit')
-
-        doc
-          .fontSize(9)
-          .font('Helvetica')
-          .text(item.label, 50, currentY, { width: 380 })
-          .font(isNegative ? 'Helvetica-Bold' : 'Helvetica')
-          .fillColor(isNegative ? '#059669' : '#000000')
-          .text(
-            isNegative
-              ? `(${formatCurrency(Math.abs(item.amount))})`
-              : formatCurrency(item.amount),
-            450,
-            currentY,
-            { align: 'right', width: 100 }
-          )
-          .fillColor('#000000')
-
-        if (isDeposit) {
-          doc
-            .fontSize(7)
-            .font('Helvetica')
-            .fillColor('#059669')
-            .text('(Payment Received)', 50, currentY + 12)
-            .fillColor('#000000')
-        }
-
-        currentY += itemHeight
-      })
-
-      // Totals section
-      const totalsY = currentY + 20
-      const subtotal = invoiceData.subtotal || 0
-      const taxAmount = invoiceData.taxAmount || 0
-      const total = invoiceData.total || 0
-
-      // Draw line before totals
-      doc
-        .moveTo(400, totalsY - 10)
-        .lineTo(550, totalsY - 10)
-        .stroke()
-
-      doc
-        .fontSize(10)
-        .font('Helvetica')
-        .text('Subtotal:', 400, totalsY, { align: 'right' })
-        .text(formatCurrency(subtotal), 450, totalsY, { align: 'right', width: 100 })
-
-        .text('Tax:', 400, totalsY + 20, { align: 'right' })
-        .text(formatCurrency(taxAmount), 450, totalsY + 20, { align: 'right', width: 100 })
-
-        .fontSize(12)
-        .font('Helvetica-Bold')
-        .text('Total:', 400, totalsY + 45, { align: 'right' })
-        .text(formatCurrency(total), 450, totalsY + 45, { align: 'right', width: 100 })
-
-      // Draw line under total
-      doc
-        .moveTo(400, totalsY + 60)
-        .lineTo(550, totalsY + 60)
-        .stroke()
-
-      // Footer
-      const footerY = 750
-      doc
-        .fontSize(8)
-        .font('Helvetica')
-        .fillColor('#666666')
-        .text('Thank you for your business!', 50, footerY, { align: 'center' })
-        .text('For inquiries, please contact us through the CRM system.', 50, footerY + 15, {
-          align: 'center',
-        })
-
-      // Page number
-      doc
-        .text(`Page 1 of 1`, 50, 800, { align: 'right' })
-        .fillColor('#000000')
-
-      // Finalize the PDF
-      try {
-        doc.end()
-      } catch (endError: any) {
-        console.error('Error ending PDF document:', endError)
-        reject(new Error('Failed to finalize PDF: ' + endError.message))
-      }
-    } catch (error: any) {
-      console.error('Error in PDF generation promise:', error)
-      console.error('Error stack:', error.stack)
-      reject(new Error('PDF generation failed: ' + (error.message || 'Unknown error')))
+    // Method 1: Check if it's available as a method on doc
+    if (typeof (doc as any).autoTable === 'function') {
+      autoTableFn = (doc as any).autoTable.bind(doc)
+      console.log('[PDF] Using autoTable as method')
     }
-  })
+    // Method 2: Check if it's a standalone function
+    else if (typeof autoTable === 'function') {
+      autoTableFn = autoTable
+      console.log('[PDF] Using autoTable as function')
+    }
+    // Method 3: Check default export
+    else if (typeof (autoTableModule as any).default === 'function') {
+      autoTableFn = (autoTableModule as any).default
+      console.log('[PDF] Using autoTable from default export')
+    }
+    // Method 4: Try require
+    else {
+      try {
+        const autoTableRequire = require('jspdf-autotable')
+        if (typeof autoTableRequire === 'function') {
+          autoTableFn = autoTableRequire
+        } else if (typeof autoTableRequire.default === 'function') {
+          autoTableFn = autoTableRequire.default
+        } else if (typeof (doc as any).autoTable === 'function') {
+          autoTableFn = (doc as any).autoTable.bind(doc)
+        }
+        console.log('[PDF] Using autoTable from require')
+      } catch (e) {
+        console.error('[PDF] Could not load autoTable:', e)
+      }
+    }
+
+    if (!autoTableFn) {
+      throw new Error('autoTable function not available. jspdf-autotable may not be properly installed.')
+    }
+
+    const invoiceData = invoice as any
+    const invoiceNumber = invoiceData.invoiceNumber || 'N/A'
+    const issueDate = invoiceData.issueDate
+      ? format(new Date(invoiceData.issueDate), 'MMMM dd, yyyy')
+      : 'N/A'
+    const dueDate = invoiceData.dueDate
+      ? format(new Date(invoiceData.dueDate), 'MMMM dd, yyyy')
+      : 'N/A'
+    const status = invoiceData.status || 'ISSUED'
+
+    // Helper function to format currency
+    const formatCurrency = (amount: number): string => {
+      return `AED ${amount.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`
+    }
+
+    // Header
+    doc.setFontSize(24)
+    doc.setFont('helvetica', 'bold')
+    doc.text('INVOICE', 20, 20)
+
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    doc.text('MisterWheels CRM', 20, 28)
+    doc.text('Car Rental Services', 20, 33)
+
+    // Invoice details (right side)
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    doc.text(`Invoice #: ${invoiceNumber}`, 190, 20, { align: 'right' })
+    doc.text(`Issue Date: ${issueDate}`, 190, 25, { align: 'right' })
+    doc.text(`Due Date: ${dueDate}`, 190, 30, { align: 'right' })
+    doc.text(`Status: ${status}`, 190, 35, { align: 'right' })
+
+    // Customer Information
+    const booking = invoiceData.booking
+    const customer = booking?.customer?.user
+    const vehicle = booking?.vehicle
+
+    let startY = 50
+
+    doc.setFontSize(12)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Bill To:', 20, startY)
+
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    doc.text(customer?.name || 'N/A', 20, startY + 8)
+    doc.text(customer?.email || '', 20, startY + 14)
+    if (customer?.phone) {
+      doc.text(customer.phone, 20, startY + 20)
+    }
+
+    // Vehicle Information
+    if (vehicle) {
+      doc.setFontSize(12)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Vehicle:', 110, startY)
+
+      doc.setFontSize(10)
+      doc.setFont('helvetica', 'normal')
+      doc.text(
+        `${vehicle.plateNumber} - ${vehicle.brand} ${vehicle.model}${vehicle.year ? ` (${vehicle.year})` : ''}`,
+        110,
+        startY + 8
+      )
+    }
+
+    // Line items table
+    const items = invoiceData.items || []
+    const tableStartY = startY + 35
+
+    // Prepare table data
+    const tableData = items.map((item: { label: string; amount: number }) => {
+      const isNegative = item.amount < 0
+      const amountStr = isNegative
+        ? `(${formatCurrency(Math.abs(item.amount))})`
+        : formatCurrency(item.amount)
+      return [item.label, amountStr]
+    })
+
+    // Generate table using autoTable
+    const autoTableOptions = {
+      head: [['Description', 'Amount']],
+      body: tableData,
+      startY: tableStartY,
+      theme: 'striped' as any,
+      styles: {
+        fontSize: 9,
+        cellPadding: 3,
+      },
+      headStyles: {
+        fillColor: [240, 240, 240],
+        textColor: [0, 0, 0],
+        fontStyle: 'bold' as any,
+      },
+      columnStyles: {
+        0: { cellWidth: 'auto' as any, halign: 'left' as any },
+        1: { cellWidth: 'auto' as any, halign: 'right' as any },
+      },
+      margin: { top: tableStartY, left: 20, right: 20 },
+    }
+
+    // Call autoTable - if it's a method (bound), call with options only
+    // If it's a function, pass doc as first parameter
+    if (typeof (doc as any).autoTable === 'function' && autoTableFn === (doc as any).autoTable.bind(doc)) {
+      // It's a method, call it directly on doc
+      ;(doc as any).autoTable(autoTableOptions)
+    } else {
+      // It's a function, pass doc as first argument
+      autoTableFn(doc, autoTableOptions)
+    }
+
+    // Get the Y position after the table
+    const finalY = (doc as any).lastAutoTable.finalY || tableStartY + 50
+
+    // Totals section
+    const totalsY = finalY + 10
+    const subtotal = invoiceData.subtotal || 0
+    const taxAmount = invoiceData.taxAmount || 0
+    const total = invoiceData.total || 0
+
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    doc.text('Subtotal:', 150, totalsY, { align: 'right' })
+    doc.text(formatCurrency(subtotal), 190, totalsY, { align: 'right' })
+
+    doc.text('Tax:', 150, totalsY + 8, { align: 'right' })
+    doc.text(formatCurrency(taxAmount), 190, totalsY + 8, { align: 'right' })
+
+    doc.setFontSize(12)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Total:', 150, totalsY + 20, { align: 'right' })
+    doc.text(formatCurrency(total), 190, totalsY + 20, { align: 'right' })
+
+    // Footer
+    const footerY = 270
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(100, 100, 100)
+    doc.text('Thank you for your business!', 105, footerY, { align: 'center' })
+    doc.text('For inquiries, please contact us through the CRM system.', 105, footerY + 6, {
+      align: 'center',
+    })
+    doc.setTextColor(0, 0, 0)
+
+    // Page number
+    doc.text('Page 1 of 1', 190, 290, { align: 'right' })
+
+    console.log('[PDF] PDF generated successfully')
+
+    // Convert to buffer
+    const pdfBlob = doc.output('arraybuffer')
+    const buffer = Buffer.from(pdfBlob)
+
+    if (buffer.length === 0) {
+      throw new Error('Generated PDF is empty')
+    }
+
+    console.log(`[PDF] PDF buffer size: ${buffer.length} bytes`)
+    return buffer
+  } catch (error: any) {
+    console.error('[PDF] PDF generation error:', error)
+    console.error('[PDF] Error stack:', error.stack)
+    throw new Error(`PDF generation failed: ${error.message}`)
+  }
 }
 
+/**
+ * Generate PDF buffer for an investor payout statement using jsPDF
+ */
+export async function generateInvestorPayoutPDF(payoutId: string): Promise<Buffer> {
+  try {
+    await connectDB()
+  } catch (dbError: any) {
+    console.error('[PDF] Database connection error:', dbError)
+    throw new Error('Failed to connect to database')
+  }
+
+  let payout
+  try {
+    payout = await InvestorPayout.findById(payoutId)
+      .populate({
+        path: 'investor',
+        populate: {
+          path: 'user',
+          select: 'name email phone',
+        },
+      })
+      .populate('expense', 'amount dateIncurred description')
+      .populate('payment', 'amount method status transactionId paidAt')
+      .lean()
+      .exec()
+  } catch (queryError: any) {
+    console.error('[PDF] Payout query error:', queryError)
+    throw new Error('Failed to fetch payout data')
+  }
+
+  if (!payout) {
+    throw new Error('Investor payout not found')
+  }
+
+  try {
+    console.log('[PDF] Starting PDF generation for payout:', payoutId)
+    console.log('[PDF] Loading jsPDF...')
+
+    // Dynamic imports
+    const { jsPDF } = await import('jspdf')
+    const autoTableModule = await import('jspdf-autotable')
+    const autoTable = (autoTableModule as any).default || autoTableModule
+
+    console.log('[PDF] jsPDF loaded successfully')
+
+    // Create PDF document in portrait A4
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
+    })
+
+    // Get autoTable function
+    let autoTableFn: any = null
+    if (typeof (doc as any).autoTable === 'function') {
+      autoTableFn = (doc as any).autoTable.bind(doc)
+    } else if (typeof autoTable === 'function') {
+      autoTableFn = autoTable
+    } else if (typeof (autoTableModule as any).default === 'function') {
+      autoTableFn = (autoTableModule as any).default
+    } else {
+      try {
+        const autoTableRequire = require('jspdf-autotable')
+        if (typeof autoTableRequire === 'function') {
+          autoTableFn = autoTableRequire
+        } else if (typeof autoTableRequire.default === 'function') {
+          autoTableFn = autoTableRequire.default
+        } else if (typeof (doc as any).autoTable === 'function') {
+          autoTableFn = (doc as any).autoTable.bind(doc)
+        }
+      } catch (e) {
+        console.error('[PDF] Could not load autoTable:', e)
+      }
+    }
+
+    if (!autoTableFn) {
+      throw new Error('autoTable function not available')
+    }
+
+    const payoutData = payout as any
+    const investor = payoutData.investor
+    const investorUser = investor?.user
+    const totals = payoutData.totals || {}
+    const breakdown = totals.breakdown || []
+
+    // Helper function to format currency
+    const formatCurrency = (amount: number): string => {
+      return `AED ${amount.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`
+    }
+
+    // Header
+    doc.setFontSize(24)
+    doc.setFont('helvetica', 'bold')
+    doc.text('INVESTOR PAYOUT STATEMENT', 20, 20)
+
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    doc.text('MisterWheels CRM', 20, 28)
+    doc.text('Car Rental Services', 20, 33)
+
+    // Statement details (right side)
+    const periodFrom = payoutData.periodFrom
+      ? format(new Date(payoutData.periodFrom), 'MMMM dd, yyyy')
+      : 'N/A'
+    const periodTo = payoutData.periodTo
+      ? format(new Date(payoutData.periodTo), 'MMMM dd, yyyy')
+      : 'N/A'
+    const status = payoutData.status || 'DRAFT'
+    const generatedDate = format(new Date(), 'MMMM dd, yyyy HH:mm')
+
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    doc.text(`Period: ${periodFrom} - ${periodTo}`, 190, 20, { align: 'right' })
+    doc.text(`Status: ${status}`, 190, 25, { align: 'right' })
+    doc.text(`Generated: ${generatedDate}`, 190, 30, { align: 'right' })
+
+    // Investor Information
+    let startY = 50
+
+    doc.setFontSize(12)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Investor Details:', 20, startY)
+
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    doc.text(investorUser?.name || 'N/A', 20, startY + 8)
+    if (investor?.companyName) {
+      doc.text(`Company: ${investor.companyName}`, 20, startY + 14)
+    }
+    doc.text(investorUser?.email || '', 20, startY + 20)
+    if (investorUser?.phone) {
+      doc.text(investorUser.phone, 20, startY + 26)
+    }
+
+    // Bank Details
+    if (investor) {
+      doc.setFontSize(12)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Bank Details:', 110, startY)
+
+      doc.setFontSize(10)
+      doc.setFont('helvetica', 'normal')
+      doc.text(`Bank: ${investor.bankName || 'N/A'}`, 110, startY + 8)
+      doc.text(`Account: ${investor.bankAccountName || 'N/A'}`, 110, startY + 14)
+      doc.text(`IBAN: ${investor.iban || 'N/A'}`, 110, startY + 20)
+      if (investor.swift) {
+        doc.text(`SWIFT: ${investor.swift}`, 110, startY + 26)
+      }
+    }
+
+    // Summary section
+    const summaryY = startY + 40
+    doc.setFontSize(12)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Payout Summary', 20, summaryY)
+
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    doc.text('Total Revenue:', 20, summaryY + 10)
+    doc.text(formatCurrency(totals.totalRevenue || 0), 150, summaryY + 10, { align: 'right' })
+
+    doc.text(`Commission (${totals.commissionPercent || 0}%):`, 20, summaryY + 18)
+    doc.text(formatCurrency(totals.commissionAmount || 0), 150, summaryY + 18, { align: 'right' })
+
+    doc.setFontSize(12)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Net Payout:', 20, summaryY + 30)
+    doc.text(formatCurrency(totals.netPayout || 0), 150, summaryY + 30, { align: 'right' })
+
+    // Breakdown table
+    const tableStartY = summaryY + 45
+
+    if (breakdown.length > 0) {
+      const tableData = breakdown.map((item: any) => [
+        item.plateNumber || 'N/A',
+        `${item.brand || ''} ${item.model || ''}`.trim() || 'N/A',
+        item.category || 'N/A',
+        String(item.bookingsCount || 0),
+        formatCurrency(item.revenue || 0),
+      ])
+
+      const autoTableOptions = {
+        head: [['Plate No', 'Vehicle', 'Category', 'Bookings', 'Revenue (AED)']],
+        body: tableData,
+        startY: tableStartY,
+        theme: 'striped' as any,
+        styles: {
+          fontSize: 9,
+          cellPadding: 3,
+        },
+        headStyles: {
+          fillColor: [240, 240, 240],
+          textColor: [0, 0, 0],
+          fontStyle: 'bold' as any,
+        },
+        columnStyles: {
+          0: { cellWidth: 30, halign: 'left' as any },
+          1: { cellWidth: 50, halign: 'left' as any },
+          2: { cellWidth: 30, halign: 'left' as any },
+          3: { cellWidth: 25, halign: 'center' as any },
+          4: { cellWidth: 35, halign: 'right' as any },
+        },
+        margin: { top: tableStartY, left: 20, right: 20 },
+      }
+
+      if (typeof (doc as any).autoTable === 'function' && autoTableFn === (doc as any).autoTable.bind(doc)) {
+        ;(doc as any).autoTable(autoTableOptions)
+      } else {
+        autoTableFn(doc, autoTableOptions)
+      }
+    }
+
+    // Footer
+    const footerY = 270
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(100, 100, 100)
+    doc.text('This is an automatically generated payout statement.', 105, footerY, { align: 'center' })
+    doc.text('For inquiries, please contact us through the CRM system.', 105, footerY + 6, {
+      align: 'center',
+    })
+    doc.setTextColor(0, 0, 0)
+
+    // Page number
+    doc.text('Page 1 of 1', 190, 290, { align: 'right' })
+
+    console.log('[PDF] PDF generated successfully')
+
+    // Convert to buffer
+    const pdfBlob = doc.output('arraybuffer')
+    const buffer = Buffer.from(pdfBlob)
+
+    if (buffer.length === 0) {
+      throw new Error('Generated PDF is empty')
+    }
+
+    console.log(`[PDF] PDF buffer size: ${buffer.length} bytes`)
+    return buffer
+  } catch (error: any) {
+    console.error('[PDF] PDF generation error:', error)
+    console.error('[PDF] Error stack:', error.stack)
+    throw new Error(`PDF generation failed: ${error.message}`)
+  }
+}

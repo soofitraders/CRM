@@ -23,8 +23,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    // Check permissions - Only SUPER_ADMIN and ADMIN can list users
-    if (!hasRole(user, ['SUPER_ADMIN', 'ADMIN'])) {
+    // Check permissions - SUPER_ADMIN, ADMIN, and FINANCE can list users
+    // FINANCE needs access to create investors
+    if (!hasRole(user, ['SUPER_ADMIN', 'ADMIN', 'FINANCE'])) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

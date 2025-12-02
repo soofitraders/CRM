@@ -17,6 +17,8 @@ export interface IVehicle extends Document {
   investor?: mongoose.Types.ObjectId
   status: VehicleStatus
   mileage: number
+  lastUpdatedMileage?: Date
+  maintenanceScheduled?: boolean
   fuelType: FuelType
   transmission: Transmission
   registrationExpiry: Date
@@ -88,6 +90,13 @@ const VehicleSchema = new Schema<IVehicle>(
       type: Number,
       required: [true, 'Mileage is required'],
       min: [0, 'Mileage cannot be negative'],
+    },
+    lastUpdatedMileage: {
+      type: Date,
+    },
+    maintenanceScheduled: {
+      type: Boolean,
+      default: false,
     },
     fuelType: {
       type: String,

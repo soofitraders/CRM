@@ -179,9 +179,49 @@ export async function POST(request: NextRequest) {
       paymentStatus: 'UNPAID',
       notes: data.notes,
       status: bookingStatus,
+      mileageAtBooking: (body as any).mileageAtBooking,
     })
 
     await booking.save()
+
+    // Log activity
+    try {
+      const { logActivity } = await import('@/lib/services/activityLogService')
+      await logActivity({
+        activityType: 'BOOKING_CREATED',
+        module: 'BOOKINGS',
+        action: 'CREATE',
+        description: `Created booking for ${data.rentalType} rental`,
+        entityType: 'Booking',
+        entityId: booking._id.toString(),
+        userId: user._id.toString(),
+        metadata: {
+          branchId: data.pickupBranch,
+        },
+      })
+    } catch (logError) {
+      console.error('Error logging activity:', logError)
+      // Don't fail booking creation if logging fails
+    }
+
+    // Update vehicle mileage if provided
+    if ((body as any).mileageAtBooking !== undefined && (body as any).mileageAtBooking !== null) {
+      try {
+        const { updateVehicleMileage } = await import('@/lib/services/mileageTrackingService')
+        await updateVehicleMileage(
+          data.vehicle,
+          (body as any).mileageAtBooking,
+          user._id.toString(),
+          'BOOKING',
+          booking._id.toString(),
+          undefined,
+          'Mileage updated during booking creation'
+        )
+      } catch (mileageError: any) {
+        console.error('Error updating vehicle mileage:', mileageError)
+        // Don't fail booking creation if mileage update fails
+      }
+    }
 
     // Auto-create invoice when booking is created with CONFIRMED status
     if (bookingStatus === 'CONFIRMED') {

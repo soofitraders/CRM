@@ -5,13 +5,18 @@ export type MaintenanceStatus = 'OPEN' | 'IN_PROGRESS' | 'COMPLETED'
 
 export interface IMaintenanceRecord extends Document {
   vehicle: mongoose.Types.ObjectId
+  maintenanceSchedule?: mongoose.Types.ObjectId // Link to schedule if created from schedule
   type: MaintenanceType
+  serviceType?: string // Service type (e.g., 'Oil Change')
   description: string
   status: MaintenanceStatus
   scheduledDate?: Date
+  startDate?: Date // When maintenance actually started (for downtime tracking)
   completedDate?: Date
   cost: number
   vendorName?: string
+  mileageAtService?: number // Vehicle mileage when service was performed
+  downtimeHours?: number // Hours vehicle was out of service
   createdBy: mongoose.Types.ObjectId
   createdAt: Date
   updatedAt: Date
@@ -46,6 +51,14 @@ const MaintenanceRecordSchema = new Schema<IMaintenanceRecord>(
     completedDate: {
       type: Date,
     },
+    maintenanceSchedule: {
+      type: Schema.Types.ObjectId,
+      ref: 'MaintenanceSchedule',
+    },
+    serviceType: {
+      type: String,
+      trim: true,
+    },
     cost: {
       type: Number,
       required: [true, 'Cost is required'],
@@ -55,6 +68,17 @@ const MaintenanceRecordSchema = new Schema<IMaintenanceRecord>(
     vendorName: {
       type: String,
       trim: true,
+    },
+    mileageAtService: {
+      type: Number,
+      min: [0, 'Mileage cannot be negative'],
+    },
+    startDate: {
+      type: Date,
+    },
+    downtimeHours: {
+      type: Number,
+      min: [0, 'Downtime hours cannot be negative'],
     },
     createdBy: {
       type: Schema.Types.ObjectId,

@@ -1,6 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import { 
   LayoutDashboard, 
@@ -11,7 +12,8 @@ import {
   User, 
   Settings, 
   HelpCircle, 
-  LogOut 
+  LogOut,
+  BarChart3
 } from 'lucide-react'
 
 const menuItems = [
@@ -31,6 +33,10 @@ const bottomMenuItems = [
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const { data: session } = useSession()
+  
+  // Check if user has access to financial reports
+  const canViewReports = session?.user?.role && ['SUPER_ADMIN', 'ADMIN', 'FINANCE'].includes(session.user.role)
 
   return (
     <div className="w-64 bg-[#1a1a1a] min-h-screen flex flex-col">
@@ -46,7 +52,7 @@ export default function Sidebar() {
       <nav className="flex-1 py-4">
         {menuItems.map((item) => {
           const Icon = item.icon
-          const isActive = pathname === item.path
+          const isActive = pathname === item.path || (item.path === '/financials' && pathname?.startsWith('/financials'))
           
           return (
             <Link
@@ -63,6 +69,21 @@ export default function Sidebar() {
             </Link>
           )
         })}
+        
+        {/* Financial Reports - only for authorized roles */}
+        {canViewReports && (
+          <Link
+            href="/financials/reports"
+            className={`flex items-center px-6 py-3 text-sm font-medium transition-colors ${
+              pathname === '/financials/reports'
+                ? 'bg-[#ff6b35] text-white'
+                : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+            }`}
+          >
+            <BarChart3 className="w-5 h-5 mr-3" />
+            Reports
+          </Link>
+        )}
 
         {/* Separator */}
         <div className="border-t border-gray-700 my-2"></div>

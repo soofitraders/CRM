@@ -10,7 +10,7 @@ export default function NewBookingPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
 
-  const handleSubmit = async (data: CreateBookingInput) => {
+  const handleSubmit = async (data: CreateBookingInput & { mileageAtBooking?: number }) => {
     setIsLoading(true)
     try {
       const response = await fetch('/api/bookings', {

@@ -35,19 +35,19 @@
   }
 
   h1 {
-    @apply text-3xl;
+    @apply text-4xl font-bold tracking-tight;
   }
 
   h2 {
-    @apply text-2xl;
+    @apply text-2xl font-semibold;
   }
 
   h3 {
-    @apply text-xl;
+    @apply text-xl font-semibold;
   }
 
   h4 {
-    @apply text-lg;
+    @apply text-lg font-semibold;
   }
 
   /* Custom Scrollbar Styles */
@@ -66,6 +66,24 @@
 
   ::-webkit-scrollbar-thumb:hover {
     @apply bg-sidebarMuted;
+  }
+
+  /* Sidebar Scrollbar */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.3);
+    border-radius: 3px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(156, 163, 175, 0.5);
   }
 }
 
