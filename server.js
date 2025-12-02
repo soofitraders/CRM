@@ -14,10 +14,14 @@ const hostname = '0.0.0.0' // Bind to all interfaces
 console.log(`[Server] Initializing Next.js application...`)
 console.log(`[Server] Port: ${port}`)
 console.log(`[Server] Hostname: ${hostname}`)
-console.log(`[Server] NODE_ENV: ${process.env.NODE_ENV || 'development'}`)
+console.log(`[Server] NODE_ENV: ${process.env.NODE_ENV || 'production'}`)
+console.log(`[Server] Production mode: ${isProduction}`)
+
+// Determine if we're in production mode
+const isProduction = process.env.NODE_ENV === 'production' || !process.env.NODE_ENV
 
 const app = next({
-  dev: process.env.NODE_ENV !== 'production',
+  dev: !isProduction,
   hostname,
   port,
 })
