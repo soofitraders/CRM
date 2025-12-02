@@ -5,6 +5,8 @@ services:
     plan: starter
     region: oregon
     buildCommand: npm install && npm run build
+    # Note: Build cache warning is informational and doesn't affect functionality
+    # Next.js will use default file system cache automatically
     startCommand: node server.js
     dockerfilePath: ""
     autoDeploy: true
