@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "node server.js",
+    "start": "node start.js",
+    "start:standalone": "cd .next/standalone && node server.js",
     "start:standalone": "cd .next/standalone && node server.js",
     "start:next": "next start -p ${PORT:-3000}",
     "lint": "next lint",

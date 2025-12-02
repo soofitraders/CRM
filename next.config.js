@@ -4,8 +4,8 @@ const nextConfig = {
   compress: true,
   
   // Output configuration for Render
-  // Disable standalone to use custom server.js for better port control
-  // output: 'standalone',
+  // Use standalone output for production deployment
+  output: 'standalone',
   
   // Optimize images
   images: {
