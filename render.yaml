@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: misterwheels-crm
+    env: node
+    plan: starter
+    region: oregon
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: NEXTAUTH_SECRET
+        sync: false
+      - key: NEXTAUTH_URL
+        sync: false
+        # Note: Set this to your Render URL after deployment (e.g., https://your-app.onrender.com)
+      - key: CACHE_TTL
+        value: 300
+      - key: CACHE_MAX_SIZE
+        value: 1000
+      - key: RECURRING_EXPENSE_API_KEY
+        sync: false
+        optional: true
+    healthCheckPath: /api/health
+

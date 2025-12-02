@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs'
 import connectDB from '@/lib/db'
 import User from '@/lib/models/User'
 import { logger } from '@/lib/utils/performance'
+import { getNextAuthSecret } from '@/lib/utils/env'
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -83,6 +84,6 @@ export const authOptions: NextAuthOptions = {
     strategy: 'jwt',
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: getNextAuthSecret(),
 }
 

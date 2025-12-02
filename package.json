@@ -11,7 +11,8 @@
     "db:studio": "prisma studio",
     "db:generate": "prisma generate",
     "seed:admin": "tsx scripts/seedSuperAdmin.ts",
-    "optimize": "tsx scripts/optimizePerformance.ts"
+    "optimize": "tsx scripts/optimizePerformance.ts",
+    "postinstall": "npm run db:generate"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
