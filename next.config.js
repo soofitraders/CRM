@@ -125,6 +125,10 @@ const nextConfig = {
     optimizeCss: true,
   },
   
+  // Enable build caching for faster rebuilds
+  cacheHandler: undefined, // Use default file system cache
+  cacheMaxMemorySize: 50, // 50 MB cache limit
+  
   // Environment variables available to the client
   env: {
     NEXT_PUBLIC_APP_URL: process.env.NEXTAUTH_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000',
