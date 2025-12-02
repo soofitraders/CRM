@@ -25,7 +25,7 @@ In the Render dashboard, go to your service → Environment tab and add:
 
 ```env
 MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/database?retryWrites=true&w=majority
-NEXTAUTH_URL=https://your-app-name.onrender.com
+NEXTAUTH_URL=https://crm-n5iw.onrender.com
 NEXTAUTH_SECRET=your-generated-secret-key-here
 ```
 
