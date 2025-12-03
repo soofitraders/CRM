@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const limit = parseInt(searchParams.get('limit') || '50')
     const userId = searchParams.get('userId')
-    const module = searchParams.get('module') || undefined
+    const moduleName = searchParams.get('module') || undefined
     const activityType = searchParams.get('activityType') || undefined
     const dateFrom = searchParams.get('dateFrom') ? new Date(searchParams.get('dateFrom')!) : undefined
     const dateTo = searchParams.get('dateTo') ? new Date(searchParams.get('dateTo')!) : undefined
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
       logs = await getAllActivityLogs({
         limit,
         userId: userId || undefined,
-        module,
+        module: moduleName,
         activityType: activityType as any,
         dateFrom,
         dateTo,
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
       // Users can only view their own logs
       logs = await getUserActivityLogs(user._id.toString(), {
         limit,
-        module,
+        module: moduleName,
         activityType: activityType as any,
         dateFrom,
         dateTo,
