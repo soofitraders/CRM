@@ -184,7 +184,7 @@ export default function EditBookingPage() {
   }
 
   const handlePaymentStatusChange = async (paymentStatus: string) => {
-    await handleUpdate({ paymentStatus })
+    await handleUpdate({ paymentStatus: paymentStatus as "UNPAID" | "PARTIALLY_PAID" | "PAID" })
   }
 
   if (isLoading) {
