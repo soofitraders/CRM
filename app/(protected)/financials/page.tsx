@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import SectionCard from '@/components/ui/SectionCard'
 import Table, { TableRow, TableCell } from '@/components/ui/Table'
@@ -57,7 +57,7 @@ interface PaymentsResponse {
   }
 }
 
-export default function FinancialsPage() {
+function FinancialsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState<'invoices' | 'payments'>(
@@ -849,6 +849,14 @@ export default function FinancialsPage() {
         </SectionCard>
       )}
     </div>
+  )
+}
+
+export default function FinancialsPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="text-bodyText">Loading...</div></div>}>
+      <FinancialsContent />
+    </Suspense>
   )
 }
 
