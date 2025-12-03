@@ -180,7 +180,7 @@ export default function EditBookingPage() {
   }
 
   const handleStatusChange = async (status: string) => {
-    await handleUpdate({ status })
+    await handleUpdate({ status: status as "PENDING" | "CONFIRMED" | "CHECKED_OUT" | "CHECKED_IN" | "CANCELLED" })
   }
 
   const handlePaymentStatusChange = async (paymentStatus: string) => {
