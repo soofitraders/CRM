@@ -301,7 +301,7 @@ export default function InvestorPayoutsPage() {
                         ? 'red'
                         : payout.status === 'PENDING'
                         ? 'yellow'
-                        : 'gray'
+                        : 'default'
                     }
                   />
                 </TableCell>
