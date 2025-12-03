@@ -39,7 +39,7 @@ export default function VehicleForm({
     formState: { errors },
     setValue,
   } = useForm<CreateVehicleInput>({
-    resolver: zodResolver(createVehicleSchema),
+    resolver: zodResolver(createVehicleSchema) as any,
     defaultValues: initialData || {
       status: 'AVAILABLE',
       category: 'SEDAN',
@@ -63,7 +63,7 @@ export default function VehicleForm({
   // Fetch investors
   useEffect(() => {
     if (ownershipType === 'INVESTOR') {
-      async function fetchInvestors() {
+      const fetchInvestors = async () => {
         try {
           const response = await fetch('/api/investors')
           if (response.ok) {

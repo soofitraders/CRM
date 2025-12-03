@@ -113,7 +113,7 @@ export async function PATCH(
 
     if (!validationResult.success) {
       return NextResponse.json(
-        { error: 'Validation failed', details: validationResult.error.errors },
+        { error: 'Validation failed', details: validationResult.error.issues },
         { status: 400 }
       )
     }
@@ -151,7 +151,7 @@ export async function PATCH(
       action: 'UPDATE',
       description: `Updated role: ${role.name}`,
       entityType: 'Role',
-      entityId: role._id.toString(),
+      entityId: (role._id as any)?.toString(),
       changes: [
         { field: 'name', oldValue: oldState.name, newValue: role.name },
         { field: 'permissions', oldValue: oldState.permissions, newValue: role.permissions },
@@ -165,7 +165,7 @@ export async function PATCH(
       title: 'Role Updated',
       description: `Role "${role.name}" was updated by ${user.name}`,
       entityType: 'Role',
-      entityId: role._id.toString(),
+      entityId: (role._id as any)?.toString(),
       beforeState: oldState,
       afterState: role.toObject(),
       userId: user._id.toString(),

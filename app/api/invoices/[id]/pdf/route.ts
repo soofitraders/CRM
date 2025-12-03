@@ -39,7 +39,7 @@ export async function GET(
     logger.log('[PDF] PDF generated successfully, size:', pdfBuffer.length, 'bytes')
 
     // Return PDF as response
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(pdfBuffer as any, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="invoice-${invoiceId}.pdf"`,

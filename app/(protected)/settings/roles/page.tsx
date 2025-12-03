@@ -6,6 +6,7 @@ import SectionCard from '@/components/ui/SectionCard'
 import Table, { TableRow, TableCell } from '@/components/ui/Table'
 import { Plus, Edit, Trash2, Shield, Loader2 } from 'lucide-react'
 import RoleFormModal from '@/components/roles/RoleFormModal'
+import { PermissionModule, PermissionAction } from '@/lib/models/Role'
 
 interface Role {
   _id: string
@@ -13,8 +14,8 @@ interface Role {
   description?: string
   isSystemRole: boolean
   permissions: Array<{
-    module: string
-    actions: string[]
+    module: PermissionModule
+    actions: PermissionAction[]
     conditions?: {
       branchRestricted?: boolean
       ownDataOnly?: boolean

@@ -120,7 +120,7 @@ export async function getAuditLogs(
     .populate('user', 'name email')
     .sort({ createdAt: -1 })
     .limit(limit)
-    .lean()
+    .lean() as unknown as IAuditLog[]
 }
 
 /**

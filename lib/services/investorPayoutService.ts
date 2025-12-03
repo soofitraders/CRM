@@ -92,7 +92,7 @@ export async function calculateInvestorPayoutPreview(params: {
       periodTo,
       branchId,
       totalRevenue: 0,
-      commissionPercent: investorProfile.commissionPercent || DEFAULT_COMMISSION_PERCENT,
+      commissionPercent: DEFAULT_COMMISSION_PERCENT,
       commissionAmount: 0,
       netPayout: 0,
       breakdown: [],
@@ -270,7 +270,7 @@ export async function createInvestorPayoutWithExpenseAndPayment(
       gatewayReference: undefined,
       paidAt: undefined,
     })
-    paymentId = payment._id
+    paymentId = payment._id as mongoose.Types.ObjectId
   }
 
   // Create InvestorPayout

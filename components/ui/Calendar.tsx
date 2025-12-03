@@ -14,7 +14,7 @@ interface CalendarProps {
 }
 
 export default function Calendar({ events = [], onDateClick }: CalendarProps) {
-  const [currentDate, setCurrentDate] = useState<Date | null>(null)
+  const [currentDate, setCurrentDate] = useState<Date>(new Date())
   const [isMounted, setIsMounted] = useState(false)
 
   useEffect(() => {

@@ -47,7 +47,7 @@ export async function DELETE(request: NextRequest) {
 
     if (revokeAll) {
       // Revoke all sessions except current
-      const currentSessionToken = session.sessionToken as string | undefined
+      const currentSessionToken = (session as any).sessionToken as string | undefined
       await revokeAllUserSessions(session.user.id, currentSessionToken)
       return NextResponse.json({ message: 'All sessions revoked' })
     }

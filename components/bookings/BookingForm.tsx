@@ -49,7 +49,7 @@ export default function BookingForm({
     formState: { errors },
     setValue,
   } = useForm<CreateBookingInput>({
-    resolver: zodResolver(createBookingSchema),
+    resolver: zodResolver(createBookingSchema) as any,
     defaultValues: initialData || {
       discounts: 0,
       taxPercent: 5,

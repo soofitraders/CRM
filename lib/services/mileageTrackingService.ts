@@ -131,7 +131,7 @@ async function scheduleMaintenanceAtMileageCap(vehicleId: string, userId: string
   })
 
   // Send notification to admins
-  await sendMaintenanceRequiredNotification(vehicleId, vehicle.mileage, maintenanceRecord._id.toString())
+  await sendMaintenanceRequiredNotification(vehicleId, vehicle.mileage, (maintenanceRecord._id as any).toString())
 
   // Create maintenance schedule for next service (if needed)
   await MaintenanceSchedule.create({

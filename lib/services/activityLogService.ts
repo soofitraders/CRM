@@ -106,7 +106,7 @@ export async function getUserActivityLogs(
   return ActivityLog.find(filter)
     .sort({ createdAt: -1 })
     .limit(limit)
-    .lean()
+    .lean() as unknown as IActivityLog[]
 }
 
 /**
@@ -154,6 +154,6 @@ export async function getAllActivityLogs(
     .populate('user', 'name email')
     .sort({ createdAt: -1 })
     .limit(limit)
-    .lean()
+    .lean() as unknown as IActivityLog[]
 }
 

@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import BookingForm from '@/components/bookings/BookingForm'
 import SectionCard from '@/components/ui/SectionCard'
 import StatusChip from '@/components/ui/StatusChip'
-import { CreateBookingInput, UpdateBookingInput } from '@/lib/validation/booking'
+import { CreateBookingInput, UpdateBookingInput, bookingStatusSchema, paymentStatusSchema } from '@/lib/validation/booking'
 import { FileText, Plus } from 'lucide-react'
 import Link from 'next/link'
 
@@ -180,11 +180,11 @@ export default function EditBookingPage() {
   }
 
   const handleStatusChange = async (status: string) => {
-    await handleUpdate({ status })
+    await handleUpdate({ status: status as UpdateBookingInput['status'] })
   }
 
   const handlePaymentStatusChange = async (paymentStatus: string) => {
-    await handleUpdate({ paymentStatus })
+    await handleUpdate({ paymentStatus: paymentStatus as UpdateBookingInput['paymentStatus'] })
   }
 
   if (isLoading) {

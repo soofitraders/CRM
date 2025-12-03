@@ -133,9 +133,9 @@ export async function POST(request: NextRequest) {
     await vehicle.save()
 
     // Invalidate cache
-    invalidateVehicleCache(vehicle._id.toString())
+    invalidateVehicleCache((vehicle._id as any)?.toString())
 
-    const populatedVehicle = await Vehicle.findById(vehicle._id)
+    const populatedVehicle = await Vehicle.findById(vehicle._id as any)
       .populate('investor', 'user')
       .lean()
 

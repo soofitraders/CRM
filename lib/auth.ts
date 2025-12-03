@@ -36,7 +36,7 @@ export async function getCurrentUser(): Promise<IUser | null> {
     }
 
     // Convert lean document to IUser-like object
-    return user as IUser
+    return user as unknown as IUser
   } catch (error) {
     logger.error('Error getting current user:', error)
     return null

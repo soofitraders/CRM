@@ -41,6 +41,13 @@ export default function AdvancedFilters({
 
   const applyDatePreset = (preset: DatePreset) => {
     setDatePreset(preset)
+    
+    // Handle CUSTOM preset separately
+    if (preset === 'CUSTOM') {
+      setShowCustomDate(true)
+      return
+    }
+    
     const today = new Date()
     let from: Date
     let to: Date = new Date()
@@ -76,7 +83,7 @@ export default function AdvancedFilters({
     }
 
     onDateChange(format(from, 'yyyy-MM-dd'), format(to, 'yyyy-MM-dd'))
-    setShowCustomDate(preset === 'CUSTOM')
+    setShowCustomDate(false)
   }
 
   const handleCustomDateChange = (from: string, to: string) => {

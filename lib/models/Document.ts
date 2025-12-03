@@ -1,8 +1,8 @@
-import mongoose, { Schema, Document, Model } from 'mongoose'
+import mongoose, { Schema, Document as MongooseDocument, Model } from 'mongoose'
 
 export type DocumentOwnerType = 'VEHICLE' | 'CUSTOMER' | 'INVESTOR' | 'BOOKING' | 'OTHER'
 
-export interface IDocument extends Document {
+export interface IDocument extends MongooseDocument {
   ownerType: DocumentOwnerType
   ownerId: mongoose.Types.ObjectId
   label: string

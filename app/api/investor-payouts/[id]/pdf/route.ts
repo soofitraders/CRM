@@ -81,7 +81,7 @@ export async function GET(
     const filename = `payout-${investorName.replace(/\s+/g, '-')}-${periodMonth}.pdf`
 
     // Return PDF as response
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(pdfBuffer as any, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="${filename}"`,

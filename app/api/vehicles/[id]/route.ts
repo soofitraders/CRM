@@ -91,11 +91,11 @@ export async function PATCH(
     if (data.plateNumber !== undefined) vehicle.plateNumber = data.plateNumber
     if (data.vin !== undefined) vehicle.vin = data.vin
     if (data.brand !== undefined) vehicle.brand = data.brand
-    if (data.model !== undefined) vehicle.model = data.model
+    if (data.model !== undefined) (vehicle as any).model = data.model
     if (data.year !== undefined) vehicle.year = data.year
     if (data.category !== undefined) vehicle.category = data.category
     if (data.ownershipType !== undefined) vehicle.ownershipType = data.ownershipType
-    if (data.investor !== undefined) vehicle.investor = data.investor
+    if (data.investor !== undefined) (vehicle as any).investor = data.investor
     if (data.status !== undefined) vehicle.status = data.status
     if (data.mileage !== undefined) vehicle.mileage = data.mileage
     if (data.fuelType !== undefined) vehicle.fuelType = data.fuelType
@@ -122,9 +122,9 @@ export async function PATCH(
     await vehicle.save()
 
     // Invalidate cache
-    invalidateVehicleCache(vehicle._id.toString())
+    invalidateVehicleCache((vehicle._id as any)?.toString())
 
-    const updatedVehicle = await Vehicle.findById(vehicle._id)
+    const updatedVehicle = await Vehicle.findById(vehicle._id as any)
       .populate('investor', 'user')
       .lean()
 
@@ -184,7 +184,7 @@ export async function DELETE(
     await vehicle.save()
 
     // Invalidate cache
-    invalidateVehicleCache(vehicle._id.toString())
+    invalidateVehicleCache((vehicle._id as any)?.toString())
 
     return NextResponse.json({ message: 'Vehicle marked as inactive successfully' })
   } catch (error: any) {

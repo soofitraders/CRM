@@ -309,7 +309,7 @@ export default function InvestorPayoutDetailPage() {
                     ? 'red'
                     : payout.status === 'PENDING'
                     ? 'yellow'
-                    : 'gray'
+                    : 'default'
                 }
               />
             </div>

@@ -169,7 +169,11 @@ export async function POST(request: NextRequest) {
     await booking.save()
 
     // Invalidate related caches
-    invalidateBookingCache(booking._id.toString(), booking.customer?.toString(), booking.vehicle?.toString())
+    invalidateBookingCache(
+      (booking._id as any)?.toString(),
+      (booking.customer as any)?.toString(),
+      (booking.vehicle as any)?.toString()
+    )
     invalidateDashboardCache()
 
     // Log activity
@@ -181,7 +185,7 @@ export async function POST(request: NextRequest) {
         action: 'CREATE',
         description: `Created booking for ${data.rentalType} rental`,
         entityType: 'Booking',
-        entityId: booking._id.toString(),
+        entityId: (booking._id as any)?.toString(),
         userId: user._id.toString(),
         metadata: {
           branchId: data.pickupBranch,
@@ -201,7 +205,7 @@ export async function POST(request: NextRequest) {
           (body as any).mileageAtBooking,
           user._id.toString(),
           'BOOKING',
-          booking._id.toString(),
+          (booking._id as any)?.toString(),
           undefined,
           'Mileage updated during booking creation'
         )
@@ -215,7 +219,7 @@ export async function POST(request: NextRequest) {
     if (bookingStatus === 'CONFIRMED') {
       try {
         const { createInvoiceFromBooking } = await import('@/lib/services/invoiceService')
-        await createInvoiceFromBooking(booking._id.toString())
+        await createInvoiceFromBooking((booking._id as any)?.toString())
       } catch (error: any) {
         // Log error but don't fail the booking creation if invoice creation fails
         // (invoice might already exist or there might be a temporary issue)
@@ -223,7 +227,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const populatedBooking = await Booking.findById(booking._id)
+    const populatedBooking = await Booking.findById((booking._id as any))
       .populate('vehicle', 'plateNumber brand model')
       .populate('customer')
       .populate('bookedBy', 'name email')

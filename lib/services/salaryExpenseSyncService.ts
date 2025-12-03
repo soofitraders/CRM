@@ -6,6 +6,7 @@ import User from '@/lib/models/User'
 import { endOfMonth } from 'date-fns'
 import type { SalaryInput } from '@/lib/validation/salary'
 import type { IUser } from '@/lib/models/User'
+import mongoose from 'mongoose'
 
 /**
  * Create a salary record with automatically linked expense
@@ -73,7 +74,7 @@ export async function createSalaryWithExpense(
   })
 
   // Link expense to salary record
-  salaryRecord.expense = expense._id
+  salaryRecord.expense = expense._id as mongoose.Types.ObjectId
   await salaryRecord.save()
 
   // Return populated salary record
@@ -105,7 +106,7 @@ export async function updateSalaryWithExpense(
   }
 
   // Apply updates
-  if (updates.staffUser !== undefined) salaryRecord.staffUser = updates.staffUser
+  if (updates.staffUser !== undefined) salaryRecord.staffUser = new mongoose.Types.ObjectId(updates.staffUser)
   if (updates.month !== undefined) salaryRecord.month = updates.month
   if (updates.year !== undefined) salaryRecord.year = updates.year
   if (updates.grossSalary !== undefined) salaryRecord.grossSalary = updates.grossSalary
@@ -184,7 +185,7 @@ export async function updateSalaryWithExpense(
       salaryRecord: salaryRecord._id,
     })
 
-    salaryRecord.expense = expense._id
+    salaryRecord.expense = expense._id as mongoose.Types.ObjectId
   }
 
   await salaryRecord.save()

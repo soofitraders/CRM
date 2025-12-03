@@ -492,7 +492,7 @@ export async function getInvestorPayoutSummary(
       investorMap.set(investorId, {
         investorId,
         investorName:
-          investorProfile?.investor?.user?.name || 'Unknown',
+          (investorProfile?.investor as any)?.user?.name || 'Unknown',
         revenue: 0,
         commissionPercent,
         commission: 0,

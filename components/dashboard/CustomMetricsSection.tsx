@@ -322,7 +322,7 @@ export default function CustomMetricsSection() {
           setSharingWidget(null)
         }}
         onSave={handleSaveShare}
-        existingWidget={sharingWidget || undefined}
+        existingWidget={sharingWidget ? { ...sharingWidget, isShared: sharingWidget.isShared ?? false, sharedWithRoles: sharingWidget.sharedWithRoles ?? [] } : undefined}
       />
     </SectionCard>
   )

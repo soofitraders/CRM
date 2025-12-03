@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document, Model } from 'mongoose'
+import mongoose, { Schema, Model } from 'mongoose'
 
 export type VehicleCategory = 'SUV' | 'SEDAN' | 'HATCHBACK' | 'COUPE' | 'CONVERTIBLE' | 'WAGON' | 'VAN' | 'TRUCK' | 'OTHER'
 export type OwnershipType = 'COMPANY' | 'INVESTOR'
@@ -6,7 +6,7 @@ export type VehicleStatus = 'AVAILABLE' | 'BOOKED' | 'IN_MAINTENANCE' | 'INACTIV
 export type FuelType = 'PETROL' | 'DIESEL' | 'ELECTRIC' | 'HYBRID' | 'CNG'
 export type Transmission = 'MANUAL' | 'AUTOMATIC' | 'CVT'
 
-export interface IVehicle extends Document {
+export interface IVehicle extends Omit<mongoose.Document, 'model'> {
   plateNumber: string
   vin: string
   brand: string

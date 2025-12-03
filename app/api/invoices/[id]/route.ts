@@ -156,7 +156,7 @@ export async function PATCH(
       // Update invoice using direct MongoDB update to bypass Mongoose validation
       // that might block negative amounts for fines/discounts
       await Invoice.collection.updateOne(
-        { _id: invoice._id },
+        { _id: invoice._id as any },
         {
           $set: {
             items: data.items,
@@ -171,7 +171,7 @@ export async function PATCH(
     }
 
     // Fetch the updated invoice with populated relations
-    const updatedInvoice = await Invoice.findById(invoice._id)
+    const updatedInvoice = await Invoice.findById(invoice._id as any)
       .populate({
         path: 'booking',
         populate: [
@@ -203,7 +203,7 @@ export async function PATCH(
           action: 'UPDATE',
           description: `Invoice ${invoice.invoiceNumber} status changed from ${oldStatus} to ${invoice.status}`,
           entityType: 'Invoice',
-          entityId: invoice._id.toString(),
+          entityId: (invoice._id as any)?.toString(),
           changes: [
             { field: 'status', oldValue: oldStatus, newValue: invoice.status },
           ],
@@ -218,7 +218,7 @@ export async function PATCH(
             title: 'Invoice Paid',
             description: `Invoice ${invoice.invoiceNumber} was marked as paid`,
             entityType: 'Invoice',
-            entityId: invoice._id.toString(),
+            entityId: (invoice._id as any)?.toString(),
             financialAmount: invoice.total,
             currency: 'AED',
             beforeState: { status: oldStatus },

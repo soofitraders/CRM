@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
 
     if (!validationResult.success) {
       return NextResponse.json(
-        { error: 'Validation failed', details: validationResult.error.errors },
+        { error: 'Validation failed', details: validationResult.error.issues },
         { status: 400 }
       )
     }
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
       action: 'CREATE',
       description: `Created new role: ${role.name}`,
       entityType: 'Role',
-      entityId: role._id.toString(),
+      entityId: (role._id as any)?.toString(),
       userId: user._id.toString(),
     })
 
@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
       title: 'Role Created',
       description: `Role "${role.name}" was created by ${user.name}`,
       entityType: 'Role',
-      entityId: role._id.toString(),
+      entityId: (role._id as any)?.toString(),
       userId: user._id.toString(),
     })
 

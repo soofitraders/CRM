@@ -123,10 +123,10 @@ export async function checkMaintenanceDue(): Promise<{
  */
 export async function createMaintenanceFromSchedule(
   scheduleId: string,
+  userId: string,
   actualCost?: number,
   vendorName?: string,
-  notes?: string,
-  userId: string
+  notes?: string
 ): Promise<any> {
   await connectDB()
 

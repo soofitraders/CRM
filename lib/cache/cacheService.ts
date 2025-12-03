@@ -88,8 +88,9 @@ class CacheService {
   deletePattern(pattern: string | RegExp): number {
     let count = 0
     const regex = typeof pattern === 'string' ? new RegExp(pattern) : pattern
+    const keys = Array.from(this.cache.keys())
 
-    for (const key of this.cache.keys()) {
+    for (const key of keys) {
       if (regex.test(key)) {
         this.cache.delete(key)
         count++
@@ -200,8 +201,9 @@ class CacheService {
   private cleanup(): void {
     const now = Date.now()
     let cleaned = 0
+    const entries = Array.from(this.cache.entries())
 
-    for (const [key, entry] of this.cache.entries()) {
+    for (const [key, entry] of entries) {
       if (now > entry.expiresAt) {
         this.cache.delete(key)
         cleaned++

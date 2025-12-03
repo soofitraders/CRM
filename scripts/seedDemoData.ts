@@ -236,7 +236,7 @@ async function seedDemoData() {
     for (const booking of bookings) {
       if (booking.status === 'CONFIRMED' || booking.status === 'CHECKED_OUT') {
         try {
-          await createInvoiceFromBooking(booking._id.toString())
+          await createInvoiceFromBooking((booking._id as any).toString())
           invoiceCount++
         } catch (error: any) {
           // Invoice might already exist, skip

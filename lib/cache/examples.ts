@@ -49,6 +49,10 @@ export async function updateBookingAndInvalidateCache(bookingId: string, updates
   
   const booking = await Booking.findByIdAndUpdate(bookingId, updates, { new: true })
   
+  if (!booking) {
+    return null
+  }
+  
   // Invalidate related caches
   invalidateBookingCache(
     bookingId,

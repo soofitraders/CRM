@@ -3,9 +3,8 @@
 import { useState, useEffect } from 'react'
 import { X, Save, Loader2 } from 'lucide-react'
 import { logger } from '@/lib/utils/logger'
+import { PermissionModule, PermissionAction } from '@/lib/models/Role'
 import {
-  PermissionModule,
-  PermissionAction,
   getAvailableModules,
   getAvailableActions,
 } from '@/lib/services/permissionService'

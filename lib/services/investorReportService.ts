@@ -235,7 +235,7 @@ export async function getInvestorPerformanceReport(
         const commissionPercent = investorCommissionMap.get(investorIdFromVehicle) || 20
         investorMap.set(investorIdFromVehicle, {
           investorId: investorIdFromVehicle,
-          investorName: profile.user?.name || 'Unknown',
+          investorName: (profile.user as any)?.name || 'Unknown',
           companyName: profile.companyName,
           totalVehicles: 0,
           totalRevenue: 0,
@@ -277,8 +277,11 @@ export async function getInvestorPerformanceReport(
     vehiclePerf.bookingsCount += 1
 
     // Update investor totals
-    investor.totalRevenue += revenue
-    investor.totalBookings += 1
+    const currentInvestor = investorMap.get(investorIdFromVehicle)
+    if (currentInvestor) {
+      currentInvestor.totalRevenue += revenue
+      currentInvestor.totalBookings += 1
+    }
   })
 
   // Calculate commission and net payout for each vehicle

@@ -141,14 +141,14 @@ export async function POST(request: NextRequest) {
     // Validate input
     const validationResult = investorPayoutInputSchema.safeParse(body)
     if (!validationResult.success) {
-      logger.error('Validation errors:', validationResult.error.errors)
-      const errorMessages = validationResult.error.errors.map((err) => 
+      logger.error('Validation errors:', validationResult.error.issues)
+      const errorMessages = validationResult.error.issues.map((err) => 
         `${err.path.join('.')}: ${err.message}`
       ).join(', ')
       return NextResponse.json(
         { 
           error: 'Validation failed', 
-          details: validationResult.error.errors,
+          details: validationResult.error.issues,
           message: errorMessages
         },
         { status: 400 }

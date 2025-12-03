@@ -96,16 +96,16 @@ export async function GET(request: NextRequest) {
 
     try {
       if (format === 'csv') {
-        const csvContent = exportToCSV(exportData, columns)
+        const csvContent = exportToCSV(exportData as any, columns as any)
         fileBuffer = Buffer.from(csvContent, 'utf-8')
         contentType = 'text/csv; charset=utf-8'
         fileExtension = 'csv'
       } else if (format === 'excel') {
-        fileBuffer = await exportToExcel(exportData, columns)
+        fileBuffer = await exportToExcel(exportData as any, columns as any)
         contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         fileExtension = 'xlsx'
       } else if (format === 'pdf') {
-        fileBuffer = await exportToPDF('Accounts Receivable Report', exportData, columns)
+        fileBuffer = await exportToPDF('Accounts Receivable Report', exportData as any, columns as any)
         contentType = 'application/pdf'
         fileExtension = 'pdf'
       } else {

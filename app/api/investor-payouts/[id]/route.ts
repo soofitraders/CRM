@@ -100,7 +100,7 @@ export async function PATCH(
     const validationResult = investorPayoutUpdateSchema.safeParse(body)
     if (!validationResult.success) {
       return NextResponse.json(
-        { error: 'Validation failed', details: validationResult.error.errors },
+        { error: 'Validation failed', details: validationResult.error.issues },
         { status: 400 }
       )
     }
@@ -113,7 +113,7 @@ export async function PATCH(
     }
 
     // Update payout status
-    const payout = await updateInvestorPayoutStatus(params.id, updates, user)
+    const payout = await updateInvestorPayoutStatus(params.id, updates as any, user)
 
     return NextResponse.json({ payout })
   } catch (error: any) {
