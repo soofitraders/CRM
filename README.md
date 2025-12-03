@@ -225,17 +225,6 @@ After seeding the database, you can log in with:
 
 ## 🚀 Deployment
 
-### Deploy on Render (Recommended)
-
-See [README_DEPLOYMENT.md](./README_DEPLOYMENT.md) for detailed deployment instructions.
-
-**Quick Steps:**
-1. Push your code to GitHub
-2. Create a new Web Service on Render
-3. Connect your GitHub repository
-4. Add environment variables (see below)
-5. Deploy!
-
 ### Deploy on Vercel
 
 1. Push your code to GitHub
@@ -245,15 +234,10 @@ See [README_DEPLOYMENT.md](./README_DEPLOYMENT.md) for detailed deployment instr
 
 ### Environment Variables for Production
 
-**Required:**
-- `MONGODB_URI`: Your MongoDB connection string (MongoDB Atlas recommended)
-- `NEXTAUTH_URL`: Your production URL (e.g., `https://your-app.onrender.com`)
-- `NEXTAUTH_SECRET`: A strong secret key (generate with `openssl rand -base64 32`)
-
-**Optional:**
-- `CACHE_TTL`: Cache time-to-live in seconds (default: 300)
-- `CACHE_MAX_SIZE`: Maximum cache entries (default: 1000)
-- `RECURRING_EXPENSE_API_KEY`: API key for recurring expenses endpoint
+Make sure to set:
+- `DATABASE_URL`: Your MongoDB connection string
+- `NEXTAUTH_URL`: Your production URL
+- `NEXTAUTH_SECRET`: A strong secret key
 
 ## 📄 License
 

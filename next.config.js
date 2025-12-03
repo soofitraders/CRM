@@ -3,10 +3,6 @@ const nextConfig = {
   // Enable compression
   compress: true,
   
-  // Output configuration for Render
-  // Use standalone output for production deployment
-  output: 'standalone',
-  
   // Optimize images
   images: {
     formats: ['image/avif', 'image/webp'],
@@ -123,11 +119,6 @@ const nextConfig = {
   // Experimental features
   experimental: {
     optimizeCss: true,
-  },
-  
-  // Environment variables available to the client
-  env: {
-    NEXT_PUBLIC_APP_URL: process.env.NEXTAUTH_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000',
   },
 };
 

@@ -169,7 +169,7 @@ export async function POST(request: NextRequest) {
     await booking.save()
 
     // Invalidate related caches
-    invalidateBookingCache(String(booking._id), booking.customer ? String(booking.customer) : undefined, booking.vehicle ? String(booking.vehicle) : undefined)
+    invalidateBookingCache(booking._id.toString(), booking.customer?.toString(), booking.vehicle?.toString())
     invalidateDashboardCache()
 
     // Log activity
@@ -181,7 +181,7 @@ export async function POST(request: NextRequest) {
         action: 'CREATE',
         description: `Created booking for ${data.rentalType} rental`,
         entityType: 'Booking',
-        entityId: String(booking._id),
+        entityId: booking._id.toString(),
         userId: user._id.toString(),
         metadata: {
           branchId: data.pickupBranch,
@@ -201,7 +201,7 @@ export async function POST(request: NextRequest) {
           (body as any).mileageAtBooking,
           user._id.toString(),
           'BOOKING',
-          String(booking._id),
+          booking._id.toString(),
           undefined,
           'Mileage updated during booking creation'
         )
@@ -215,7 +215,7 @@ export async function POST(request: NextRequest) {
     if (bookingStatus === 'CONFIRMED') {
       try {
         const { createInvoiceFromBooking } = await import('@/lib/services/invoiceService')
-        await createInvoiceFromBooking(String(booking._id))
+        await createInvoiceFromBooking(booking._id.toString())
       } catch (error: any) {
         // Log error but don't fail the booking creation if invoice creation fails
         // (invoice might already exist or there might be a temporary issue)

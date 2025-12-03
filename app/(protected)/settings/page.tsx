@@ -155,7 +155,7 @@ export default function SettingsPage() {
       <SectionCard title="Company Settings">
         {!canEditSettings && (
           <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-yellow-500 text-sm">
-            You don&apos;t have permission to edit company settings. Only Administrators can modify these settings.
+            You don't have permission to edit company settings. Only Administrators can modify these settings.
           </div>
         )}
         <form onSubmit={handleSettingsSubmit} className="space-y-6">

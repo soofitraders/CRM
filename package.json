@@ -5,17 +5,13 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "node start.js",
-    "start:standalone": "cd .next/standalone && node server.js",
-    "start:standalone": "cd .next/standalone && node server.js",
-    "start:next": "next start -p ${PORT:-3000}",
+    "start": "next start",
     "lint": "next lint",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "db:generate": "prisma generate",
     "seed:admin": "tsx scripts/seedSuperAdmin.ts",
-    "optimize": "tsx scripts/optimizePerformance.ts",
-    "postinstall": "npm run db:generate"
+    "optimize": "tsx scripts/optimizePerformance.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

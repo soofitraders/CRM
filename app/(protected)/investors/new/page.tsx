@@ -139,7 +139,7 @@ export default function NewInvestorPage() {
                 </p>
               )}
               <p className="text-xs text-sidebarMuted mt-1">
-                Select the user account for this investor. If the user doesn&apos;t exist, create one first.
+                Select the user account for this investor. If the user doesn't exist, create one first.
               </p>
             </div>
 
