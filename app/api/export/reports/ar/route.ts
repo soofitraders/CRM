@@ -79,15 +79,15 @@ export async function GET(request: NextRequest) {
       })),
     ]
 
-    const columns = [
-      { key: 'invoiceNumber' as const, label: 'Invoice #' },
-      { key: 'customerName' as const, label: 'Customer' },
-      { key: 'dueDate' as const, label: 'Due Date' },
-      { key: 'total' as const, label: 'Total' },
-      { key: 'paidAmount' as const, label: 'Paid' },
-      { key: 'balance' as const, label: 'Balance' },
-      { key: 'daysOverdue' as const, label: 'Days Overdue' },
-      { key: 'bucket' as const, label: 'Aging Bucket' },
+    const columns: { key: string; label: string }[] = [
+      { key: 'invoiceNumber', label: 'Invoice #' },
+      { key: 'customerName', label: 'Customer' },
+      { key: 'dueDate', label: 'Due Date' },
+      { key: 'total', label: 'Total' },
+      { key: 'paidAmount', label: 'Paid' },
+      { key: 'balance', label: 'Balance' },
+      { key: 'daysOverdue', label: 'Days Overdue' },
+      { key: 'bucket', label: 'Aging Bucket' },
     ]
 
     let fileBuffer: Buffer
@@ -96,16 +96,16 @@ export async function GET(request: NextRequest) {
 
     try {
       if (format === 'csv') {
-        const csvContent = exportToCSV(exportData, columns)
+        const csvContent = exportToCSV(exportData as any[], columns as any[])
         fileBuffer = Buffer.from(csvContent, 'utf-8')
         contentType = 'text/csv; charset=utf-8'
         fileExtension = 'csv'
       } else if (format === 'excel') {
-        fileBuffer = await exportToExcel(exportData, columns)
+        fileBuffer = await exportToExcel(exportData as any[], columns as any[])
         contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         fileExtension = 'xlsx'
       } else if (format === 'pdf') {
-        fileBuffer = await exportToPDF('Accounts Receivable Report', exportData, columns)
+        fileBuffer = await exportToPDF('Accounts Receivable Report', exportData as any[], columns as any[])
         contentType = 'application/pdf'
         fileExtension = 'pdf'
       } else {
@@ -137,7 +137,7 @@ export async function GET(request: NextRequest) {
     const timestamp = formatDate(new Date(), 'yyyyMMdd-HHmmss')
     const filename = `ar-report-${timestamp}.${fileExtension}`
 
-    return new NextResponse(fileBuffer, {
+    return new NextResponse(fileBuffer as any, {
       headers: {
         'Content-Type': contentType,
         'Content-Disposition': `attachment; filename="${filename}"`,

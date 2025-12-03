@@ -211,7 +211,7 @@ export async function GET(request: NextRequest) {
 
     logger.log(`Returning file: ${filename} (${fileBuffer.length} bytes)`)
 
-    return new NextResponse(fileBuffer, {
+    return new NextResponse(fileBuffer as any, {
       headers: {
         'Content-Type': contentType,
         'Content-Disposition': `attachment; filename="${filename}"`,

@@ -139,7 +139,7 @@ export async function GET(request: NextRequest) {
     const filename = `vehicles-${timestamp}.${fileExtension}`
 
     // Return file
-    return new NextResponse(fileBuffer, {
+    return new NextResponse(fileBuffer as any, {
       headers: {
         'Content-Type': contentType,
         'Content-Disposition': `attachment; filename="${filename}"`,

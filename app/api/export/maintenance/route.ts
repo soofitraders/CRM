@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    if (!hasRole(user, ['SUPER_ADMIN', 'ADMIN', 'FINANCE', 'OPERATIONS'])) {
+    if (!hasRole(user, ['SUPER_ADMIN', 'ADMIN', 'FINANCE', 'MANAGER'])) {
       clearTimeout(timeoutId)
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
@@ -145,7 +145,7 @@ export async function GET(request: NextRequest) {
     const timestamp = formatDate(new Date(), 'yyyyMMdd-HHmmss')
     const filename = `maintenance-records-${timestamp}.${fileExtension}`
 
-    return new NextResponse(fileBuffer, {
+    return new NextResponse(fileBuffer as any, {
       headers: {
         'Content-Type': contentType,
         'Content-Disposition': `attachment; filename="${filename}"`,

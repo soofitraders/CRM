@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import SectionCard from '@/components/ui/SectionCard'
 import Table, { TableRow, TableCell } from '@/components/ui/Table'
-import ReportExportButton from '@/components/export/ReportExportButton'
+// import ReportExportButton from '@/components/export/ReportExportButton' // Not available for maintenance module
 import {
   Plus,
   X,
@@ -53,6 +53,7 @@ interface MaintenanceSchedule {
   nextServiceMileage?: number
   nextServiceDate?: string
   reminderDaysBefore: number
+  reminderMileageBefore?: number
   isActive: boolean
 }
 
@@ -335,15 +336,7 @@ export default function MaintenancePage() {
           <p className="text-bodyText mt-2">Automated maintenance scheduling and tracking</p>
         </div>
         <div className="flex gap-2">
-          <ReportExportButton
-            module="maintenance"
-            filters={{
-              vehicleId: vehicleFilter,
-              status: statusFilter,
-              dateFrom,
-              dateTo,
-            }}
-          />
+          {/* Export functionality can be added later when API endpoint is available */}
         </div>
       </div>
 
@@ -704,7 +697,7 @@ export default function MaintenancePage() {
                         cx="50%"
                         cy="50%"
                         labelLine={false}
-                        label={({ type, totalCost }) => `${type}: ${formatCurrency(totalCost)}`}
+                        label={({ name, value }) => `${name}: ${formatCurrency(value)}`}
                         outerRadius={100}
                         fill="#8884d8"
                         dataKey="totalCost"

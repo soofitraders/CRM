@@ -125,7 +125,7 @@ export async function GET(request: NextRequest) {
     const timestamp = formatDate(new Date(), 'yyyyMMdd-HHmmss')
     const filename = `utilization-report-${timestamp}.${fileExtension}`
 
-    return new NextResponse(fileBuffer, {
+    return new NextResponse(fileBuffer as any, {
       headers: {
         'Content-Type': contentType,
         'Content-Disposition': `attachment; filename="${filename}"`,

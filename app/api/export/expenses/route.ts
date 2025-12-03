@@ -158,7 +158,7 @@ export async function GET(request: NextRequest) {
         contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         fileExtension = 'xlsx'
       } else if (format === 'pdf') {
-        fileBuffer = await exportToPDF(exportData, columns, 'Expenses Report')
+        fileBuffer = await exportToPDF('Expenses Report', exportData, columns)
         contentType = 'application/pdf'
         fileExtension = 'pdf'
       } else {
@@ -189,7 +189,7 @@ export async function GET(request: NextRequest) {
 
       // Return file with proper headers
       const filename = `expenses_${formatDate(new Date(), 'yyyy-MM-dd_HH-mm-ss')}.${fileExtension}`
-      return new NextResponse(fileBuffer, {
+      return new NextResponse(fileBuffer as any, {
         status: 200,
         headers: {
           'Content-Type': contentType,

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { format, addDays } from 'date-fns'
 import SectionCard from '@/components/ui/SectionCard'
 import Table, { TableRow, TableCell } from '@/components/ui/Table'
-import ReportExportButton from '@/components/export/ReportExportButton'
+// import ReportExportButton from '@/components/export/ReportExportButton' // Not available for recurring-expenses module
 import { Plus, X, Edit, Trash2, Calendar, Bell, History, Loader2, CheckCircle, XCircle } from 'lucide-react'
 
 interface RecurringExpense {
@@ -273,13 +273,7 @@ export default function RecurringExpensesPage() {
           <p className="text-bodyText mt-2">Manage automated recurring expenses</p>
         </div>
         <div className="flex gap-2">
-          <ReportExportButton
-            module="recurring-expenses"
-            filters={{
-              isActive: isActiveFilter,
-              ...(branchId && { branchId }),
-            }}
-          />
+          {/* Export functionality can be added later when API endpoint is available */}
           <button
             onClick={() => {
               resetForm()

@@ -135,7 +135,7 @@ export async function PATCH(
       // Auto-create invoice when booking is confirmed (if not already created)
       if (previousStatus !== 'CONFIRMED' && data.status === 'CONFIRMED') {
         try {
-          await createInvoiceFromBooking(booking._id.toString())
+          await createInvoiceFromBooking(String(booking._id))
         } catch (error: any) {
           // Log error but don't fail the booking update if invoice creation fails
           // (invoice might already exist)

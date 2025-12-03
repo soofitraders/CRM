@@ -51,11 +51,12 @@ export function TableRow({ children, onClick }: TableRowProps) {
 interface TableCellProps {
   children: ReactNode
   className?: string
+  colSpan?: number
 }
 
-export function TableCell({ children, className = '' }: TableCellProps) {
+export function TableCell({ children, className = '', colSpan }: TableCellProps) {
   return (
-    <td className={`py-4 px-6 text-sm text-bodyText ${className}`}>
+    <td className={`py-4 px-6 text-sm text-bodyText ${className}`} colSpan={colSpan}>
       {children}
     </td>
   )

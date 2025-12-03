@@ -230,6 +230,7 @@ export default function SalariesPage() {
               allowances: '',
               deductions: '',
               netSalary: '',
+              branchId: '',
               notes: '',
             })
             setShowForm(true)
