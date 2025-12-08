@@ -148,10 +148,104 @@ export async function PATCH(
 
     // Update items if provided
     if (data.items !== undefined) {
-      // Recalculate totals
+      // Calculate subtotal from all items (including deposits as negative amounts)
       const subtotal = data.items.reduce((sum, item) => sum + item.amount, 0)
-      const taxAmount = invoice.taxAmount // Keep existing tax amount
+      
+      // Calculate taxable amount for VAT
+      // VAT applies to: rental + fines + other charges - discounts
+      // VAT does NOT apply to: deposits (which are payments/credits)
+      // Separate items into taxable (positive or discount) and non-taxable (deposits)
+      const taxableItems = data.items.filter(item => {
+        const label = item.label.toLowerCase()
+        // Deposits are non-taxable (they're payments, not charges)
+        return !label.includes('deposit')
+      })
+      const taxableSubtotal = taxableItems.reduce((sum, item) => sum + item.amount, 0)
+      
+      // Get VAT rate from settings
+      const Settings = (await import('@/lib/models/Settings')).default
+      const settings = await Settings.findOne().lean()
+      const vatRate = settings?.defaultTaxPercent || 5
+      
+      // Calculate VAT on taxable amount (ensure non-negative)
+      const taxAmount = Math.max(0, (taxableSubtotal * vatRate) / 100)
+      
+      // Total = subtotal (all items including deposits) + VAT
       const total = subtotal + taxAmount
+      
+      // Identify fines in the new items (items with positive amounts that are fines)
+      const fineItems = data.items.filter(item => {
+        const label = item.label.toLowerCase()
+        return item.amount > 0 && (
+          label.includes('fine') || 
+          label.includes('penalty') || 
+          label.includes('government') ||
+          label.includes('traffic')
+        )
+      })
+      
+      // Get existing invoice items to compare
+      const existingItems = invoice.items || []
+      const existingFineLabels = new Set(
+        existingItems
+          .filter((item: any) => {
+            const label = item.label.toLowerCase()
+            return item.amount > 0 && (
+              label.includes('fine') || 
+              label.includes('penalty') || 
+              label.includes('government') ||
+              label.includes('traffic')
+            )
+          })
+          .map((item: any) => item.label)
+      )
+      
+      // Create expense records for new fines
+      if (fineItems.length > 0) {
+        try {
+          const Expense = (await import('@/lib/models/Expense')).default
+          const ExpenseCategory = (await import('@/lib/models/ExpenseCategory')).default
+          
+          // Ensure default categories exist
+          await ExpenseCategory.ensureDefaultCategories()
+          
+          // Find or create FINES category
+          let finesCategory = await ExpenseCategory.findOne({ code: 'FINES' }).lean()
+          if (!finesCategory) {
+            finesCategory = await ExpenseCategory.create({
+              code: 'FINES',
+              name: 'Fines & Government Fees',
+              type: 'COGS',
+              isActive: true,
+            })
+          }
+          
+          // Get booking details for branch
+          const booking = await (await import('@/lib/models/Booking')).default
+            .findById(invoice.booking)
+            .select('pickupBranch')
+            .lean()
+          
+          // Create expense for each new fine
+          for (const fineItem of fineItems) {
+            // Only create expense if this fine wasn't in the existing items
+            if (!existingFineLabels.has(fineItem.label)) {
+              await Expense.create({
+                category: finesCategory._id,
+                description: `Fine - ${fineItem.label} - Invoice ${invoice.invoiceNumber}`,
+                amount: fineItem.amount,
+                currency: 'AED',
+                dateIncurred: invoice.issueDate || new Date(),
+                branchId: booking?.pickupBranch,
+                createdBy: user._id,
+              })
+            }
+          }
+        } catch (expenseError: any) {
+          // Log error but don't fail invoice update
+          logger.error('Error creating expense for fines:', expenseError)
+        }
+      }
       
       // Update invoice using direct MongoDB update to bypass Mongoose validation
       // that might block negative amounts for fines/discounts
@@ -160,8 +254,9 @@ export async function PATCH(
         {
           $set: {
             items: data.items,
-            subtotal,
-            total,
+            subtotal: Math.max(0, subtotal), // Ensure non-negative
+            taxAmount,
+            total: Math.max(0, total), // Ensure non-negative
             updatedAt: new Date(),
           },
         }

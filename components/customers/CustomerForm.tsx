@@ -145,6 +145,21 @@ export default function CustomerForm({
 
           <div>
             <label className="block text-sm font-medium text-headingText mb-2">
+              National ID Expiry Date
+            </label>
+            <input
+              type="date"
+              {...register('nationalIdExpiry')}
+              defaultValue={formatDateForInput(initialData?.nationalIdExpiry)}
+              className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+            />
+            {errors.nationalIdExpiry && (
+              <p className="text-danger text-xs mt-1">{errors.nationalIdExpiry.message}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-headingText mb-2">
               Passport Number
             </label>
             <input

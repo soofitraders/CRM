@@ -75,6 +75,19 @@ export async function updateVehicleMileage(
     newMileage,
   }
 
+  // Check maintenance schedules and send notifications/create records
+  try {
+    const { checkVehicleMaintenanceSchedule } = await import('@/lib/services/maintenanceService')
+    const maintenanceResult = await checkVehicleMaintenanceSchedule(vehicleId)
+    result.maintenanceScheduled = maintenanceResult.recordsCreated > 0
+    if (maintenanceResult.notificationsSent > 0 || maintenanceResult.recordsCreated > 0) {
+      logger.log(`[Mileage] Maintenance check for vehicle ${vehicleId}: ${maintenanceResult.notificationsSent} notifications sent, ${maintenanceResult.recordsCreated} records created`)
+    }
+  } catch (maintenanceError: any) {
+    logger.error('Error checking maintenance schedules:', maintenanceError)
+    // Don't fail mileage update if maintenance check fails
+  }
+
   // Check for warnings and maintenance requirements
   if (newMileage >= MILEAGE_CAP) {
     // Vehicle reached 10,000 km - schedule maintenance

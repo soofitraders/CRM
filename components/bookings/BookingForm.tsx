@@ -247,7 +247,7 @@ export default function BookingForm({
         {/* End Date/Time */}
         <div>
           <label className="block text-sm font-medium text-headingText mb-2">
-            End Date & Time *
+            End Date & Time
           </label>
           <input
             type="datetime-local"
@@ -263,6 +263,7 @@ export default function BookingForm({
           {errors.endDateTime && (
             <p className="text-danger text-xs mt-1">{errors.endDateTime.message}</p>
           )}
+          <p className="text-xs text-sidebarMuted mt-1">Leave empty for open bookings</p>
         </div>
 
         {/* Pickup Branch */}

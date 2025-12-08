@@ -1,6 +1,6 @@
 'use client'
 
-import { Car, Users, DollarSign, Calendar as CalendarIcon, Search, Filter, Plus } from 'lucide-react'
+import { Car, Users, Coins, Calendar as CalendarIcon, Search, Filter, Plus } from 'lucide-react'
 import StatCard from '@/components/ui/StatCard'
 import SectionCard from '@/components/ui/SectionCard'
 import Table, { TableRow, TableCell } from '@/components/ui/Table'
@@ -105,7 +105,7 @@ export default function DashboardPage() {
             subtext="Last month +12%"
           />
           <StatCard
-            icon={DollarSign}
+            icon={Coins}
             value={
               summaryLoading
                 ? '...'

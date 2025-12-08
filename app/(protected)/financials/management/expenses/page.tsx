@@ -77,6 +77,7 @@ export default function ExpensesPage() {
   const [showCategoryModal, setShowCategoryModal] = useState(false)
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
   const [investors, setInvestors] = useState<any[]>([])
+  const [vehicles, setVehicles] = useState<any[]>([])
   const [formData, setFormData] = useState({
     category: '',
     description: '',
@@ -85,12 +86,14 @@ export default function ExpensesPage() {
     dateIncurred: format(new Date(), 'yyyy-MM-dd'),
     branchId: '',
     investor: '',
+    vehicle: '',
   })
 
   useEffect(() => {
     fetchExpenses()
     fetchCategories()
     fetchInvestors()
+    fetchVehicles()
   }, [dateFrom, dateTo, categoryId, branchId])
 
   const fetchExpenses = async () => {
@@ -138,6 +141,18 @@ export default function ExpensesPage() {
     }
   }
 
+  const fetchVehicles = async () => {
+    try {
+      const response = await fetch('/api/vehicles')
+      if (response.ok) {
+        const data = await response.json()
+        setVehicles(data.vehicles || [])
+      }
+    } catch (err) {
+      console.error('Failed to load vehicles:', err)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
@@ -167,6 +182,7 @@ export default function ExpensesPage() {
         dateIncurred: format(new Date(), 'yyyy-MM-dd'),
         branchId: '',
         investor: '',
+        vehicle: '',
       })
       fetchExpenses()
     } catch (err: any) {
@@ -184,6 +200,7 @@ export default function ExpensesPage() {
       dateIncurred: format(new Date(expense.dateIncurred), 'yyyy-MM-dd'),
       branchId: expense.branchId || '',
       investor: (expense as any).investor?._id || '',
+      vehicle: (expense as any).vehicle?._id || '',
     })
     setShowForm(true)
   }
@@ -484,21 +501,51 @@ export default function ExpensesPage() {
                   />
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-bodyText mb-1">Investor (Optional)</label>
-                <select
-                  value={formData.investor}
-                  onChange={(e) => setFormData({ ...formData, investor: e.target.value })}
-                  className="w-full px-3 py-2 bg-cardBg border border-borderSoft rounded text-bodyText"
-                >
-                  <option value="">Select Investor (Optional)</option>
-                  {investors.map((investor) => (
-                    <option key={investor._id} value={investor._id}>
-                      {investor.user.name} {investor.companyName ? `(${investor.companyName})` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {(() => {
+                const selectedCategory = categories.find(cat => cat._id === formData.category)
+                const isVehiclePurchase = selectedCategory?.code === 'VEHICLE_PURCHASE'
+                
+                return (
+                  <>
+                    {isVehiclePurchase && (
+                      <div>
+                        <label className="block text-sm font-medium text-bodyText mb-1">Vehicle *</label>
+                        <select
+                          value={formData.vehicle}
+                          onChange={(e) => setFormData({ ...formData, vehicle: e.target.value })}
+                          required={isVehiclePurchase}
+                          className="w-full px-3 py-2 bg-cardBg border border-borderSoft rounded text-bodyText"
+                        >
+                          <option value="">Select Vehicle</option>
+                          {vehicles.map((vehicle) => (
+                            <option key={vehicle._id} value={vehicle._id}>
+                              {vehicle.plateNumber} - {vehicle.brand} {vehicle.model}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-sidebarMuted mt-1">
+                          Select the vehicle this purchase expense is for
+                        </p>
+                      </div>
+                    )}
+                    <div>
+                      <label className="block text-sm font-medium text-bodyText mb-1">Investor (Optional)</label>
+                      <select
+                        value={formData.investor}
+                        onChange={(e) => setFormData({ ...formData, investor: e.target.value })}
+                        className="w-full px-3 py-2 bg-cardBg border border-borderSoft rounded text-bodyText"
+                      >
+                        <option value="">Select Investor (Optional)</option>
+                        {investors.map((investor) => (
+                          <option key={investor._id} value={investor._id}>
+                            {investor.user.name} {investor.companyName ? `(${investor.companyName})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                )
+              })()}
               <div className="flex justify-end gap-2 pt-4">
                 <button
                   type="button"

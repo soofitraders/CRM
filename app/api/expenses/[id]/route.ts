@@ -159,7 +159,7 @@ export async function PATCH(
 
     // Regular expense - allow all updates
     const body = await request.json()
-    const { category, description, amount, currency, dateIncurred, branchId, investor } = body
+    const { category, description, amount, currency, dateIncurred, branchId, vehicle, investor } = body
 
     const updateData: any = {}
     if (category !== undefined) updateData.category = category
@@ -168,6 +168,7 @@ export async function PATCH(
     if (currency !== undefined) updateData.currency = currency
     if (dateIncurred !== undefined) updateData.dateIncurred = new Date(dateIncurred)
     if (branchId !== undefined) updateData.branchId = branchId || undefined
+    if (vehicle !== undefined) updateData.vehicle = vehicle || undefined
     if (investor !== undefined) updateData.investor = investor || undefined
 
     const expense = await Expense.findOneAndUpdate(

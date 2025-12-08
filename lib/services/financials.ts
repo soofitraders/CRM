@@ -5,6 +5,8 @@ import { logger } from '@/lib/utils/performance'
 
 /**
  * Calculate total sales for a given period
+ * Sales are calculated from invoices (PAID or ISSUED status)
+ * Excludes fines from revenue calculation
  * @param startDate - Start date of the period (optional, defaults to beginning of current month)
  * @param endDate - End date of the period (optional, defaults to now)
  * @returns Total sales amount
@@ -17,30 +19,44 @@ export async function totalSalesForPeriod(
     await connectDB()
 
     const filter: any = {
-      status: 'SUCCESS', // Only count successful payments
+      status: { $in: ['PAID', 'ISSUED'] }, // Count both paid and issued invoices
     }
 
     if (startDate || endDate) {
-      filter.createdAt = {}
+      filter.issueDate = {}
       if (startDate) {
-        filter.createdAt.$gte = startDate
+        filter.issueDate.$gte = startDate
       }
       if (endDate) {
-        filter.createdAt.$lte = endDate
+        filter.issueDate.$lte = endDate
       }
     }
 
-    const result = await Payment.aggregate([
-      { $match: filter },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: '$amount' },
-        },
-      },
-    ])
+    // Get all invoices in the period
+    const invoices = await Invoice.find(filter).lean()
 
-    return result.length > 0 ? result[0].total : 0
+    // Calculate total sales excluding fines
+    let totalSales = 0
+    
+    for (const invoice of invoices) {
+      // Calculate fines amount from invoice items
+      const finesAmount = (invoice.items || [])
+        .filter((item: any) => {
+          const label = (item.label || '').toLowerCase()
+          return item.amount > 0 && (
+            label.includes('fine') || 
+            label.includes('penalty') || 
+            label.includes('government') ||
+            label.includes('traffic')
+          )
+        })
+        .reduce((sum: number, item: any) => sum + item.amount, 0)
+      
+      // Add invoice total minus fines (fines are expenses, not revenue)
+      totalSales += (invoice.total || 0) - finesAmount
+    }
+
+    return totalSales
   } catch (error) {
     logger.error('Error calculating total sales:', error)
     return 0

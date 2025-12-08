@@ -69,15 +69,36 @@ export async function getProfitAndLoss(
     ? invoices.filter((inv: any) => inv.booking?.pickupBranch === branchId)
     : invoices
 
-  // Calculate total revenue
-  const totalRevenue = filteredInvoices.reduce((sum, inv: any) => sum + (inv.total || 0), 0)
+  // Helper function to identify fines in invoice items
+  const getFinesAmount = (items: any[]): number => {
+    if (!items || !Array.isArray(items)) return 0
+    return items
+      .filter(item => {
+        const label = (item.label || '').toLowerCase()
+        return item.amount > 0 && (
+          label.includes('fine') || 
+          label.includes('penalty') || 
+          label.includes('government') ||
+          label.includes('traffic')
+        )
+      })
+      .reduce((sum, item) => sum + item.amount, 0)
+  }
 
-  // Group revenue by month for breakdown
+  // Calculate total revenue excluding fines (fines are expenses, not revenue)
+  const totalRevenue = filteredInvoices.reduce((sum, inv: any) => {
+    const finesAmount = getFinesAmount(inv.items || [])
+    return sum + (inv.total || 0) - finesAmount
+  }, 0)
+
+  // Group revenue by month for breakdown (excluding fines)
   const revenueByMonth = new Map<string, number>()
   filteredInvoices.forEach((inv: any) => {
     const date = new Date(inv.issueDate)
     const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-    revenueByMonth.set(monthKey, (revenueByMonth.get(monthKey) || 0) + (inv.total || 0))
+    const finesAmount = getFinesAmount(inv.items || [])
+    const revenueWithoutFines = (inv.total || 0) - finesAmount
+    revenueByMonth.set(monthKey, (revenueByMonth.get(monthKey) || 0) + revenueWithoutFines)
   })
 
   const revenueBreakdown = Array.from(revenueByMonth.entries())
@@ -106,14 +127,41 @@ export async function getProfitAndLoss(
 
   cogsExpenses.forEach((exp: any) => {
     const category = exp.category
-    if (category && category.type === 'COGS') {
-      const categoryId = String(category._id)
+    const amount = exp.amount || 0
+    
+    // Helper function to check if expense should be COGS
+    const isCOGS = () => {
+      // If no category, include as COGS
+      if (!category) return true
+      
+      // If category type is explicitly COGS, include it
+      if (category.type === 'COGS') return true
+      
+      // If category type is missing, include it
+      if (!category.type) return true
+      
+      // If category name contains "(COGS)" or similar indicators, include it even if type is wrong
+      const categoryName = (category.name || '').toUpperCase()
+      if (categoryName.includes('(COGS)') || categoryName.includes('COGS') || 
+          categoryName.includes('COST OF GOODS') || categoryName.includes('PURCHASE PRICE')) {
+        return true
+      }
+      
+      // Otherwise exclude (it's OPEX)
+      return false
+    }
+    
+    // Include expenses that should be COGS
+    if (isCOGS()) {
+      const categoryId = category ? String(category._id) : 'UNCATEGORIZED'
+      const categoryName = category?.name || 'Uncategorized'
+      
       if (!cogsByCategory.has(categoryId)) {
-        cogsByCategory.set(categoryId, { name: category.name, amount: 0 })
+        cogsByCategory.set(categoryId, { name: categoryName, amount: 0 })
       }
       const cat = cogsByCategory.get(categoryId)!
-      cat.amount += exp.amount || 0
-      totalCOGS += exp.amount || 0
+      cat.amount += amount
+      totalCOGS += amount
     }
   })
 

@@ -760,6 +760,562 @@ export default function MaintenancePage() {
           )}
         </div>
       )}
+
+      {/* Maintenance Record Form Modal */}
+      {showRecordForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-cardBg rounded-xl shadow-xl border border-borderSoft max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-borderSoft flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-headingText">
+                {editingRecord ? 'Edit Maintenance Record' : 'Add Maintenance Record'}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowRecordForm(false)
+                  setEditingRecord(null)
+                }}
+                className="p-2 hover:bg-pageBg rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-bodyText" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault()
+                try {
+                  // Validate required fields
+                  if (!recordFormData.vehicle) {
+                    alert('Please select a vehicle')
+                    return
+                  }
+                  if (!recordFormData.description.trim()) {
+                    alert('Please enter a description')
+                    return
+                  }
+
+                  const submitData: any = {
+                    vehicle: recordFormData.vehicle,
+                    type: recordFormData.type,
+                    description: recordFormData.description.trim(),
+                    scheduledDate: recordFormData.scheduledDate || new Date().toISOString().split('T')[0],
+                    cost: recordFormData.cost && recordFormData.cost.toString().trim() 
+                      ? parseFloat(recordFormData.cost.toString()) 
+                      : 0,
+                  }
+
+                  if (recordFormData.maintenanceSchedule && recordFormData.maintenanceSchedule.trim()) {
+                    submitData.maintenanceSchedule = recordFormData.maintenanceSchedule
+                  }
+                  if (recordFormData.serviceType && recordFormData.serviceType.trim()) {
+                    submitData.serviceType = recordFormData.serviceType.trim()
+                  }
+                  if (recordFormData.vendorName && recordFormData.vendorName.trim()) {
+                    submitData.vendorName = recordFormData.vendorName.trim()
+                  }
+                  if (recordFormData.mileageAtService && recordFormData.mileageAtService.toString().trim()) {
+                    const mileage = parseFloat(recordFormData.mileageAtService.toString())
+                    if (!isNaN(mileage) && mileage >= 0) {
+                      submitData.mileageAtService = mileage
+                    }
+                  }
+
+                  const response = await fetch('/api/maintenance/records', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(submitData),
+                  })
+
+                  if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}))
+                    const errorMessage = errorData.error || 
+                      (errorData.details && Array.isArray(errorData.details) && errorData.details.length > 0
+                        ? errorData.details[0].message || errorData.details[0].path
+                        : 'Failed to create maintenance record')
+                    throw new Error(errorMessage)
+                  }
+
+                  const result = await response.json()
+                  
+                  // Reset form
+                  setRecordFormData({
+                    vehicle: '',
+                    maintenanceSchedule: '',
+                    type: 'SERVICE',
+                    serviceType: '',
+                    description: '',
+                    scheduledDate: format(new Date(), 'yyyy-MM-dd'),
+                    cost: '',
+                    vendorName: '',
+                    mileageAtService: '',
+                  })
+                  setShowRecordForm(false)
+                  setEditingRecord(null)
+                  
+                  // Refresh records list
+                  await fetchRecords()
+                  
+                  alert('Maintenance record created successfully')
+                } catch (err: any) {
+                  console.error('Error creating maintenance record:', err)
+                  alert(err.message || 'Failed to create maintenance record. Please check the console for details.')
+                }
+              }}
+              className="p-6 space-y-6"
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Vehicle */}
+                <div>
+                  <label className="block text-sm font-medium text-headingText mb-2">
+                    Vehicle *
+                  </label>
+                  <select
+                    value={recordFormData.vehicle}
+                    onChange={(e) => setRecordFormData({ ...recordFormData, vehicle: e.target.value })}
+                    required
+                    className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+                  >
+                    <option value="">Select vehicle</option>
+                    {vehicles.map((v) => (
+                      <option key={v._id} value={v._id}>
+                        {v.plateNumber} - {v.brand} {v.model}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Type */}
+                <div>
+                  <label className="block text-sm font-medium text-headingText mb-2">
+                    Maintenance Type *
+                  </label>
+                  <select
+                    value={recordFormData.type}
+                    onChange={(e) => setRecordFormData({ ...recordFormData, type: e.target.value as any })}
+                    required
+                    className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+                  >
+                    <option value="SERVICE">Service</option>
+                    <option value="REPAIR">Repair</option>
+                    <option value="ACCIDENT">Accident</option>
+                    <option value="INSPECTION">Inspection</option>
+                  </select>
+                </div>
+
+                {/* Service Type */}
+                <div>
+                  <label className="block text-sm font-medium text-headingText mb-2">
+                    Service Type
+                  </label>
+                  <input
+                    type="text"
+                    value={recordFormData.serviceType}
+                    onChange={(e) => setRecordFormData({ ...recordFormData, serviceType: e.target.value })}
+                    placeholder="e.g., Oil Change, Tire Rotation"
+                    className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+                  />
+                </div>
+
+                {/* Scheduled Date */}
+                <div>
+                  <label className="block text-sm font-medium text-headingText mb-2">
+                    Scheduled Date
+                  </label>
+                  <input
+                    type="date"
+                    value={recordFormData.scheduledDate}
+                    onChange={(e) => setRecordFormData({ ...recordFormData, scheduledDate: e.target.value })}
+                    className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+                  />
+                </div>
+
+                {/* Cost */}
+                <div>
+                  <label className="block text-sm font-medium text-headingText mb-2">
+                    Cost (AED)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={recordFormData.cost}
+                    onChange={(e) => setRecordFormData({ ...recordFormData, cost: e.target.value })}
+                    placeholder="0.00"
+                    className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+                  />
+                </div>
+
+                {/* Vendor Name */}
+                <div>
+                  <label className="block text-sm font-medium text-headingText mb-2">
+                    Vendor Name
+                  </label>
+                  <input
+                    type="text"
+                    value={recordFormData.vendorName}
+                    onChange={(e) => setRecordFormData({ ...recordFormData, vendorName: e.target.value })}
+                    placeholder="Vendor/Service provider"
+                    className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+                  />
+                </div>
+
+                {/* Mileage at Service */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-headingText mb-2">
+                    Mileage at Service
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={recordFormData.mileageAtService}
+                    onChange={(e) => setRecordFormData({ ...recordFormData, mileageAtService: e.target.value })}
+                    placeholder="Vehicle mileage"
+                    className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+                  />
+                </div>
+
+                {/* Description */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-headingText mb-2">
+                    Description *
+                  </label>
+                  <textarea
+                    value={recordFormData.description}
+                    onChange={(e) => setRecordFormData({ ...recordFormData, description: e.target.value })}
+                    required
+                    rows={4}
+                    placeholder="Describe the maintenance work..."
+                    className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50 resize-none"
+                  />
+                </div>
+              </div>
+
+              {/* Form Actions */}
+              <div className="flex items-center justify-end gap-4 pt-4 border-t border-borderSoft">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowRecordForm(false)
+                    setEditingRecord(null)
+                  }}
+                  className="px-6 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText font-medium hover:bg-borderSoft transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2 bg-sidebarActiveBg text-white rounded-lg font-medium hover:bg-sidebarActiveBg/90 transition-colors"
+                >
+                  {editingRecord ? 'Update Record' : 'Create Record'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Maintenance Schedule Form Modal */}
+      {showScheduleForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-cardBg rounded-xl shadow-xl border border-borderSoft max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-borderSoft flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-headingText">
+                {editingSchedule ? 'Edit Maintenance Schedule' : 'Add Maintenance Schedule'}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowScheduleForm(false)
+                  setEditingSchedule(null)
+                }}
+                className="p-2 hover:bg-pageBg rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-bodyText" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault()
+                try {
+                  // Validate required fields
+                  if (!scheduleFormData.vehicle) {
+                    alert('Please select a vehicle')
+                    return
+                  }
+                  if (!scheduleFormData.serviceType.trim()) {
+                    alert('Please enter a service type')
+                    return
+                  }
+                  if (scheduleFormData.scheduleType === 'MILEAGE' || scheduleFormData.scheduleType === 'BOTH') {
+                    if (!scheduleFormData.mileageInterval || parseFloat(scheduleFormData.mileageInterval.toString()) <= 0) {
+                      alert('Please enter a mileage interval')
+                      return
+                    }
+                  }
+                  if (scheduleFormData.scheduleType === 'TIME' || scheduleFormData.scheduleType === 'BOTH') {
+                    if (!scheduleFormData.timeInterval) {
+                      alert('Please select a time interval')
+                      return
+                    }
+                  }
+
+                  const submitData: any = {
+                    vehicle: scheduleFormData.vehicle,
+                    serviceType: scheduleFormData.serviceType.trim(),
+                    scheduleType: scheduleFormData.scheduleType,
+                    reminderDaysBefore: scheduleFormData.reminderDaysBefore ? parseFloat(scheduleFormData.reminderDaysBefore.toString()) : 7,
+                    reminderMileageBefore: scheduleFormData.reminderMileageBefore ? parseFloat(scheduleFormData.reminderMileageBefore.toString()) : 500,
+                  }
+
+                  if (scheduleFormData.scheduleType === 'MILEAGE' || scheduleFormData.scheduleType === 'BOTH') {
+                    submitData.mileageInterval = parseFloat(scheduleFormData.mileageInterval.toString())
+                  }
+                  if (scheduleFormData.scheduleType === 'TIME' || scheduleFormData.scheduleType === 'BOTH') {
+                    submitData.timeInterval = scheduleFormData.timeInterval
+                    if (scheduleFormData.timeIntervalDays && scheduleFormData.timeIntervalDays.trim()) {
+                      submitData.timeIntervalDays = parseFloat(scheduleFormData.timeIntervalDays.toString())
+                    }
+                  }
+                  if (scheduleFormData.estimatedCost && scheduleFormData.estimatedCost.toString().trim()) {
+                    submitData.estimatedCost = parseFloat(scheduleFormData.estimatedCost.toString())
+                  }
+                  if (scheduleFormData.notes && scheduleFormData.notes.trim()) {
+                    submitData.notes = scheduleFormData.notes.trim()
+                  }
+
+                  const response = await fetch('/api/maintenance/schedules', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(submitData),
+                  })
+
+                  if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}))
+                    const errorMessage = errorData.error || 
+                      (errorData.details && Array.isArray(errorData.details) && errorData.details.length > 0
+                        ? errorData.details[0].message || errorData.details[0].path
+                        : 'Failed to create maintenance schedule')
+                    throw new Error(errorMessage)
+                  }
+
+                  // Reset form
+                  setScheduleFormData({
+                    vehicle: '',
+                    serviceType: '',
+                    scheduleType: 'TIME',
+                    mileageInterval: '',
+                    timeInterval: 'MONTHLY',
+                    timeIntervalDays: '',
+                    reminderDaysBefore: '7',
+                    reminderMileageBefore: '500',
+                    estimatedCost: '',
+                    notes: '',
+                  })
+                  setShowScheduleForm(false)
+                  setEditingSchedule(null)
+                  
+                  // Refresh schedules list
+                  await fetchSchedules()
+                  
+                  alert('Maintenance schedule created successfully')
+                } catch (err: any) {
+                  console.error('Error creating maintenance schedule:', err)
+                  alert(err.message || 'Failed to create maintenance schedule. Please check the console for details.')
+                }
+              }}
+              className="p-6 space-y-6"
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Vehicle */}
+                <div>
+                  <label className="block text-sm font-medium text-headingText mb-2">
+                    Vehicle *
+                  </label>
+                  <select
+                    value={scheduleFormData.vehicle}
+                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, vehicle: e.target.value })}
+                    required
+                    className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+                  >
+                    <option value="">Select vehicle</option>
+                    {vehicles.map((v) => (
+                      <option key={v._id} value={v._id}>
+                        {v.plateNumber} - {v.brand} {v.model}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Service Type */}
+                <div>
+                  <label className="block text-sm font-medium text-headingText mb-2">
+                    Service Type *
+                  </label>
+                  <input
+                    type="text"
+                    value={scheduleFormData.serviceType}
+                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, serviceType: e.target.value })}
+                    required
+                    placeholder="e.g., Oil Change, Tire Rotation"
+                    className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+                  />
+                </div>
+
+                {/* Schedule Type */}
+                <div>
+                  <label className="block text-sm font-medium text-headingText mb-2">
+                    Schedule Type *
+                  </label>
+                  <select
+                    value={scheduleFormData.scheduleType}
+                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, scheduleType: e.target.value as any })}
+                    required
+                    className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+                  >
+                    <option value="TIME">Time Based</option>
+                    <option value="MILEAGE">Mileage Based</option>
+                    <option value="BOTH">Both Time & Mileage</option>
+                  </select>
+                </div>
+
+                {/* Time Interval */}
+                {(scheduleFormData.scheduleType === 'TIME' || scheduleFormData.scheduleType === 'BOTH') && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-headingText mb-2">
+                        Time Interval *
+                      </label>
+                      <select
+                        value={scheduleFormData.timeInterval}
+                        onChange={(e) => setScheduleFormData({ ...scheduleFormData, timeInterval: e.target.value as any })}
+                        required
+                        className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+                      >
+                        <option value="DAILY">Daily</option>
+                        <option value="WEEKLY">Weekly</option>
+                        <option value="MONTHLY">Monthly</option>
+                        <option value="QUARTERLY">Quarterly</option>
+                        <option value="YEARLY">Yearly</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-headingText mb-2">
+                        Custom Days (Optional)
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={scheduleFormData.timeIntervalDays}
+                        onChange={(e) => setScheduleFormData({ ...scheduleFormData, timeIntervalDays: e.target.value })}
+                        placeholder="Custom number of days"
+                        className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {/* Mileage Interval */}
+                {(scheduleFormData.scheduleType === 'MILEAGE' || scheduleFormData.scheduleType === 'BOTH') && (
+                  <div>
+                    <label className="block text-sm font-medium text-headingText mb-2">
+                      Mileage Interval (km) *
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={scheduleFormData.mileageInterval}
+                      onChange={(e) => setScheduleFormData({ ...scheduleFormData, mileageInterval: e.target.value })}
+                      required={scheduleFormData.scheduleType === 'MILEAGE' || scheduleFormData.scheduleType === 'BOTH'}
+                      placeholder="e.g., 5000"
+                      className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+                    />
+                  </div>
+                )}
+
+                {/* Reminder Days Before */}
+                <div>
+                  <label className="block text-sm font-medium text-headingText mb-2">
+                    Reminder Days Before
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={scheduleFormData.reminderDaysBefore}
+                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, reminderDaysBefore: e.target.value })}
+                    placeholder="7"
+                    className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+                  />
+                </div>
+
+                {/* Reminder Mileage Before */}
+                <div>
+                  <label className="block text-sm font-medium text-headingText mb-2">
+                    Reminder Mileage Before (km)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={scheduleFormData.reminderMileageBefore}
+                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, reminderMileageBefore: e.target.value })}
+                    placeholder="500"
+                    className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+                  />
+                </div>
+
+                {/* Estimated Cost */}
+                <div>
+                  <label className="block text-sm font-medium text-headingText mb-2">
+                    Estimated Cost (AED)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={scheduleFormData.estimatedCost}
+                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, estimatedCost: e.target.value })}
+                    placeholder="0.00"
+                    className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+                  />
+                </div>
+
+                {/* Notes */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-headingText mb-2">
+                    Notes
+                  </label>
+                  <textarea
+                    value={scheduleFormData.notes}
+                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, notes: e.target.value })}
+                    rows={3}
+                    placeholder="Additional notes..."
+                    className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50 resize-none"
+                  />
+                </div>
+              </div>
+
+              {/* Form Actions */}
+              <div className="flex items-center justify-end gap-4 pt-4 border-t border-borderSoft">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowScheduleForm(false)
+                    setEditingSchedule(null)
+                  }}
+                  className="px-6 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText font-medium hover:bg-borderSoft transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2 bg-sidebarActiveBg text-white rounded-lg font-medium hover:bg-sidebarActiveBg/90 transition-colors"
+                >
+                  {editingSchedule ? 'Update Schedule' : 'Create Schedule'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

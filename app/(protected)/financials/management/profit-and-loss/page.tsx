@@ -7,7 +7,7 @@ import SectionCard from '@/components/ui/SectionCard'
 import Table, { TableRow, TableCell } from '@/components/ui/Table'
 import ReportExportButton from '@/components/export/ReportExportButton'
 import AdvancedFilters from '@/components/reports/AdvancedFilters'
-import { DollarSign, TrendingUp, TrendingDown, Percent, Loader2, BarChart3, PieChart as PieChartIcon } from 'lucide-react'
+import { Coins, TrendingUp, TrendingDown, Percent, Loader2, BarChart3, PieChart as PieChartIcon } from 'lucide-react'
 import {
   LineChart,
   Line,
@@ -394,7 +394,7 @@ export default function ProfitAndLossPage() {
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
-          icon={DollarSign}
+          icon={Coins}
           value={formatCurrency(pnlData.revenue.total)}
           label="Total Revenue"
         />

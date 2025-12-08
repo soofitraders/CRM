@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
     await connectDB()
 
     const body = await request.json()
-    const { category, description, amount, currency, dateIncurred, branchId, salaryRecord, investorPayout, investor } = body
+    const { category, description, amount, currency, dateIncurred, branchId, vehicle, salaryRecord, investorPayout, investor } = body
 
     // Block manual creation of salary expenses
     if (salaryRecord) {
@@ -208,6 +208,7 @@ export async function POST(request: NextRequest) {
       currency: currency || 'AED',
       dateIncurred: new Date(dateIncurred),
       branchId: branchId || undefined,
+      vehicle: vehicle || undefined,
       investor: investor || undefined,
       createdBy: user._id,
     })

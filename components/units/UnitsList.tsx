@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import SectionCard from '@/components/ui/SectionCard'
 import Table, { TableRow, TableCell } from '@/components/ui/Table'
 import StatusChip from '@/components/ui/StatusChip'
-import { Search, Edit, AlertTriangle } from 'lucide-react'
+import { Search, Edit, AlertTriangle, BarChart3 } from 'lucide-react'
 import Link from 'next/link'
 import { isExpiringSoon, daysLeft, formatDaysLeft } from '@/lib/utils/compliance'
 import { format } from 'date-fns'
@@ -247,13 +247,22 @@ export default function UnitsList() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Link
-                      href={`/units/${vehicle._id}`}
-                      className="text-sidebarActiveBg hover:text-sidebarActiveBg/80 font-medium text-sm flex items-center gap-1"
-                    >
-                      <Edit className="w-4 h-4" />
-                      Edit
-                    </Link>
+                    <div className="flex items-center gap-3">
+                      <Link
+                        href={`/units/${vehicle._id}/performance`}
+                        className="text-sidebarActiveBg hover:text-sidebarActiveBg/80 font-medium text-sm flex items-center gap-1"
+                      >
+                        <BarChart3 className="w-4 h-4" />
+                        Performance
+                      </Link>
+                      <Link
+                        href={`/units/${vehicle._id}`}
+                        className="text-sidebarActiveBg hover:text-sidebarActiveBg/80 font-medium text-sm flex items-center gap-1"
+                      >
+                        <Edit className="w-4 h-4" />
+                        Edit
+                      </Link>
+                    </div>
                   </TableCell>
                 </TableRow>
               )

@@ -3,6 +3,7 @@ import mongoose, { Schema, Document, Model } from 'mongoose'
 export interface ICustomerProfile extends Document {
   user: mongoose.Types.ObjectId
   nationalId?: string
+  nationalIdExpiry?: Date
   passportNumber?: string
   drivingLicenseNumber: string
   drivingLicenseCountry: string
@@ -30,6 +31,9 @@ const CustomerProfileSchema = new Schema<ICustomerProfile>(
     nationalId: {
       type: String,
       trim: true,
+    },
+    nationalIdExpiry: {
+      type: Date,
     },
     passportNumber: {
       type: String,

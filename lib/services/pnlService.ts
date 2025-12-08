@@ -218,9 +218,29 @@ export async function getEnhancedProfitAndLoss(
     ? invoices.filter((inv: any) => inv.booking?.pickupBranch === branchId)
     : invoices
 
-  const totalRevenue = filteredInvoices.reduce((sum, inv: any) => sum + (inv.total || 0), 0)
+  // Helper function to identify fines in invoice items
+  const getFinesAmount = (items: any[]): number => {
+    if (!items || !Array.isArray(items)) return 0
+    return items
+      .filter(item => {
+        const label = (item.label || '').toLowerCase()
+        return item.amount > 0 && (
+          label.includes('fine') || 
+          label.includes('penalty') || 
+          label.includes('government') ||
+          label.includes('traffic')
+        )
+      })
+      .reduce((sum, item) => sum + item.amount, 0)
+  }
 
-  // Group revenue by period for breakdown
+  // Calculate revenue excluding fines (fines are expenses, not revenue)
+  const totalRevenue = filteredInvoices.reduce((sum, inv: any) => {
+    const finesAmount = getFinesAmount(inv.items || [])
+    return sum + (inv.total || 0) - finesAmount
+  }, 0)
+
+  // Group revenue by period for breakdown (excluding fines)
   const revenueBreakdown = new Map<string, number>()
   filteredInvoices.forEach((inv: any) => {
     const date = new Date(inv.issueDate)
@@ -243,7 +263,9 @@ export async function getEnhancedProfitAndLoss(
         break
     }
 
-    revenueBreakdown.set(periodKey, (revenueBreakdown.get(periodKey) || 0) + (inv.total || 0))
+    const finesAmount = getFinesAmount(inv.items || [])
+    const revenueWithoutFines = (inv.total || 0) - finesAmount
+    revenueBreakdown.set(periodKey, (revenueBreakdown.get(periodKey) || 0) + revenueWithoutFines)
   })
 
   // Calculate COGS
@@ -259,23 +281,51 @@ export async function getEnhancedProfitAndLoss(
     cogsFilter.branchId = branchId
   }
 
-  const cogsExpenses = await Expense.find(cogsFilter)
+  const allExpenses = await Expense.find(cogsFilter)
     .populate('category')
     .lean()
 
   const cogsByCategory = new Map<string, { name: string; code: string; amount: number }>()
   let totalCOGS = 0
 
-  cogsExpenses.forEach((exp: any) => {
+  allExpenses.forEach((exp: any) => {
     const category = exp.category
-    if (category && category.type === 'COGS') {
-      const categoryId = String(category._id)
+    const amount = exp.amount || 0
+    
+    // Helper function to check if expense should be COGS
+    const isCOGS = () => {
+      // If no category, include as COGS
+      if (!category) return true
+      
+      // If category type is explicitly COGS, include it
+      if (category.type === 'COGS') return true
+      
+      // If category type is missing, include it
+      if (!category.type) return true
+      
+      // If category name contains "(COGS)" or similar indicators, include it even if type is wrong
+      const categoryName = (category.name || '').toUpperCase()
+      if (categoryName.includes('(COGS)') || categoryName.includes('COGS') || 
+          categoryName.includes('COST OF GOODS') || categoryName.includes('PURCHASE PRICE')) {
+        return true
+      }
+      
+      // Otherwise exclude (it's OPEX)
+      return false
+    }
+    
+    // Include expenses that should be COGS
+    if (isCOGS()) {
+      const categoryId = category ? String(category._id) : 'UNCATEGORIZED'
+      const categoryName = category?.name || 'Uncategorized'
+      const categoryCode = category?.code || 'OTHER'
+      
       if (!cogsByCategory.has(categoryId)) {
-        cogsByCategory.set(categoryId, { name: category.name, code: category.code, amount: 0 })
+        cogsByCategory.set(categoryId, { name: categoryName, code: categoryCode, amount: 0 })
       }
       const cat = cogsByCategory.get(categoryId)!
-      cat.amount += exp.amount || 0
-      totalCOGS += exp.amount || 0
+      cat.amount += amount
+      totalCOGS += amount
     }
   })
 
@@ -304,23 +354,26 @@ export async function getEnhancedProfitAndLoss(
     totalMaintenance += cost
   })
 
-  // Calculate OPEX
-  const opexExpenses = await Expense.find(cogsFilter).populate('category').lean()
+  // Calculate OPEX - use the same allExpenses array but filter for OPEX type
+  const opexExpenses = allExpenses.filter((exp: any) => {
+    const category = exp.category
+    return category && category.type === 'OPEX'
+  })
 
   const opexByCategory = new Map<string, { name: string; code: string; amount: number }>()
   let totalOPEX = 0
 
   opexExpenses.forEach((exp: any) => {
     const category = exp.category
-    if (category && category.type === 'OPEX') {
-      const categoryId = String(category._id)
-      if (!opexByCategory.has(categoryId)) {
-        opexByCategory.set(categoryId, { name: category.name, code: category.code, amount: 0 })
-      }
-      const cat = opexByCategory.get(categoryId)!
-      cat.amount += exp.amount || 0
-      totalOPEX += exp.amount || 0
+    const amount = exp.amount || 0
+    
+    const categoryId = String(category._id)
+    if (!opexByCategory.has(categoryId)) {
+      opexByCategory.set(categoryId, { name: category.name, code: category.code, amount: 0 })
     }
+    const cat = opexByCategory.get(categoryId)!
+    cat.amount += amount
+    totalOPEX += amount
   })
 
   // Calculate Fixed Costs (Salaries, Rent, Utilities)
@@ -405,7 +458,7 @@ export async function getEnhancedProfitAndLoss(
       .lean()
 
     const previousCOGS = previousExpenses
-      .filter((exp: any) => exp.category?.type === 'COGS')
+      .filter((exp: any) => !exp.category || exp.category?.type === 'COGS' || !exp.category?.type)
       .reduce((sum, exp: any) => sum + (exp.amount || 0), 0)
 
     const previousOPEX = previousExpenses

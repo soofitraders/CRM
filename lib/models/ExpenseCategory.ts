@@ -87,6 +87,8 @@ ExpenseCategorySchema.statics.ensureDefaultCategories = async function () {
       { code: 'MARKETING', name: 'Marketing', type: 'OPEX' as ExpenseCategoryType },
       { code: 'SOFTWARE', name: 'Software', type: 'OPEX' as ExpenseCategoryType },
       { code: 'INVESTOR_PAYOUTS', name: 'Investor Payouts', type: 'COGS' as ExpenseCategoryType },
+      { code: 'FINES', name: 'Fines & Government Fees', type: 'COGS' as ExpenseCategoryType },
+      { code: 'VEHICLE_PURCHASE', name: 'Vehicle Purchase', type: 'COGS' as ExpenseCategoryType },
     ]
 
     for (const cat of defaultCategories) {

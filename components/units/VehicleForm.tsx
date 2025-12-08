@@ -111,19 +111,19 @@ export default function VehicleForm({
           )}
         </div>
 
-        {/* VIN */}
+        {/* Chassis Number */}
         <div>
           <label className="block text-sm font-medium text-headingText mb-2">
-            VIN *
+            Chassis Number *
           </label>
           <input
             type="text"
             {...register('vin')}
-            placeholder="Vehicle Identification Number"
+            placeholder="Chassis Number"
             className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50 uppercase"
           />
           {errors.vin && (
-            <p className="text-danger text-xs mt-1">{errors.vin.message}</p>
+            <p className="text-danger text-xs mt-1">{errors.vin.message?.replace('VIN', 'Chassis Number')}</p>
           )}
         </div>
 
@@ -194,6 +194,7 @@ export default function VehicleForm({
             <option value="WAGON">Wagon</option>
             <option value="VAN">Van</option>
             <option value="TRUCK">Truck</option>
+            <option value="CROSSOVER">Crossover</option>
             <option value="OTHER">Other</option>
           </select>
           {errors.category && (
@@ -414,6 +415,22 @@ export default function VehicleForm({
           />
           {errors.currentBranch && (
             <p className="text-danger text-xs mt-1">{errors.currentBranch.message}</p>
+          )}
+        </div>
+
+        {/* Color */}
+        <div>
+          <label className="block text-sm font-medium text-headingText mb-2">
+            Color
+          </label>
+          <input
+            type="text"
+            {...register('color')}
+            placeholder="Vehicle color"
+            className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+          />
+          {errors.color && (
+            <p className="text-danger text-xs mt-1">{errors.color.message}</p>
           )}
         </div>
       </div>

@@ -8,6 +8,7 @@ export const createCustomerSchema = z.object({
   
   // CustomerProfile fields
   nationalId: z.string().optional(),
+  nationalIdExpiry: z.string().or(z.date()).optional(),
   passportNumber: z.string().optional(),
   drivingLicenseNumber: z.string().min(1, 'Driving license number is required'),
   drivingLicenseCountry: z.string().min(1, 'Driving license country is required'),

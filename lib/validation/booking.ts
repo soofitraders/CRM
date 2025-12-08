@@ -20,7 +20,7 @@ export const createBookingSchema = z
     customer: z.string().min(1, 'Customer is required'),
     rentalType: rentalTypeSchema,
     startDateTime: z.string().or(z.date()),
-    endDateTime: z.string().or(z.date()),
+    endDateTime: z.string().or(z.date()).optional(),
     pickupBranch: z.string().min(1, 'Pickup branch is required'),
     dropoffBranch: z.string().min(1, 'Dropoff branch is required'),
     baseRate: z.number().min(0, 'Base rate must be positive'),
@@ -32,6 +32,7 @@ export const createBookingSchema = z
   })
   .refine(
     (data) => {
+      if (!data.endDateTime) return true // End date is optional
       const start = new Date(data.startDateTime)
       const end = new Date(data.endDateTime)
       return end > start

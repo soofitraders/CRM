@@ -193,6 +193,7 @@ export async function POST(request: NextRequest) {
         issueDate: data.issueDate ? new Date(data.issueDate) : undefined,
         dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
         taxPercent: data.taxPercent,
+        createdBy: user._id.toString(),
       })
     } else {
       // Create invoice from booking (auto-generate items from booking)

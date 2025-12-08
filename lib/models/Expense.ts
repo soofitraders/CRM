@@ -8,8 +8,10 @@ export interface IExpense extends Document {
   dateIncurred: Date
   branchId?: string
   createdBy: mongoose.Types.ObjectId
+  vehicle?: mongoose.Types.ObjectId
   salaryRecord?: mongoose.Types.ObjectId
   investorPayout?: mongoose.Types.ObjectId
+  maintenanceRecord?: mongoose.Types.ObjectId
   investor?: mongoose.Types.ObjectId
   isDeleted: boolean
   createdAt: Date
@@ -53,6 +55,10 @@ const ExpenseSchema = new Schema<IExpense>(
       ref: 'User',
       required: [true, 'Created by user is required'],
     },
+    vehicle: {
+      type: Schema.Types.ObjectId,
+      ref: 'Vehicle',
+    },
     salaryRecord: {
       type: Schema.Types.ObjectId,
       ref: 'SalaryRecord',
@@ -60,6 +66,10 @@ const ExpenseSchema = new Schema<IExpense>(
     investorPayout: {
       type: Schema.Types.ObjectId,
       ref: 'InvestorPayout',
+    },
+    maintenanceRecord: {
+      type: Schema.Types.ObjectId,
+      ref: 'MaintenanceRecord',
     },
     investor: {
       type: Schema.Types.ObjectId,
@@ -80,11 +90,14 @@ ExpenseSchema.index({ category: 1 })
 ExpenseSchema.index({ dateIncurred: -1 })
 ExpenseSchema.index({ branchId: 1 })
 ExpenseSchema.index({ createdBy: 1 })
+ExpenseSchema.index({ vehicle: 1 })
 ExpenseSchema.index({ salaryRecord: 1 })
 ExpenseSchema.index({ investorPayout: 1 })
+ExpenseSchema.index({ maintenanceRecord: 1 })
 ExpenseSchema.index({ investor: 1 })
 ExpenseSchema.index({ isDeleted: 1 })
 ExpenseSchema.index({ dateIncurred: 1, category: 1 })
+ExpenseSchema.index({ vehicle: 1, category: 1 })
 
 const Expense: Model<IExpense> =
   mongoose.models.Expense || mongoose.model<IExpense>('Expense', ExpenseSchema)

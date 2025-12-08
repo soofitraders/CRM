@@ -9,6 +9,7 @@ export const vehicleCategorySchema = z.enum([
   'WAGON',
   'VAN',
   'TRUCK',
+  'CROSSOVER',
   'OTHER',
 ])
 
@@ -27,7 +28,7 @@ export const transmissionSchema = z.enum(['MANUAL', 'AUTOMATIC', 'CVT'])
 
 export const createVehicleSchema = z.object({
   plateNumber: z.string().min(1, 'Plate number is required'),
-  vin: z.string().min(1, 'VIN is required'),
+  vin: z.string().min(1, 'Chassis Number is required'),
   brand: z.string().min(1, 'Brand is required'),
   model: z.string().min(1, 'Model is required'),
   year: z.number().min(1900).max(new Date().getFullYear() + 1),
@@ -44,6 +45,7 @@ export const createVehicleSchema = z.object({
   weeklyRate: z.number().min(0),
   monthlyRate: z.number().min(0),
   currentBranch: z.string().min(1, 'Current branch is required'),
+  color: z.string().optional(),
 })
 
 export const updateVehicleSchema = createVehicleSchema.partial()

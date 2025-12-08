@@ -1,6 +1,7 @@
 import connectDB from '@/lib/db'
 import Invoice from '@/lib/models/Invoice'
 import Booking from '@/lib/models/Booking'
+import Settings from '@/lib/models/Settings'
 import { logger } from '@/lib/utils/performance'
 
 /**
@@ -42,9 +43,9 @@ export async function createInvoiceFromBooking(bookingId: string): Promise<any> 
       return existingInvoice
     }
 
-    // Get booking details
+    // Get booking details with vehicle rates
     const booking = await Booking.findById(bookingId)
-      .populate('vehicle', 'plateNumber brand model')
+      .populate('vehicle', 'plateNumber brand model dailyRate weeklyRate monthlyRate')
       .populate('customer')
       .lean()
 
@@ -52,12 +53,37 @@ export async function createInvoiceFromBooking(bookingId: string): Promise<any> 
       throw new Error('Booking not found')
     }
 
+    const vehicle = (booking as any).vehicle
+    if (!vehicle) {
+      throw new Error('Vehicle not found')
+    }
+
+    // Calculate number of days
+    let numberOfDays = 1 // Default to 1 day if no end date
+    if (booking.endDateTime) {
+      const startDate = new Date(booking.startDateTime)
+      const endDate = new Date(booking.endDateTime)
+      const diffTime = endDate.getTime() - startDate.getTime()
+      numberOfDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)))
+    }
+
+    // Get daily rate based on rental type
+    let dailyRate = vehicle.dailyRate || 0
+    if (booking.rentalType === 'WEEKLY' && vehicle.weeklyRate) {
+      dailyRate = vehicle.weeklyRate / 7
+    } else if (booking.rentalType === 'MONTHLY' && vehicle.monthlyRate) {
+      dailyRate = vehicle.monthlyRate / 30
+    }
+
+    // Calculate line total: Daily Rate × Number of Days
+    const lineTotal = dailyRate * numberOfDays
+
     // Calculate invoice items
     // Note: We use positive amounts and calculate subtotal separately to avoid validation issues
     const items = [
       {
-        label: `Rental - ${(booking as any).vehicle?.brand || ''} ${(booking as any).vehicle?.model || ''} (${booking.rentalType})`,
-        amount: booking.baseRate,
+        label: `Rental - ${vehicle.brand || ''} ${vehicle.model || ''} (${booking.rentalType}) - ${numberOfDays} day${numberOfDays !== 1 ? 's' : ''} @ ${dailyRate.toFixed(2)} AED/day`,
+        amount: lineTotal,
       },
     ]
 
@@ -79,17 +105,27 @@ export async function createInvoiceFromBooking(bookingId: string): Promise<any> 
       })
     }
 
-    // Calculate subtotal from rental items only (before deposit and tax)
-    // This is the taxable amount
-    const rentalSubtotal = booking.baseRate - booking.discounts
+    // Calculate taxable amount for VAT
+    // VAT applies to: rental + fines + other charges - discounts
+    // VAT does NOT apply to: deposits (which are payments/credits)
+    // Separate items into taxable (rental, discounts) and non-taxable (deposits)
+    const taxableItems = items.filter(item => {
+      const label = item.label.toLowerCase()
+      // Deposits are non-taxable (they're payments, not charges)
+      return !label.includes('deposit')
+    })
+    const taxableSubtotal = taxableItems.reduce((sum, item) => sum + item.amount, 0)
     
-    // Tax is calculated on the rental subtotal (before deposit)
-    const taxAmount = booking.taxes // Already calculated correctly on (baseRate - discounts)
+    // VAT is calculated on the taxable subtotal (rental - discounts, excluding deposits)
+    // Get VAT rate from settings (defaultTaxPercent) or use default 5%
+    const settings = await Settings.findOne().lean()
+    const vatRate = settings?.defaultTaxPercent || 5
+    const taxAmount = Math.max(0, (taxableSubtotal * vatRate) / 100)
     
     // Calculate final subtotal including all items (rental - discount - deposit)
     const finalSubtotal = items.reduce((sum, item) => sum + item.amount, 0)
     
-    // Total amount due = final subtotal (rental - discount - deposit) + tax
+    // Total amount due = final subtotal (rental - discount - deposit) + VAT
     // This represents the amount the customer still owes after deposit
     const total = finalSubtotal + taxAmount
 
@@ -145,6 +181,7 @@ export async function createCustomInvoice(data: {
   issueDate?: Date
   dueDate?: Date
   taxPercent?: number
+  createdBy?: string
 }): Promise<any> {
   try {
     await connectDB()
@@ -155,10 +192,21 @@ export async function createCustomInvoice(data: {
       throw new Error('Invoice already exists for this booking')
     }
 
-    // Calculate totals
+    // Calculate subtotal from all items
     const subtotal = data.items.reduce((sum, item) => sum + item.amount, 0)
-    const taxPercent = data.taxPercent || 0
-    const taxAmount = (subtotal * taxPercent) / 100
+    
+    // Calculate taxable amount for VAT (excluding deposits)
+    const taxableItems = data.items.filter(item => {
+      const label = item.label.toLowerCase()
+      return !label.includes('deposit')
+    })
+    const taxableSubtotal = taxableItems.reduce((sum, item) => sum + item.amount, 0)
+    
+    // Get VAT rate from settings or use provided taxPercent
+    const settings = await Settings.findOne().lean()
+    const vatRate = data.taxPercent !== undefined ? data.taxPercent : (settings?.defaultTaxPercent || 5)
+    const taxAmount = Math.max(0, (taxableSubtotal * vatRate) / 100)
+    
     const total = subtotal + taxAmount
 
     // Calculate dates
@@ -186,6 +234,60 @@ export async function createCustomInvoice(data: {
     })
 
     await invoice.save()
+
+    // Create expense records for fines
+    const fineItems = data.items.filter(item => {
+      const label = (item.label || '').toLowerCase()
+      return item.amount > 0 && (
+        label.includes('fine') || 
+        label.includes('penalty') || 
+        label.includes('government') ||
+        label.includes('traffic')
+      )
+    })
+
+    if (fineItems.length > 0 && data.createdBy) {
+      try {
+        const Expense = (await import('@/lib/models/Expense')).default
+        const ExpenseCategory = (await import('@/lib/models/ExpenseCategory')).default
+        const Booking = (await import('@/lib/models/Booking')).default
+        
+        // Ensure default categories exist
+        await ExpenseCategory.ensureDefaultCategories()
+        
+        // Find or create FINES category
+        let finesCategory = await ExpenseCategory.findOne({ code: 'FINES' }).lean()
+        if (!finesCategory) {
+          finesCategory = await ExpenseCategory.create({
+            code: 'FINES',
+            name: 'Fines & Government Fees',
+            type: 'COGS',
+            isActive: true,
+          })
+        }
+        
+        // Get booking details for branch
+        const booking = await Booking.findById(data.bookingId)
+          .select('pickupBranch')
+          .lean()
+        
+        // Create expense for each fine
+        for (const fineItem of fineItems) {
+          await Expense.create({
+            category: finesCategory._id,
+            description: `Fine - ${fineItem.label} - Invoice ${invoiceNumber}`,
+            amount: fineItem.amount,
+            currency: 'AED',
+            dateIncurred: issueDate,
+            branchId: booking?.pickupBranch,
+            createdBy: data.createdBy,
+          })
+        }
+      } catch (expenseError: any) {
+        // Log error but don't fail invoice creation
+        logger.error('Error creating expense for fines:', expenseError)
+      }
+    }
 
     return invoice
   } catch (error) {

@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
       customer: data.customer,
       bookedBy: user._id,
       startDateTime: new Date(data.startDateTime),
-      endDateTime: new Date(data.endDateTime),
+      endDateTime: data.endDateTime ? new Date(data.endDateTime) : undefined,
       pickupBranch: data.pickupBranch,
       dropoffBranch: data.dropoffBranch,
       rentalType: data.rentalType,

@@ -201,23 +201,54 @@ export async function getRevenueOverview(
     })
   }
 
+  // Helper function to identify fines in invoice items
+  const getFinesAmount = (items: any[]): number => {
+    if (!items || !Array.isArray(items)) return 0
+    return items
+      .filter(item => {
+        const label = (item.label || '').toLowerCase()
+        return item.amount > 0 && (
+          label.includes('fine') || 
+          label.includes('penalty') || 
+          label.includes('government') ||
+          label.includes('traffic')
+        )
+      })
+      .reduce((sum, item) => sum + item.amount, 0)
+  }
+
   // Calculate summary metrics
   let grossRentalRevenue = 0
   let discounts = 0
   let taxCollected = 0
   let netRentalRevenue = 0
+  let totalFines = 0
 
   filteredInvoices.forEach((invoice: any) => {
     const items = invoice.items || []
+    const finesAmount = getFinesAmount(items)
+    totalFines += finesAmount
+    
     items.forEach((item: { label: string; amount: number }) => {
       if (item.amount < 0) {
         discounts += Math.abs(item.amount)
       } else {
-        grossRentalRevenue += item.amount
+        // Exclude fines from gross rental revenue (they're expenses)
+        const label = (item.label || '').toLowerCase()
+        const isFine = item.amount > 0 && (
+          label.includes('fine') || 
+          label.includes('penalty') || 
+          label.includes('government') ||
+          label.includes('traffic')
+        )
+        if (!isFine) {
+          grossRentalRevenue += item.amount
+        }
       }
     })
     taxCollected += invoice.taxAmount || 0
-    netRentalRevenue += invoice.total || 0
+    // Net revenue excludes fines (they're pass-through costs)
+    netRentalRevenue += (invoice.total || 0) - finesAmount
   })
 
   // Group by period

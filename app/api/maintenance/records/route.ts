@@ -50,10 +50,16 @@ export async function GET(request: NextRequest) {
     if (vehicleId) filter.vehicle = vehicleId
     if (status) filter.status = status
     if (dateFrom && dateTo) {
-      filter.completedDate = {
-        $gte: new Date(dateFrom),
-        $lte: new Date(dateTo),
-      }
+      // Filter by scheduledDate, completedDate, or createdAt
+      // This ensures all records are included regardless of their status
+      const dateFromObj = new Date(dateFrom)
+      const dateToObj = new Date(dateTo)
+      
+      filter.$or = [
+        { scheduledDate: { $gte: dateFromObj, $lte: dateToObj } },
+        { completedDate: { $gte: dateFromObj, $lte: dateToObj } },
+        { createdAt: { $gte: dateFromObj, $lte: dateToObj } },
+      ]
     }
 
     const records = await MaintenanceRecord.find(filter)
@@ -97,16 +103,27 @@ export async function POST(request: NextRequest) {
     if (body.maintenanceSchedule && body.createFromSchedule) {
       const record = await createMaintenanceFromSchedule(
         body.maintenanceSchedule,
+        user._id.toString(),
         body.cost,
         body.vendorName,
-        body.notes,
-        user._id.toString()
+        body.notes
       )
       return NextResponse.json({ record }, { status: 201 })
     }
 
     // Otherwise, create manually
-    const validationResult = createMaintenanceSchema.safeParse(body)
+    // Pre-process body to ensure numeric fields are numbers
+    const processedBody = {
+      ...body,
+      cost: body.cost !== undefined && body.cost !== null && body.cost !== '' 
+        ? (typeof body.cost === 'string' ? parseFloat(body.cost) : body.cost)
+        : 0,
+      mileageAtService: body.mileageAtService !== undefined && body.mileageAtService !== null && body.mileageAtService !== ''
+        ? (typeof body.mileageAtService === 'string' ? parseFloat(body.mileageAtService) : body.mileageAtService)
+        : undefined,
+    }
+
+    const validationResult = createMaintenanceSchema.safeParse(processedBody)
     if (!validationResult.success) {
       return NextResponse.json(
         { error: 'Validation failed', details: validationResult.error.issues },
@@ -133,6 +150,52 @@ export async function POST(request: NextRequest) {
       status: 'OPEN',
       createdBy: user._id,
     })
+
+    // Create expense record if cost > 0
+    if (data.cost > 0) {
+      try {
+        const { default: Expense } = await import('@/lib/models/Expense')
+        const { default: ExpenseCategory } = await import('@/lib/models/ExpenseCategory')
+        const { default: Vehicle } = await import('@/lib/models/Vehicle')
+        
+        // Ensure default categories exist
+        await ExpenseCategory.ensureDefaultCategories()
+        
+        // Find or create MAINTENANCE category
+        let maintenanceCategory = await ExpenseCategory.findOne({ code: 'MAINTENANCE' }).lean()
+        if (!maintenanceCategory) {
+          maintenanceCategory = await ExpenseCategory.create({
+            code: 'MAINTENANCE',
+            name: 'Maintenance',
+            type: 'COGS',
+            isActive: true,
+          })
+        }
+
+        // Get vehicle details for branch
+        const vehicle = await Vehicle.findById(data.vehicle).select('plateNumber currentBranch').lean()
+        const scheduledDate = data.scheduledDate
+          ? typeof data.scheduledDate === 'string'
+            ? new Date(data.scheduledDate)
+            : data.scheduledDate
+          : new Date()
+
+        // Create expense linked to maintenance record
+        await Expense.create({
+          category: maintenanceCategory._id,
+          description: `Maintenance - ${vehicle?.plateNumber || 'Vehicle'} - ${data.description}`,
+          amount: data.cost,
+          currency: 'AED',
+          dateIncurred: scheduledDate,
+          branchId: vehicle?.currentBranch,
+          createdBy: user._id,
+          maintenanceRecord: record._id,
+        })
+      } catch (expenseError: any) {
+        // Log error but don't fail maintenance creation
+        logger.error('Error creating expense for maintenance:', expenseError)
+      }
+    }
 
     await record.populate('vehicle', 'plateNumber brand model mileage')
     await record.populate('maintenanceSchedule', 'serviceType scheduleType')

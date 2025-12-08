@@ -7,7 +7,7 @@ import SectionCard from '@/components/ui/SectionCard'
 import Table, { TableRow, TableCell } from '@/components/ui/Table'
 import ReportExportButton from '@/components/export/ReportExportButton'
 import AdvancedFilters from '@/components/reports/AdvancedFilters'
-import { DollarSign, TrendingUp, Users, Percent, Loader2, BarChart3, PieChart as PieChartIcon, FileText } from 'lucide-react'
+import { Coins, TrendingUp, Users, Percent, Loader2, BarChart3, PieChart as PieChartIcon, FileText } from 'lucide-react'
 import {
   BarChart,
   Bar,
@@ -283,7 +283,7 @@ export default function InvestorReportsPage() {
           label="Total Investors"
         />
         <StatCard
-          icon={DollarSign}
+          icon={Coins}
           value={formatCurrency(reportData.summary.totalRevenue)}
           label="Total Revenue"
         />
@@ -293,7 +293,7 @@ export default function InvestorReportsPage() {
           label="Total Commission"
         />
         <StatCard
-          icon={DollarSign}
+          icon={Coins}
           value={formatCurrency(reportData.summary.totalNetPayout)}
           label="Total Net Payout"
         />

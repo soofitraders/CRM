@@ -1,7 +1,7 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import { DollarSign, TrendingUp, TrendingDown } from 'lucide-react'
+import { Coins, TrendingUp, TrendingDown } from 'lucide-react'
 import SectionCard from '@/components/ui/SectionCard'
 
 interface RevenueWidgetProps {
@@ -53,7 +53,7 @@ export default function RevenueWidget({ widgetId, timeRange }: RevenueWidgetProp
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <DollarSign className="w-5 h-5 text-sidebarActiveBg" />
+            <Coins className="w-5 h-5 text-sidebarActiveBg" />
             <h3 className="text-lg font-semibold text-headingText">Revenue</h3>
           </div>
           <span className="text-xs text-sidebarMuted capitalize">{timeRange.toLowerCase()}</span>

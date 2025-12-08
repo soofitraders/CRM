@@ -1,6 +1,6 @@
 import mongoose, { Schema, Model } from 'mongoose'
 
-export type VehicleCategory = 'SUV' | 'SEDAN' | 'HATCHBACK' | 'COUPE' | 'CONVERTIBLE' | 'WAGON' | 'VAN' | 'TRUCK' | 'OTHER'
+export type VehicleCategory = 'SUV' | 'SEDAN' | 'HATCHBACK' | 'COUPE' | 'CONVERTIBLE' | 'WAGON' | 'VAN' | 'TRUCK' | 'CROSSOVER' | 'OTHER'
 export type OwnershipType = 'COMPANY' | 'INVESTOR'
 export type VehicleStatus = 'AVAILABLE' | 'BOOKED' | 'IN_MAINTENANCE' | 'INACTIVE'
 export type FuelType = 'PETROL' | 'DIESEL' | 'ELECTRIC' | 'HYBRID' | 'CNG'
@@ -27,6 +27,7 @@ export interface IVehicle extends Omit<mongoose.Document, 'model'> {
   weeklyRate: number
   monthlyRate: number
   currentBranch: string
+  color?: string
   createdAt: Date
   updatedAt: Date
 }
@@ -65,7 +66,7 @@ const VehicleSchema = new Schema<IVehicle>(
     },
     category: {
       type: String,
-      enum: ['SUV', 'SEDAN', 'HATCHBACK', 'COUPE', 'CONVERTIBLE', 'WAGON', 'VAN', 'TRUCK', 'OTHER'],
+      enum: ['SUV', 'SEDAN', 'HATCHBACK', 'COUPE', 'CONVERTIBLE', 'WAGON', 'VAN', 'TRUCK', 'CROSSOVER', 'OTHER'],
       required: [true, 'Category is required'],
     },
     ownershipType: {
@@ -134,6 +135,10 @@ const VehicleSchema = new Schema<IVehicle>(
     currentBranch: {
       type: String,
       required: [true, 'Current branch is required'],
+      trim: true,
+    },
+    color: {
+      type: String,
       trim: true,
     },
   },

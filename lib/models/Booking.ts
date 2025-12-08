@@ -51,9 +51,10 @@ const BookingSchema = new Schema<IBooking>(
     },
     endDateTime: {
       type: Date,
-      required: [true, 'End date/time is required'],
+      required: false,
       validate: {
         validator: function(this: IBooking, value: Date) {
+          if (!value) return true // End date is optional
           return value > this.startDateTime
         },
         message: 'End date/time must be after start date/time',

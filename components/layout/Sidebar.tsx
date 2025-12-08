@@ -13,8 +13,6 @@ import {
   UserCog,
   Shield,
   Settings,
-  HelpCircle,
-  LogOut,
   BarChart3,
   Receipt,
   Wallet,
@@ -30,7 +28,6 @@ import {
   CreditCard,
   TrendingDown,
   User,
-  Bell,
   Home,
   ClipboardList,
 } from 'lucide-react'
@@ -204,10 +201,27 @@ export default function Sidebar() {
     <aside className="w-64 bg-sidebarBg h-screen flex flex-col fixed left-0 top-0 z-50 shadow-lg overflow-hidden">
       {/* Logo */}
       <div className="p-6 border-b border-sidebarMuted/20 flex-shrink-0">
-        <h1 className="text-sidebarText text-xl font-bold leading-tight tracking-tight">
-          MISTERWHEELS
-        </h1>
-        <p className="text-sidebarMuted text-xs mt-1.5 font-medium">RENT A CAR LLC</p>
+        <div className="flex items-center justify-center">
+          <img 
+            src="/logo.png?v=2"
+            alt="MisterWheels Logo" 
+            className="h-10 w-auto object-contain max-w-full"
+            style={{ imageRendering: 'auto' }}
+            loading="eager"
+            onError={(e) => {
+              // Fallback to text if logo not found
+              const target = e.target as HTMLImageElement
+              target.style.display = 'none'
+              const parent = target.parentElement
+              if (parent && !parent.querySelector('.logo-fallback')) {
+                const fallback = document.createElement('div')
+                fallback.className = 'logo-fallback'
+                fallback.innerHTML = '<h1 class="text-sidebarText text-xl font-bold leading-tight tracking-tight">MISTERWHEELS</h1><p class="text-sidebarMuted text-xs mt-1.5 font-medium">RENT A CAR LLC</p>'
+                parent.appendChild(fallback)
+              }
+            }}
+          />
+        </div>
       </div>
 
       {/* Navigation Menu */}
@@ -277,30 +291,6 @@ export default function Sidebar() {
         </div>
       </nav>
 
-      {/* Fixed Bottom Section */}
-      <div className="p-4 border-t border-sidebarMuted/20 space-y-1 flex-shrink-0 bg-sidebarBg">
-        <Link
-          href="/notifications"
-          className="flex items-center px-4 py-2.5 text-sm font-medium text-sidebarMuted hover:bg-sidebarMuted/10 hover:text-sidebarText transition-all duration-200 rounded-lg group"
-        >
-          <Bell className="w-5 h-5 mr-3 flex-shrink-0 text-sidebarMuted group-hover:text-sidebarText" />
-          <span>Notifications</span>
-        </Link>
-        <Link
-          href="/support"
-          className="flex items-center px-4 py-2.5 text-sm font-medium text-sidebarMuted hover:bg-sidebarMuted/10 hover:text-sidebarText transition-all duration-200 rounded-lg group"
-        >
-          <HelpCircle className="w-5 h-5 mr-3 flex-shrink-0 text-sidebarMuted group-hover:text-sidebarText" />
-          <span>Support</span>
-        </Link>
-        <Link
-          href="/login"
-          className="flex items-center px-4 py-2.5 text-sm font-medium text-sidebarMuted hover:bg-sidebarMuted/10 hover:text-sidebarText transition-all duration-200 rounded-lg group"
-        >
-          <LogOut className="w-5 h-5 mr-3 flex-shrink-0 text-sidebarMuted group-hover:text-sidebarText" />
-          <span>Logout</span>
-        </Link>
-      </div>
     </aside>
   )
 }

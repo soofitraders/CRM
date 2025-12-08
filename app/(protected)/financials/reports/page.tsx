@@ -7,7 +7,7 @@ import SectionCard from '@/components/ui/SectionCard'
 import Table, { TableRow, TableCell } from '@/components/ui/Table'
 import ReportExportButton from '@/components/export/ReportExportButton'
 import AdvancedFilters from '@/components/reports/AdvancedFilters'
-import { DollarSign, TrendingUp, FileText, BarChart3, Calendar, Save, Loader2 } from 'lucide-react'
+import { Coins, TrendingUp, FileText, BarChart3, Calendar, Save, Loader2 } from 'lucide-react'
 import {
   LineChart,
   Line,
@@ -448,7 +448,7 @@ export default function ReportsPage() {
           {/* KPI Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <StatCard
-              icon={DollarSign}
+              icon={Coins}
               value={`AED ${revenueData.summary.netRentalRevenue.toLocaleString('en-US', {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
@@ -556,7 +556,7 @@ export default function ReportsPage() {
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
             <StatCard
-              icon={DollarSign}
+              icon={Coins}
               value={`AED ${arData.total.toLocaleString('en-US', {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
@@ -676,7 +676,7 @@ export default function ReportsPage() {
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <StatCard
-              icon={DollarSign}
+              icon={Coins}
               value={`AED ${investorData.summary.totalRevenue.toLocaleString('en-US', {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
