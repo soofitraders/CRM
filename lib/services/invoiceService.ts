@@ -258,12 +258,13 @@ export async function createCustomInvoice(data: {
         // Find or create FINES category
         let finesCategory = await ExpenseCategory.findOne({ code: 'FINES' }).lean()
         if (!finesCategory) {
-          finesCategory = await ExpenseCategory.create({
+          await ExpenseCategory.create({
             code: 'FINES',
             name: 'Fines & Government Fees',
             type: 'COGS',
             isActive: true,
           })
+          finesCategory = await ExpenseCategory.findOne({ code: 'FINES' }).lean()
         }
         
         // Get booking details for branch
@@ -272,16 +273,18 @@ export async function createCustomInvoice(data: {
           .lean()
         
         // Create expense for each fine
-        for (const fineItem of fineItems) {
-          await Expense.create({
-            category: finesCategory._id,
-            description: `Fine - ${fineItem.label} - Invoice ${invoiceNumber}`,
-            amount: fineItem.amount,
-            currency: 'AED',
-            dateIncurred: issueDate,
-            branchId: booking?.pickupBranch,
-            createdBy: data.createdBy,
-          })
+        if (finesCategory) {
+          for (const fineItem of fineItems) {
+            await Expense.create({
+              category: finesCategory._id,
+              description: `Fine - ${fineItem.label} - Invoice ${invoiceNumber}`,
+              amount: fineItem.amount,
+              currency: 'AED',
+              dateIncurred: issueDate,
+              branchId: booking?.pickupBranch,
+              createdBy: data.createdBy,
+            })
+          }
         }
       } catch (expenseError: any) {
         // Log error but don't fail invoice creation

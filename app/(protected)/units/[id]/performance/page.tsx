@@ -366,7 +366,7 @@ export default function VehiclePerformancePage() {
                 <p className="font-semibold text-headingText">
                   {formatCurrency(
                     weeklyBreakdown.length > 0
-                      ? weeklyBreakdown.reduce((sum, w) => sum + w.revenue, 0) / weeklyBreakdown.length
+                      ? weeklyBreakdown.reduce((sum: number, w: any) => sum + w.revenue, 0) / weeklyBreakdown.length
                       : 0
                   )}
                 </p>
@@ -376,7 +376,7 @@ export default function VehiclePerformancePage() {
                 <p className="font-semibold text-headingText">
                   {formatCurrency(
                     weeklyBreakdown.length > 0
-                      ? Math.max(...weeklyBreakdown.map(w => w.revenue))
+                      ? Math.max(...weeklyBreakdown.map((w: any) => w.revenue))
                       : 0
                   )}
                 </p>
@@ -415,7 +415,7 @@ export default function VehiclePerformancePage() {
                 <p className="font-semibold text-headingText">
                   {formatCurrency(
                     monthlyBreakdown.length > 0
-                      ? monthlyBreakdown.reduce((sum, m) => sum + m.revenue, 0) / monthlyBreakdown.length
+                      ? monthlyBreakdown.reduce((sum: number, m: any) => sum + m.revenue, 0) / monthlyBreakdown.length
                       : 0
                   )}
                 </p>
@@ -425,7 +425,7 @@ export default function VehiclePerformancePage() {
                 <p className="font-semibold text-headingText">
                   {formatCurrency(
                     monthlyBreakdown.length > 0
-                      ? Math.max(...monthlyBreakdown.map(m => m.revenue))
+                      ? Math.max(...monthlyBreakdown.map((m: any) => m.revenue))
                       : 0
                   )}
                 </p>
@@ -459,7 +459,7 @@ export default function VehiclePerformancePage() {
               <p className="font-semibold text-headingText">
                 {formatCurrency(
                   yearlyBreakdown.length > 0
-                    ? yearlyBreakdown.reduce((sum, y) => sum + y.revenue, 0) / yearlyBreakdown.length
+                    ? yearlyBreakdown.reduce((sum: number, y: any) => sum + y.revenue, 0) / yearlyBreakdown.length
                     : 0
                 )}
               </p>
@@ -469,7 +469,7 @@ export default function VehiclePerformancePage() {
               <p className="font-semibold text-headingText">
                 {formatCurrency(
                   yearlyBreakdown.length > 0
-                    ? Math.max(...yearlyBreakdown.map(y => y.revenue))
+                    ? Math.max(...yearlyBreakdown.map((y: any) => y.revenue))
                     : 0
                 )}
               </p>

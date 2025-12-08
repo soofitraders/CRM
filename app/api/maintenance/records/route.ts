@@ -164,12 +164,13 @@ export async function POST(request: NextRequest) {
         // Find or create MAINTENANCE category
         let maintenanceCategory = await ExpenseCategory.findOne({ code: 'MAINTENANCE' }).lean()
         if (!maintenanceCategory) {
-          maintenanceCategory = await ExpenseCategory.create({
+          await ExpenseCategory.create({
             code: 'MAINTENANCE',
             name: 'Maintenance',
             type: 'COGS',
             isActive: true,
           })
+          maintenanceCategory = await ExpenseCategory.findOne({ code: 'MAINTENANCE' }).lean()
         }
 
         // Get vehicle details for branch
@@ -181,16 +182,18 @@ export async function POST(request: NextRequest) {
           : new Date()
 
         // Create expense linked to maintenance record
-        await Expense.create({
-          category: maintenanceCategory._id,
-          description: `Maintenance - ${vehicle?.plateNumber || 'Vehicle'} - ${data.description}`,
-          amount: data.cost,
-          currency: 'AED',
-          dateIncurred: scheduledDate,
-          branchId: vehicle?.currentBranch,
-          createdBy: user._id,
-          maintenanceRecord: record._id,
-        })
+        if (maintenanceCategory) {
+          await Expense.create({
+            category: maintenanceCategory._id,
+            description: `Maintenance - ${vehicle?.plateNumber || 'Vehicle'} - ${data.description}`,
+            amount: data.cost,
+            currency: 'AED',
+            dateIncurred: scheduledDate,
+            branchId: vehicle?.currentBranch,
+            createdBy: user._id,
+            maintenanceRecord: record._id,
+          })
+        }
       } catch (expenseError: any) {
         // Log error but don't fail maintenance creation
         logger.error('Error creating expense for maintenance:', expenseError)

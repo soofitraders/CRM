@@ -481,12 +481,13 @@ export async function completeMaintenance(
       // Find or create MAINTENANCE category
       let maintenanceCategory = await ExpenseCategory.findOne({ code: 'MAINTENANCE' }).lean()
       if (!maintenanceCategory) {
-        maintenanceCategory = await ExpenseCategory.create({
+        await ExpenseCategory.create({
           code: 'MAINTENANCE',
           name: 'Maintenance',
           type: 'COGS',
           isActive: true,
         })
+        maintenanceCategory = await ExpenseCategory.findOne({ code: 'MAINTENANCE' }).lean()
       }
 
       const vehicle = maintenance.vehicle as any
@@ -504,7 +505,7 @@ export async function completeMaintenance(
           amount: finalCost,
           dateIncurred: completedDate,
         })
-      } else {
+      } else if (maintenanceCategory) {
         // Create new expense linked to maintenance record
         await Expense.create({
           category: maintenanceCategory._id,

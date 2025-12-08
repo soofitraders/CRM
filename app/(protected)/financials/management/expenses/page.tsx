@@ -253,6 +253,7 @@ export default function ExpensesPage() {
                 dateIncurred: format(new Date(), 'yyyy-MM-dd'),
                 branchId: '',
                 investor: '',
+                vehicle: '',
               })
               setShowForm(true)
             }}

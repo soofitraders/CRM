@@ -212,12 +212,13 @@ export async function PATCH(
           // Find or create FINES category
           let finesCategory = await ExpenseCategory.findOne({ code: 'FINES' }).lean()
           if (!finesCategory) {
-            finesCategory = await ExpenseCategory.create({
+            await ExpenseCategory.create({
               code: 'FINES',
               name: 'Fines & Government Fees',
               type: 'COGS',
               isActive: true,
             })
+            finesCategory = await ExpenseCategory.findOne({ code: 'FINES' }).lean()
           }
           
           // Get booking details for branch
@@ -227,18 +228,20 @@ export async function PATCH(
             .lean()
           
           // Create expense for each new fine
-          for (const fineItem of fineItems) {
-            // Only create expense if this fine wasn't in the existing items
-            if (!existingFineLabels.has(fineItem.label)) {
-              await Expense.create({
-                category: finesCategory._id,
-                description: `Fine - ${fineItem.label} - Invoice ${invoice.invoiceNumber}`,
-                amount: fineItem.amount,
-                currency: 'AED',
-                dateIncurred: invoice.issueDate || new Date(),
-                branchId: booking?.pickupBranch,
-                createdBy: user._id,
-              })
+          if (finesCategory) {
+            for (const fineItem of fineItems) {
+              // Only create expense if this fine wasn't in the existing items
+              if (!existingFineLabels.has(fineItem.label)) {
+                await Expense.create({
+                  category: finesCategory._id,
+                  description: `Fine - ${fineItem.label} - Invoice ${invoice.invoiceNumber}`,
+                  amount: fineItem.amount,
+                  currency: 'AED',
+                  dateIncurred: invoice.issueDate || new Date(),
+                  branchId: booking?.pickupBranch,
+                  createdBy: user._id,
+                })
+              }
             }
           }
         } catch (expenseError: any) {
