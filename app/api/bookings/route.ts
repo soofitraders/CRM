@@ -6,7 +6,9 @@ import { authOptions } from '@/lib/authOptions'
 import connectDB from '@/lib/db'
 import Booking from '@/lib/models/Booking'
 import Vehicle from '@/lib/models/Vehicle'
+// Import CustomerProfile to ensure it's registered with Mongoose before populate
 import CustomerProfile from '@/lib/models/CustomerProfile'
+import User from '@/lib/models/User'
 import { createBookingSchema, bookingQuerySchema } from '@/lib/validation/booking'
 import { hasRole } from '@/lib/auth'
 import { UserRole } from '@/lib/models/User'
@@ -15,6 +17,12 @@ import { cacheQuery } from '@/lib/cache/cacheUtils'
 import { CacheKeys } from '@/lib/cache/cacheKeys'
 import { invalidateBookingCache, invalidateDashboardCache } from '@/lib/cache/cacheUtils'
 import { logger } from '@/lib/utils/performance'
+
+// Ensure models are registered by accessing them
+// This ensures Mongoose knows about CustomerProfile when populating
+if (typeof CustomerProfile !== 'undefined') {
+  // Model is registered
+}
 
 // GET - List bookings with filters
 export async function GET(request: NextRequest) {
@@ -25,6 +33,12 @@ export async function GET(request: NextRequest) {
     }
 
     await connectDB()
+
+    // Ensure CustomerProfile model is registered before populate
+    // Access the model to ensure it's initialized
+    if (!CustomerProfile) {
+      throw new Error('CustomerProfile model not available')
+    }
 
     const searchParams = request.nextUrl.searchParams
     const query = bookingQuerySchema.parse({
@@ -110,7 +124,11 @@ export async function GET(request: NextRequest) {
       60 // Cache for 1 minute
     )
 
-    return jsonResponse(result, 200, { cache: 60 })
+    const response = jsonResponse(result, 200, { cache: 0 }) // No cache for real-time updates
+    response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
+    response.headers.set('Pragma', 'no-cache')
+    response.headers.set('Expires', '0')
+    return response
   } catch (error: any) {
     logger.error('Error fetching bookings:', error)
     return NextResponse.json(

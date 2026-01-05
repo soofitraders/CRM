@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSession } from 'next-auth/react'
 import SectionCard from '@/components/ui/SectionCard'
 import { getCurrentUser, hasRole } from '@/lib/auth'
+import ClearDatabaseButton from '@/components/admin/ClearDatabaseButton'
 
 interface Settings {
   _id?: string
@@ -18,6 +20,7 @@ interface NotificationPreferences {
 }
 
 export default function SettingsPage() {
+  const { data: session } = useSession()
   const [settings, setSettings] = useState<Settings>({
     companyName: 'MisterWheels',
     defaultCurrency: 'AED',
@@ -81,7 +84,11 @@ export default function SettingsPage() {
     }
   }
 
-  const canEditSettings = ['SUPER_ADMIN', 'ADMIN'].includes(userRole)
+  // Get user role from session or state
+  const sessionRole = (session?.user as any)?.role || ''
+  const effectiveRole = sessionRole || userRole
+  const canEditSettings = ['SUPER_ADMIN', 'ADMIN'].includes(effectiveRole)
+  const isSuperAdmin = effectiveRole === 'SUPER_ADMIN'
 
   const handleSettingsSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -299,6 +306,23 @@ export default function SettingsPage() {
               />
               <div className="w-11 h-6 bg-borderSoft peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-sidebarActiveBg/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sidebarActiveBg"></div>
             </label>
+          </div>
+        </div>
+      </SectionCard>
+
+      {/* System Administration */}
+      <SectionCard title="System Administration">
+        <div className="space-y-4">
+          <div className="p-4 bg-pageBg border border-borderSoft rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-medium text-headingText mb-1">Database Management</h3>
+                <p className="text-sm text-sidebarMuted">
+                  Clear all database data except the super admin user. This action is irreversible.
+                </p>
+              </div>
+              <ClearDatabaseButton />
+            </div>
           </div>
         </div>
       </SectionCard>

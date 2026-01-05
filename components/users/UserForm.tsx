@@ -174,9 +174,10 @@ export default function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
           <option value="FINANCE">Finance</option>
           <option value="ADMIN">Admin</option>
           <option value="SUPER_ADMIN">Super Admin</option>
+          <option value="INVESTOR">Investor</option>
         </select>
         <p className="text-xs text-sidebarMuted mt-1">
-          Note: CUSTOMER and INVESTOR roles cannot be created through this form
+          Note: CUSTOMER role cannot be created through this form
         </p>
       </div>
 

@@ -8,6 +8,7 @@ import StatusChip from '@/components/ui/StatusChip'
 import { CreateBookingInput, UpdateBookingInput, bookingStatusSchema, paymentStatusSchema } from '@/lib/validation/booking'
 import { FileText, Plus } from 'lucide-react'
 import Link from 'next/link'
+import { triggerDataSync } from '@/lib/utils/dataSync'
 
 interface Booking {
   _id: string
@@ -153,7 +154,19 @@ export default function EditBookingPage() {
     }
   }
 
-  const handleUpdate = async (data: UpdateBookingInput) => {
+  const handleUpdate = async (data: UpdateBookingInput, optimisticUpdate?: boolean) => {
+    // Optimistic update: update UI immediately
+    if (optimisticUpdate && booking) {
+      const updatedBooking = { ...booking }
+      if (data.status !== undefined) {
+        updatedBooking.status = data.status
+      }
+      if (data.paymentStatus !== undefined) {
+        updatedBooking.paymentStatus = data.paymentStatus
+      }
+      setBooking(updatedBooking)
+    }
+
     setIsSaving(true)
     try {
       const response = await fetch(`/api/bookings/${bookingId}`, {
@@ -165,14 +178,44 @@ export default function EditBookingPage() {
       })
 
       if (response.ok) {
-        router.push('/bookings')
-        router.refresh()
+        const result = await response.json()
+        // Update with server response
+        setBooking(result.booking)
+        
+        // Trigger data sync to refresh all pages immediately
+        triggerDataSync('bookings')
+        triggerDataSync('dashboard')
+        
+        // Force immediate refresh of bookings list by dispatching custom event
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('force-refresh-bookings'))
+        }
+        
+        // Only redirect if it's a full form update, not just status change
+        if (!optimisticUpdate) {
+          router.push('/bookings')
+          router.refresh()
+        } else {
+          // For status changes, navigate back to list after a short delay to show updated data
+          setTimeout(() => {
+            router.push('/bookings')
+            router.refresh()
+          }, 500)
+        }
       } else {
         const error = await response.json()
+        // Revert optimistic update on error
+        if (optimisticUpdate) {
+          fetchBooking()
+        }
         alert(error.error || 'Failed to update booking')
       }
     } catch (error) {
       console.error('Error updating booking:', error)
+      // Revert optimistic update on error
+      if (optimisticUpdate) {
+        fetchBooking()
+      }
       alert('Failed to update booking')
     } finally {
       setIsSaving(false)
@@ -180,11 +223,13 @@ export default function EditBookingPage() {
   }
 
   const handleStatusChange = async (status: string) => {
-    await handleUpdate({ status: status as UpdateBookingInput['status'] })
+    // Use optimistic update for status changes
+    await handleUpdate({ status: status as UpdateBookingInput['status'] }, true)
   }
 
   const handlePaymentStatusChange = async (paymentStatus: string) => {
-    await handleUpdate({ paymentStatus: paymentStatus as UpdateBookingInput['paymentStatus'] })
+    // Use optimistic update for payment status changes
+    await handleUpdate({ paymentStatus: paymentStatus as UpdateBookingInput['paymentStatus'] }, true)
   }
 
   if (isLoading) {
@@ -264,17 +309,25 @@ export default function EditBookingPage() {
               Status
             </label>
             {canEdit ? (
-              <select
-                value={booking.status}
-                onChange={(e) => handleStatusChange(e.target.value)}
-                className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
-              >
-                <option value="PENDING">Pending</option>
-                <option value="CONFIRMED">Confirmed</option>
-                <option value="CHECKED_OUT">Checked Out</option>
-                <option value="CHECKED_IN">Checked In</option>
-                <option value="CANCELLED">Cancelled</option>
-              </select>
+              <div className="relative">
+                <select
+                  value={booking.status}
+                  onChange={(e) => handleStatusChange(e.target.value)}
+                  disabled={isSaving}
+                  className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="PENDING">Pending</option>
+                  <option value="CONFIRMED">Confirmed</option>
+                  <option value="CHECKED_OUT">Checked Out</option>
+                  <option value="CHECKED_IN">Checked In</option>
+                  <option value="CANCELLED">Cancelled</option>
+                </select>
+                {isSaving && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <div className="w-4 h-4 border-2 border-sidebarActiveBg border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )}
+              </div>
             ) : (
               <StatusChip status={booking.status} />
             )}
@@ -284,15 +337,23 @@ export default function EditBookingPage() {
               Payment Status
             </label>
             {canChangePayment ? (
-              <select
-                value={booking.paymentStatus}
-                onChange={(e) => handlePaymentStatusChange(e.target.value)}
-                className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
-              >
-                <option value="UNPAID">Unpaid</option>
-                <option value="PARTIALLY_PAID">Partially Paid</option>
-                <option value="PAID">Paid</option>
-              </select>
+              <div className="relative">
+                <select
+                  value={booking.paymentStatus}
+                  onChange={(e) => handlePaymentStatusChange(e.target.value)}
+                  disabled={isSaving}
+                  className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="UNPAID">Unpaid</option>
+                  <option value="PARTIALLY_PAID">Partially Paid</option>
+                  <option value="PAID">Paid</option>
+                </select>
+                {isSaving && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <div className="w-4 h-4 border-2 border-sidebarActiveBg border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )}
+              </div>
             ) : (
               <StatusChip status={booking.paymentStatus.replace('_', ' ')} />
             )}

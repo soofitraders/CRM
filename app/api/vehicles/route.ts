@@ -5,12 +5,21 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/authOptions'
 import connectDB from '@/lib/db'
 import Vehicle from '@/lib/models/Vehicle'
+// Import models to ensure they're registered with Mongoose before populate
+import InvestorProfile from '@/lib/models/InvestorProfile'
+import User from '@/lib/models/User'
 import { vehicleQuerySchema, createVehicleSchema } from '@/lib/validation/vehicle'
 import { hasRole, getCurrentUser } from '@/lib/auth'
 import { cacheQuery } from '@/lib/cache/cacheUtils'
 import { CacheKeys } from '@/lib/cache/cacheKeys'
 import { invalidateVehicleCache } from '@/lib/cache/cacheUtils'
 import { logger } from '@/lib/utils/performance'
+
+// Ensure models are registered by referencing them
+// This ensures Mongoose knows about InvestorProfile when populating
+if (typeof InvestorProfile !== 'undefined') {
+  // Model is registered
+}
 
 // GET - List vehicles with filters
 export async function GET(request: NextRequest) {
@@ -21,6 +30,11 @@ export async function GET(request: NextRequest) {
     }
 
     await connectDB()
+
+    // Ensure InvestorProfile model is registered before populate
+    if (!InvestorProfile) {
+      throw new Error('InvestorProfile model not available')
+    }
 
     const searchParams = request.nextUrl.searchParams
     const query = vehicleQuerySchema.parse({

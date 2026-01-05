@@ -3,10 +3,21 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/authOptions'
 import connectDB from '@/lib/db'
 import Booking from '@/lib/models/Booking'
+// Import models to ensure they're registered with Mongoose before populate
+import CustomerProfile from '@/lib/models/CustomerProfile'
+import Vehicle from '@/lib/models/Vehicle'
+import User from '@/lib/models/User'
 import { updateBookingSchema } from '@/lib/validation/booking'
 import { hasRole, getCurrentUser } from '@/lib/auth'
 import { createInvoiceFromBooking } from '@/lib/services/invoiceService'
 import { logger } from '@/lib/utils/performance'
+import { invalidateBookingCache, invalidateDashboardCache } from '@/lib/cache/cacheUtils'
+
+// Ensure models are registered by accessing them
+// This ensures Mongoose knows about CustomerProfile when populating
+if (typeof CustomerProfile !== 'undefined') {
+  // Model is registered
+}
 
 // GET - Get single booking
 export async function GET(
@@ -133,13 +144,18 @@ export async function PATCH(
       booking.status = data.status
       
       // Auto-create invoice when booking is confirmed (if not already created)
+      // Do this asynchronously to not block the status update
       if (previousStatus !== 'CONFIRMED' && data.status === 'CONFIRMED') {
-        try {
-          await createInvoiceFromBooking(String(booking._id))
-        } catch (error: any) {
-          // Log error but don't fail the booking update if invoice creation fails
-          // (invoice might already exist)
-          logger.error('Error auto-creating invoice:', error.message)
+        // Check if invoice already exists first (quick check)
+        const { default: Invoice } = await import('@/lib/models/Invoice')
+        const existingInvoice = await Invoice.findOne({ booking: booking._id }).lean()
+        
+        if (!existingInvoice) {
+          // Create invoice asynchronously (don't await - let it run in background)
+          createInvoiceFromBooking(String(booking._id)).catch((error: any) => {
+            // Log error but don't fail the booking update
+            logger.error('Error auto-creating invoice:', error.message)
+          })
         }
       }
     }
@@ -176,13 +192,26 @@ export async function PATCH(
 
     await booking.save()
 
+    // Invalidate cache to ensure bookings list refreshes
+    invalidateBookingCache(
+      String(booking._id),
+      booking.customer ? String(booking.customer) : undefined,
+      booking.vehicle ? String(booking.vehicle) : undefined
+    )
+    invalidateDashboardCache()
+
     const updatedBooking = await Booking.findById(booking._id)
       .populate('vehicle', 'plateNumber brand model')
       .populate('customer')
       .populate('bookedBy', 'name email')
       .lean()
 
-    return NextResponse.json({ booking: updatedBooking })
+    // Add cache-busting header to trigger client-side refresh
+    const response = NextResponse.json({ booking: updatedBooking })
+    response.headers.set('X-Data-Updated', 'bookings')
+    response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
+    
+    return response
   } catch (error: any) {
     if (error.name === 'ZodError') {
       return NextResponse.json(

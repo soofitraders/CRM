@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import SectionCard from '@/components/ui/SectionCard'
 import Table, { TableRow, TableCell } from '@/components/ui/Table'
@@ -9,6 +9,7 @@ import { Search, Filter, ChevronLeft, ChevronRight, Edit } from 'lucide-react'
 import Link from 'next/link'
 import ExportButtonGroup from '@/components/export/ExportButtonGroup'
 import { logger } from '@/lib/utils/logger'
+import { useDataSync } from '@/hooks/useDataSync'
 
 interface Booking {
   _id: string
@@ -57,11 +58,8 @@ export default function BookingsList() {
   })
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    fetchBookings()
-  }, [filters, pagination.page])
-
-  const fetchBookings = async () => {
+  // Memoize fetchBookings to avoid recreating on every render
+  const fetchBookings = useCallback(async (forceRefresh = false) => {
     setIsLoading(true)
     try {
       const params = new URLSearchParams()
@@ -71,9 +69,19 @@ export default function BookingsList() {
       if (filters.search) params.append('search', filters.search)
       params.append('page', pagination.page.toString())
       params.append('limit', pagination.limit.toString())
+      
+      // Add cache-busting parameter to force fresh data
+      if (forceRefresh) {
+        params.append('_t', Date.now().toString())
+      }
 
       logger.log('[Bookings] Fetching bookings with params:', params.toString())
-      const response = await fetch(`/api/bookings?${params.toString()}`)
+      const response = await fetch(`/api/bookings?${params.toString()}`, {
+        cache: 'no-store', // Always fetch fresh data
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
+      })
       
       logger.log('[Bookings] Response status:', response.status)
       
@@ -115,7 +123,44 @@ export default function BookingsList() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [filters.status, filters.dateFrom, filters.dateTo, filters.search, pagination.page, pagination.limit])
+
+  // Fetch bookings when filters or page change
+  useEffect(() => {
+    fetchBookings()
+  }, [fetchBookings])
+
+  // Listen for data sync events to refresh bookings (force refresh)
+  useDataSync('bookings', () => fetchBookings(true))
+  
+  // Also listen to window focus to refresh when user returns to tab
+  useEffect(() => {
+    const handleFocus = () => {
+      fetchBookings(true)
+    }
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
+  }, [fetchBookings])
+  
+  // Listen for force refresh events
+  useEffect(() => {
+    const handleForceRefresh = () => {
+      fetchBookings(true)
+    }
+    window.addEventListener('force-refresh-bookings', handleForceRefresh)
+    return () => window.removeEventListener('force-refresh-bookings', handleForceRefresh)
+  }, [fetchBookings])
+  
+  // Auto-refresh every 5 seconds when page is visible (reduced from 10 for faster updates)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchBookings(true)
+      }
+    }, 5000) // Refresh every 5 seconds
+    
+    return () => clearInterval(interval)
+  }, [fetchBookings])
 
   const handleFilterChange = (key: string, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }))

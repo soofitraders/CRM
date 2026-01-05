@@ -25,9 +25,9 @@ export const createUserSchema = z.object({
   name: z.string().min(1, 'Name is required').trim(),
   email: z.string().email('Invalid email address').toLowerCase().trim(),
   role: userRoleSchema.refine(
-    (role) => role !== 'CUSTOMER' && role !== 'INVESTOR',
+    (role) => role !== 'CUSTOMER',
     {
-      message: 'Cannot create CUSTOMER or INVESTOR users through this endpoint',
+      message: 'Cannot create CUSTOMER users through this endpoint. Use the customer creation form instead.',
     }
   ),
   status: userStatusSchema.default('ACTIVE'),

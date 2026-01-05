@@ -255,48 +255,56 @@ export async function getUrgentMaintenance(): Promise<UrgentMaintenance[]> {
     await connectDB()
 
     const today = new Date()
+    today.setHours(0, 0, 0, 0) // Start of today
     const nextMonth = new Date(today)
     nextMonth.setMonth(nextMonth.getMonth() + 1)
+    nextMonth.setHours(23, 59, 59, 999) // End of next month
 
-    // Get vehicles with expiring registration or insurance
-    const vehicles = await Vehicle.find({
-      $or: [
-        { registrationExpiry: { $lte: nextMonth, $gte: today } },
-        { insuranceExpiry: { $lte: nextMonth, $gte: today } },
-      ],
-    })
-      .limit(10)
+    // Get ALL vehicles to check their expiry dates
+    // We'll filter for urgent items (expired or expiring within 30 days)
+    const vehicles = await Vehicle.find({})
+      .select('plateNumber registrationExpiry insuranceExpiry')
       .lean()
 
     const urgentItems: UrgentMaintenance[] = []
 
     for (const vehicle of vehicles) {
-      // Check registration
-      if (vehicle.registrationExpiry <= nextMonth && vehicle.registrationExpiry >= today) {
-        const daysLeftValue = daysLeft(vehicle.registrationExpiry)
-        urgentItems.push({
-          id: vehicle._id.toString() + '-reg',
-          vehicleNumber: vehicle.plateNumber,
-          documents: 'Registration',
-          vehicleIssue: 'Registration Expiry',
-          daysLeft: daysLeftValue,
-          status: daysLeftValue < 0 ? 'Overdue' : daysLeftValue <= 7 ? 'In Progress' : 'In Progress',
-          expiryDate: vehicle.registrationExpiry,
-        })
+      // Check registration - include expired and expiring within 30 days
+      if (vehicle.registrationExpiry) {
+        const regExpiry = new Date(vehicle.registrationExpiry)
+        const daysLeftValue = daysLeft(regExpiry)
+        
+        // Include if expired or expiring within 30 days
+        if (daysLeftValue <= 30) {
+          urgentItems.push({
+            id: vehicle._id.toString() + '-reg',
+            vehicleNumber: vehicle.plateNumber,
+            documents: 'Registration',
+            vehicleIssue: 'Registration Expiry',
+            daysLeft: daysLeftValue,
+            status: daysLeftValue < 0 ? 'Overdue' : daysLeftValue <= 7 ? 'In Progress' : 'In Progress',
+            expiryDate: regExpiry,
+          })
+        }
       }
 
-      // Check insurance
-      if (vehicle.insuranceExpiry <= nextMonth && vehicle.insuranceExpiry >= today) {
-        const daysLeftValue = daysLeft(vehicle.insuranceExpiry)
-        urgentItems.push({
-          id: vehicle._id.toString() + '-ins',
-          vehicleNumber: vehicle.plateNumber,
-          documents: 'Insurance',
-          vehicleIssue: 'Insurance Expiry',
-          daysLeft: daysLeftValue,
-          status: daysLeftValue < 0 ? 'Overdue' : daysLeftValue <= 7 ? 'In Progress' : 'In Progress',
-          expiryDate: vehicle.insuranceExpiry,
-        })
+      // Check insurance - include expired and expiring within 30 days
+      if (vehicle.insuranceExpiry) {
+        const insExpiry = new Date(vehicle.insuranceExpiry)
+        const daysLeftValue = daysLeft(insExpiry)
+        
+        // Include if expired or expiring within 30 days
+        if (daysLeftValue <= 30) {
+          urgentItems.push({
+            id: vehicle._id.toString() + '-ins',
+            vehicleNumber: vehicle.plateNumber,
+            documents: 'Insurance',
+            vehicleIssue: 'Insurance Expiry',
+            daysLeft: daysLeftValue,
+            status: daysLeftValue < 0 ? 'Overdue' : daysLeftValue <= 7 ? 'In Progress' : 'In Progress',
+            expiryDate: insExpiry,
+          })
+        }
       }
     }
 
@@ -310,26 +318,35 @@ export async function getUrgentMaintenance(): Promise<UrgentMaintenance[]> {
 
     for (const record of maintenanceRecords) {
       const vehicle = record.vehicle as any
+      const scheduledDate = record.scheduledDate ? new Date(record.scheduledDate) : null
+      const daysLeftValue = scheduledDate ? daysLeft(scheduledDate) : 0
+      
       urgentItems.push({
         id: record._id.toString(),
         vehicleNumber: vehicle?.plateNumber || 'N/A',
         documents: 'Maintenance',
-        vehicleIssue: record.description,
-        daysLeft: record.scheduledDate
-          ? daysLeft(record.scheduledDate)
-          : 0,
+        vehicleIssue: record.description || 'Maintenance Required',
+        daysLeft: daysLeftValue,
         status: record.status === 'COMPLETED' ? 'Completed' : 'In Progress',
-        expiryDate: record.scheduledDate,
+        expiryDate: scheduledDate || undefined,
       })
     }
 
-    // Sort by days left (most urgent first)
-    urgentItems.sort((a, b) => a.daysLeft - b.daysLeft)
+    // Sort by days left (most urgent first - negative days first, then ascending)
+    urgentItems.sort((a, b) => {
+      // Overdue items first
+      if (a.daysLeft < 0 && b.daysLeft >= 0) return -1
+      if (a.daysLeft >= 0 && b.daysLeft < 0) return 1
+      // Then sort by days left (most urgent first)
+      return a.daysLeft - b.daysLeft
+    })
 
-    return urgentItems.slice(0, 10).length > 0 ? urgentItems.slice(0, 10) : getMockUrgentMaintenance()
+    // Return only the top 10 most urgent items, or empty array if none
+    return urgentItems.slice(0, 10)
   } catch (error) {
     logger.error('Error fetching urgent maintenance:', error)
-    return getMockUrgentMaintenance()
+    // Return empty array instead of mock data
+    return []
   }
 }
 

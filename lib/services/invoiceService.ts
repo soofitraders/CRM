@@ -67,22 +67,22 @@ export async function createInvoiceFromBooking(bookingId: string): Promise<any> 
       numberOfDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)))
     }
 
-    // Get daily rate based on rental type
-    let dailyRate = vehicle.dailyRate || 0
-    if (booking.rentalType === 'WEEKLY' && vehicle.weeklyRate) {
-      dailyRate = vehicle.weeklyRate / 7
-    } else if (booking.rentalType === 'MONTHLY' && vehicle.monthlyRate) {
-      dailyRate = vehicle.monthlyRate / 30
-    }
-
-    // Calculate line total: Daily Rate × Number of Days
-    const lineTotal = dailyRate * numberOfDays
+    // Use the booking's baseRate (entered during booking creation) instead of vehicle rates
+    // baseRate is the rate per day/period that was set when creating the booking
+    const baseRate = booking.baseRate || 0
+    
+    // Calculate line total: Base Rate × Number of Days
+    // This uses the rate that was specifically set for this booking
+    const lineTotal = baseRate * numberOfDays
+    
+    // Calculate effective daily rate for display purposes
+    const effectiveDailyRate = numberOfDays > 0 ? lineTotal / numberOfDays : baseRate
 
     // Calculate invoice items
     // Note: We use positive amounts and calculate subtotal separately to avoid validation issues
     const items = [
       {
-        label: `Rental - ${vehicle.brand || ''} ${vehicle.model || ''} (${booking.rentalType}) - ${numberOfDays} day${numberOfDays !== 1 ? 's' : ''} @ ${dailyRate.toFixed(2)} AED/day`,
+        label: `Rental - ${vehicle.brand || ''} ${vehicle.model || ''} (${booking.rentalType}) - ${numberOfDays} day${numberOfDays !== 1 ? 's' : ''} @ ${effectiveDailyRate.toFixed(2)} AED/day`,
         amount: lineTotal,
       },
     ]

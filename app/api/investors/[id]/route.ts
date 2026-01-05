@@ -4,9 +4,17 @@ import { authOptions } from '@/lib/authOptions'
 import connectDB from '@/lib/db'
 import InvestorProfile from '@/lib/models/InvestorProfile'
 import User from '@/lib/models/User'
+// Import Document model to ensure it's registered before populate
+import Document from '@/lib/models/Document'
 import { hasRole } from '@/lib/auth'
 import { getCurrentUser } from '@/lib/auth'
 import { logger } from '@/lib/utils/performance'
+
+// Ensure models are registered by referencing them
+// This ensures Mongoose knows about Document when populating
+if (typeof Document !== 'undefined') {
+  // Model is registered
+}
 
 // GET - Get investor by ID
 export async function GET(
@@ -20,6 +28,11 @@ export async function GET(
     }
 
     await connectDB()
+
+    // Ensure Document model is registered before populate
+    if (!Document) {
+      throw new Error('Document model not available')
+    }
 
     const investor = await InvestorProfile.findById(params.id)
       .populate('user', 'name email phone address')

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import SectionCard from '@/components/ui/SectionCard'
 import Table, { TableRow, TableCell } from '@/components/ui/Table'
@@ -11,6 +11,7 @@ import { isExpiringSoon, daysLeft, formatDaysLeft } from '@/lib/utils/compliance
 import { format } from 'date-fns'
 import ExportButtonGroup from '@/components/export/ExportButtonGroup'
 import { logger } from '@/lib/utils/logger'
+import { useDataSync } from '@/hooks/useDataSync'
 
 interface Vehicle {
   _id: string
@@ -59,11 +60,8 @@ export default function UnitsList() {
   })
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    fetchVehicles()
-  }, [filters, pagination.page])
-
-  const fetchVehicles = async () => {
+  // Memoize fetchVehicles to avoid recreating on every render
+  const fetchVehicles = useCallback(async () => {
     setIsLoading(true)
     try {
       const params = new URLSearchParams()
@@ -74,18 +72,60 @@ export default function UnitsList() {
       params.append('page', pagination.page.toString())
       params.append('limit', pagination.limit.toString())
 
+      logger.log('[Vehicles] Fetching vehicles with params:', params.toString())
       const response = await fetch(`/api/vehicles?${params.toString()}`)
-      if (response.ok) {
-        const data: VehiclesResponse = await response.json()
-        setVehicles(data.vehicles)
-        setPagination(data.pagination)
+      
+      logger.log('[Vehicles] Response status:', response.status)
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+        logger.error('[Vehicles] Error response:', errorData)
+        console.error('Failed to fetch vehicles:', errorData)
+        setVehicles([])
+        setPagination({
+          page: 1,
+          limit: 10,
+          total: 0,
+          pages: 0,
+        })
+        return
       }
-    } catch (error) {
-      logger.error('Error fetching vehicles:', error)
+      
+      const data: VehiclesResponse = await response.json()
+      logger.log('[Vehicles] Vehicles loaded:', data.vehicles?.length || 0, 'vehicles')
+      logger.log('[Vehicles] Total vehicles:', data.pagination?.total || 0)
+      
+      // Ensure vehicles is always an array
+      const vehiclesArray = Array.isArray(data.vehicles) ? data.vehicles : []
+      setVehicles(vehiclesArray)
+      setPagination(data.pagination || {
+        page: 1,
+        limit: 10,
+        total: 0,
+        pages: 0,
+      })
+    } catch (error: any) {
+      logger.error('[Vehicles] Error fetching vehicles:', error)
+      console.error('Error fetching vehicles:', error)
+      setVehicles([])
+      setPagination({
+        page: 1,
+        limit: 10,
+        total: 0,
+        pages: 0,
+      })
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [filters.status, filters.ownershipType, filters.branch, filters.search, pagination.page, pagination.limit])
+
+  // Fetch vehicles when filters or page change
+  useEffect(() => {
+    fetchVehicles()
+  }, [fetchVehicles])
+
+  // Listen for data sync events to refresh vehicles
+  useDataSync('vehicles', fetchVehicles)
 
   const handleFilterChange = (key: string, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }))
