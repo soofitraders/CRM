@@ -226,6 +226,8 @@ export async function POST(request: NextRequest) {
       drivingLicenseExpiry: new Date(data.drivingLicenseExpiry),
       phone: data.phone,
       alternatePhone: data.alternatePhone,
+      tradeLicenseNumber: data.tradeLicenseNumber,
+      taxId: data.taxId,
       addressLine1: data.addressLine1,
       city: data.city,
       country: data.country,

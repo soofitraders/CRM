@@ -172,6 +172,36 @@ export default function CustomerForm({
               <p className="text-danger text-xs mt-1">{errors.passportNumber.message}</p>
             )}
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-headingText mb-2">
+              Trade License Number
+            </label>
+            <input
+              type="text"
+              {...register('tradeLicenseNumber')}
+              placeholder="Trade license number"
+              className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+            />
+            {errors.tradeLicenseNumber && (
+              <p className="text-danger text-xs mt-1">{errors.tradeLicenseNumber.message}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-headingText mb-2">
+              Tax ID
+            </label>
+            <input
+              type="text"
+              {...register('taxId')}
+              placeholder="Tax ID number"
+              className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+            />
+            {errors.taxId && (
+              <p className="text-danger text-xs mt-1">{errors.taxId.message}</p>
+            )}
+          </div>
         </div>
       </div>
 

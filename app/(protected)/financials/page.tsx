@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import SectionCard from '@/components/ui/SectionCard'
 import Table, { TableRow, TableCell } from '@/components/ui/Table'
 import StatusChip from '@/components/ui/StatusChip'
-import { Search, Filter, Eye, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
+import { Search, Filter, Eye, ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import ExportButtonGroup from '@/components/export/ExportButtonGroup'
 
@@ -104,6 +104,10 @@ function FinancialsContent() {
   const [bookings, setBookings] = useState<Array<{ _id: string; vehicle: { plateNumber: string; brand: string; model: string }; customer: { user: { name: string } } }>>([])
   const [selectedBooking, setSelectedBooking] = useState<string>('')
   const [isCreatingInvoice, setIsCreatingInvoice] = useState(false)
+  const [selectedInvoices, setSelectedInvoices] = useState<Set<string>>(new Set())
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [invoiceToDelete, setInvoiceToDelete] = useState<string | null>(null)
 
   useEffect(() => {
     if (activeTab === 'invoices') {
@@ -160,6 +164,8 @@ function FinancialsContent() {
       }
       console.log('[Financials] Cleaned invoices array:', invoicesArray.length, 'valid invoices')
       setInvoices(invoicesArray)
+      // Clear selections when data changes
+      setSelectedInvoices(new Set())
       setInvoicesPagination(data.pagination || {
         page: 1,
         limit: 10,
@@ -333,6 +339,87 @@ function FinancialsContent() {
     }
   }
 
+  const handleSelectInvoice = (invoiceId: string) => {
+    setSelectedInvoices((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(invoiceId)) {
+        newSet.delete(invoiceId)
+      } else {
+        newSet.add(invoiceId)
+      }
+      return newSet
+    })
+  }
+
+  const handleSelectAll = () => {
+    if (selectedInvoices.size === invoices.length) {
+      setSelectedInvoices(new Set())
+    } else {
+      setSelectedInvoices(new Set(invoices.map((inv) => inv._id)))
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedInvoices.size === 0) return
+
+    setIsDeleting(true)
+    try {
+      const response = await fetch('/api/invoices', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ invoiceIds: Array.from(selectedInvoices) }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setShowBulkDeleteModal(false)
+        setSelectedInvoices(new Set())
+        alert(`Successfully deleted ${data.deletedCount} invoice(s)`)
+        fetchInvoices()
+      } else {
+        const error = await response.json()
+        let errorMessage = error.error || 'Failed to delete invoices'
+        if (error.protectedInvoices && error.protectedInvoices.length > 0) {
+          const protectedNumbers = error.protectedInvoices
+            .map((inv: any) => inv.invoiceNumber)
+            .join(', ')
+          errorMessage += `\n\nCannot delete: ${protectedNumbers} (PAID or VOID status - protected for audit purposes)`
+        }
+        alert(errorMessage)
+      }
+    } catch (error: any) {
+      console.error('Error deleting invoices:', error)
+      alert('Failed to delete invoices: ' + (error.message || 'Network error'))
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const handleDeleteInvoice = async (invoiceId: string) => {
+    setIsDeleting(true)
+    try {
+      const response = await fetch(`/api/invoices/${invoiceId}`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        setInvoiceToDelete(null)
+        alert('Invoice deleted successfully')
+        fetchInvoices()
+      } else {
+        const error = await response.json()
+        alert(error.error || 'Failed to delete invoice')
+      }
+    } catch (error: any) {
+      console.error('Error deleting invoice:', error)
+      alert('Failed to delete invoice: ' + (error.message || 'Network error'))
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -378,6 +465,15 @@ function FinancialsContent() {
             title="Invoices"
             actions={
               <div className="flex items-center gap-2">
+                {selectedInvoices.size > 0 && ['ADMIN', 'SUPER_ADMIN'].includes(userRole) && (
+                  <button
+                    onClick={() => setShowBulkDeleteModal(true)}
+                    className="px-4 py-2 bg-danger text-white rounded-lg font-medium hover:bg-danger/90 transition-colors flex items-center gap-2"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                    Delete Selected ({selectedInvoices.size})
+                  </button>
+                )}
                 {['FINANCE', 'ADMIN', 'SUPER_ADMIN'].includes(userRole) && (
                   <button
                     onClick={() => setShowCreateModal(true)}
@@ -436,6 +532,18 @@ function FinancialsContent() {
                 <>
                   <Table
                     headers={[
+                      ['ADMIN', 'SUPER_ADMIN'].includes(userRole) ? (
+                        <div key="select-all" className="flex justify-center">
+                          <input
+                            type="checkbox"
+                            checked={invoices.length > 0 && selectedInvoices.size === invoices.length}
+                            onChange={handleSelectAll}
+                            className="w-4 h-4 text-sidebarActiveBg border-borderSoft rounded focus:ring-sidebarActiveBg cursor-pointer"
+                            onClick={(e) => e.stopPropagation()}
+                            title="Select all invoices"
+                          />
+                        </div>
+                      ) : null,
                       'Invoice #',
                       'Booking #',
                       'Customer',
@@ -444,7 +552,7 @@ function FinancialsContent() {
                       'Total',
                       'Status',
                       'Actions',
-                    ]}
+                    ].filter(Boolean)}
                   >
                     {(() => {
                   // Double-check invoices is an array and filter out any undefined/null items
@@ -529,8 +637,23 @@ function FinancialsContent() {
                       bookingIdDisplay = 'N/A'
                     }
                   
+                  const canDelete = invoice.status !== 'PAID' && invoice.status !== 'VOID'
+                  
                   return (
                     <TableRow key={invoice._id || `invoice-${index}`}>
+                      {['ADMIN', 'SUPER_ADMIN'].includes(userRole) && (
+                        <TableCell className="w-12 text-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedInvoices.has(invoice._id)}
+                            onChange={() => handleSelectInvoice(invoice._id)}
+                            disabled={!canDelete}
+                            className="w-4 h-4 text-sidebarActiveBg border-borderSoft rounded focus:ring-sidebarActiveBg disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                            onClick={(e) => e.stopPropagation()}
+                            title={!canDelete ? 'PAID and VOID invoices cannot be deleted' : 'Select invoice'}
+                          />
+                        </TableCell>
+                      )}
                       <TableCell className="font-medium text-headingText">
                         {invoice.invoiceNumber || 'N/A'}
                       </TableCell>
@@ -563,13 +686,33 @@ function FinancialsContent() {
                         />
                       </TableCell>
                       <TableCell>
-                        <Link
-                          href={`/financials/invoices/${invoice._id}`}
-                          className="text-sidebarActiveBg hover:text-sidebarActiveBg/80 font-medium text-sm flex items-center gap-1"
-                        >
-                          <Eye className="w-4 h-4" />
-                          View
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          <Link
+                            href={`/financials/invoices/${invoice._id}`}
+                            className="text-sidebarActiveBg hover:text-sidebarActiveBg/80 font-medium text-sm flex items-center gap-1 transition-colors"
+                          >
+                            <Eye className="w-4 h-4" />
+                            View
+                          </Link>
+                          {['ADMIN', 'SUPER_ADMIN'].includes(userRole) && canDelete && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setInvoiceToDelete(invoice._id)
+                              }}
+                              className="text-danger hover:text-danger/80 font-medium text-sm flex items-center gap-1 transition-colors"
+                              title="Delete invoice"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              <span className="hidden sm:inline">Delete</span>
+                            </button>
+                          )}
+                          {['ADMIN', 'SUPER_ADMIN'].includes(userRole) && !canDelete && (
+                            <span className="text-xs text-sidebarMuted italic" title="PAID and VOID invoices are protected for audit purposes">
+                              Protected
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   )
@@ -631,6 +774,96 @@ function FinancialsContent() {
             }
           })()}
         </SectionCard>
+
+        {/* Bulk Delete Confirmation Modal */}
+        {showBulkDeleteModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-pageBg rounded-lg p-6 w-full max-w-md border border-borderSoft">
+              <h2 className="text-2xl font-bold text-headingText mb-4">Delete Invoices</h2>
+              <p className="text-bodyText mb-4">
+                Are you sure you want to delete {selectedInvoices.size} invoice(s)? This action cannot be undone.
+              </p>
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                <p className="text-sm text-yellow-800 font-medium mb-2">⚠️ Important:</p>
+                <ul className="text-xs text-yellow-700 list-disc list-inside space-y-1">
+                  <li>PAID and VOID invoices are protected and cannot be deleted</li>
+                  <li>Only DRAFT and ISSUED invoices can be deleted</li>
+                  <li>This action is logged for audit purposes</li>
+                </ul>
+              </div>
+              <div className="flex items-center gap-3 justify-end">
+                <button
+                  onClick={() => setShowBulkDeleteModal(false)}
+                  disabled={isDeleting}
+                  className="px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText hover:bg-borderSoft transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={isDeleting}
+                  className="px-4 py-2 bg-danger text-white rounded-lg font-medium hover:bg-danger/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {isDeleting ? (
+                    <>
+                      <span className="animate-spin">⏳</span>
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4" />
+                      Delete
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Individual Delete Confirmation Modal */}
+        {invoiceToDelete && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-pageBg rounded-lg p-6 w-full max-w-md border border-borderSoft">
+              <h2 className="text-2xl font-bold text-headingText mb-4">Delete Invoice</h2>
+              <p className="text-bodyText mb-4">
+                Are you sure you want to delete this invoice? This action cannot be undone.
+              </p>
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                <p className="text-sm text-yellow-800 font-medium mb-2">⚠️ Note:</p>
+                <p className="text-xs text-yellow-700">
+                  PAID and VOID invoices are protected for audit and compliance purposes and cannot be deleted.
+                </p>
+              </div>
+              <div className="flex items-center gap-3 justify-end">
+                <button
+                  onClick={() => setInvoiceToDelete(null)}
+                  disabled={isDeleting}
+                  className="px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText hover:bg-borderSoft transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleDeleteInvoice(invoiceToDelete)}
+                  disabled={isDeleting}
+                  className="px-4 py-2 bg-danger text-white rounded-lg font-medium hover:bg-danger/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {isDeleting ? (
+                    <>
+                      <span className="animate-spin">⏳</span>
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4" />
+                      Delete
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Create Invoice Modal */}
         {showCreateModal && (

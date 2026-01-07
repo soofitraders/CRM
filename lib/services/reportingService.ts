@@ -4,7 +4,13 @@ import Invoice from '@/lib/models/Invoice'
 import Payment from '@/lib/models/Payment'
 import Vehicle from '@/lib/models/Vehicle'
 import InvestorProfile from '@/lib/models/InvestorProfile'
+import CustomerProfile from '@/lib/models/CustomerProfile'
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, differenceInDays } from 'date-fns'
+
+// Ensure CustomerProfile model is registered before use
+if (typeof CustomerProfile !== 'undefined') {
+  // Model is registered
+}
 
 interface RevenueOverviewParams {
   dateFrom: Date

@@ -253,3 +253,138 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// DELETE - Bulk delete invoices
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    await connectDB()
+
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
+    // Check permissions - Only ADMIN and SUPER_ADMIN can delete invoices
+    if (!hasRole(user, ['ADMIN', 'SUPER_ADMIN'])) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const body = await request.json()
+    const { invoiceIds } = body
+
+    if (!Array.isArray(invoiceIds) || invoiceIds.length === 0) {
+      return NextResponse.json(
+        { error: 'Invalid request. invoiceIds must be a non-empty array' },
+        { status: 400 }
+      )
+    }
+
+    // Validate all IDs are valid MongoDB ObjectIds
+    const validIds = invoiceIds.filter((id: string) => {
+      try {
+        return typeof id === 'string' && id.length === 24
+      } catch {
+        return false
+      }
+    })
+
+    if (validIds.length === 0) {
+      return NextResponse.json(
+        { error: 'No valid invoice IDs provided' },
+        { status: 400 }
+      )
+    }
+
+    // Find invoices to delete and check if any are PAID or VOID
+    const invoicesToDelete = await Invoice.find({
+      _id: { $in: validIds },
+    }).select('_id invoiceNumber status').lean()
+
+    if (invoicesToDelete.length === 0) {
+      return NextResponse.json(
+        { error: 'No invoices found to delete' },
+        { status: 404 }
+      )
+    }
+
+    // Prevent deletion of PAID or VOID invoices
+    const protectedInvoices = invoicesToDelete.filter(
+      (inv: any) => inv.status === 'PAID' || inv.status === 'VOID'
+    )
+
+    if (protectedInvoices.length > 0) {
+      return NextResponse.json(
+        {
+          error: 'Cannot delete invoices with PAID or VOID status',
+          protectedInvoices: protectedInvoices.map((inv: any) => ({
+            id: inv._id,
+            invoiceNumber: inv.invoiceNumber,
+            status: inv.status,
+          })),
+        },
+        { status: 400 }
+      )
+    }
+
+    // Delete invoices
+    const deleteResult = await Invoice.deleteMany({
+      _id: { $in: validIds },
+      status: { $nin: ['PAID', 'VOID'] }, // Extra safety check
+    })
+
+    // Log activity and audit
+    try {
+      const { logActivity } = await import('@/lib/services/activityLogService')
+      const { logAudit } = await import('@/lib/services/auditLogService')
+
+      await logActivity({
+        activityType: 'BULK_DELETE',
+        module: 'INVOICES',
+        action: 'DELETE',
+        description: `Bulk deleted ${deleteResult.deletedCount} invoice(s)`,
+        entityType: 'Invoice',
+        entityId: validIds.join(','),
+        changes: [{ field: 'status', oldValue: 'EXISTS', newValue: 'DELETED' }],
+        userId: user._id.toString(),
+      })
+
+      await logAudit({
+        auditType: 'BULK_DELETE',
+        severity: 'HIGH',
+        title: 'Bulk Invoice Deletion',
+        description: `User ${user.email} bulk deleted ${deleteResult.deletedCount} invoice(s)`,
+        entityType: 'Invoice',
+        entityId: validIds.join(','),
+        beforeState: { count: invoicesToDelete.length },
+        afterState: { count: 0 },
+        metadata: {
+          deletedCount: deleteResult.deletedCount,
+          invoiceIds: validIds,
+        },
+        userId: user._id.toString(),
+      })
+    } catch (logError) {
+      logger.error('Error logging bulk delete activity:', logError)
+      // Don't fail deletion if logging fails
+    }
+
+    // Invalidate cache
+    invalidateFinancialCache()
+
+    return NextResponse.json({
+      message: `Successfully deleted ${deleteResult.deletedCount} invoice(s)`,
+      deletedCount: deleteResult.deletedCount,
+    })
+  } catch (error: any) {
+    logger.error('Error bulk deleting invoices:', error)
+    return NextResponse.json(
+      { error: error.message || 'Failed to delete invoices' },
+      { status: 500 }
+    )
+  }
+}
+

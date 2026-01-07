@@ -349,3 +349,98 @@ export async function PATCH(
   }
 }
 
+// DELETE - Delete single invoice
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    await connectDB()
+
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
+    // Check permissions - Only ADMIN and SUPER_ADMIN can delete invoices
+    if (!hasRole(user, ['ADMIN', 'SUPER_ADMIN'])) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const invoice = await Invoice.findById(params.id)
+    if (!invoice) {
+      return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
+    }
+
+    // Prevent deletion of PAID or VOID invoices
+    if (invoice.status === 'PAID' || invoice.status === 'VOID') {
+      return NextResponse.json(
+        {
+          error: `Cannot delete invoice with ${invoice.status} status. PAID and VOID invoices are protected for audit and compliance purposes.`,
+        },
+        { status: 400 }
+      )
+    }
+
+    const invoiceNumber = invoice.invoiceNumber
+    const invoiceId = invoice._id.toString()
+
+    // Delete the invoice
+    await Invoice.deleteOne({ _id: invoice._id })
+
+    // Log activity and audit
+    try {
+      const { logActivity } = await import('@/lib/services/activityLogService')
+      const { logAudit } = await import('@/lib/services/auditLogService')
+
+      await logActivity({
+        activityType: 'DELETE',
+        module: 'INVOICES',
+        action: 'DELETE',
+        description: `Deleted invoice ${invoiceNumber}`,
+        entityType: 'Invoice',
+        entityId: invoiceId,
+        changes: [{ field: 'status', oldValue: invoice.status, newValue: 'DELETED' }],
+        userId: user._id.toString(),
+      })
+
+      await logAudit({
+        auditType: 'DELETE',
+        severity: 'HIGH',
+        title: 'Invoice Deletion',
+        description: `User ${user.email} deleted invoice ${invoiceNumber}`,
+        entityType: 'Invoice',
+        entityId: invoiceId,
+        beforeState: { status: invoice.status, invoiceNumber },
+        afterState: { status: 'DELETED' },
+        metadata: {
+          invoiceNumber,
+        },
+        userId: user._id.toString(),
+      })
+    } catch (logError) {
+      logger.error('Error logging invoice deletion:', logError)
+      // Don't fail deletion if logging fails
+    }
+
+    // Invalidate cache
+    const { invalidateFinancialCache } = await import('@/lib/cache/cacheUtils')
+    invalidateFinancialCache()
+
+    return NextResponse.json({
+      message: 'Invoice deleted successfully',
+    })
+  } catch (error: any) {
+    logger.error('Error deleting invoice:', error)
+    return NextResponse.json(
+      { error: error.message || 'Failed to delete invoice' },
+      { status: 500 }
+    )
+  }
+}
+

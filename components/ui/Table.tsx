@@ -1,7 +1,7 @@
 import { ReactNode } from 'react'
 
 interface TableProps {
-  headers: string[]
+  headers: (string | ReactNode)[]
   children: ReactNode
 }
 
@@ -14,14 +14,20 @@ export default function Table({ headers, children }: TableProps) {
       <table className="w-full">
         <thead className="bg-pageBg">
           <tr>
-            {safeHeaders.map((header, index) => (
-              <th
-                key={index}
-                className="text-left py-4 px-6 text-xs font-semibold text-headingText uppercase tracking-wider"
-              >
-                {header || ''}
-              </th>
-            ))}
+            {safeHeaders.map((header, index) => {
+              // Check if header is a checkbox (ReactNode)
+              const isCheckbox = typeof header !== 'string' && header !== null
+              return (
+                <th
+                  key={index}
+                  className={`py-4 px-6 text-xs font-semibold text-headingText uppercase tracking-wider ${
+                    isCheckbox ? 'w-12 text-center' : 'text-left'
+                  }`}
+                >
+                  {header || ''}
+                </th>
+              )
+            })}
           </tr>
         </thead>
         <tbody className="bg-cardBg divide-y divide-borderSoft">{children}</tbody>

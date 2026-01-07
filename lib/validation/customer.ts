@@ -15,6 +15,8 @@ export const createCustomerSchema = z.object({
   drivingLicenseExpiry: z.string().or(z.date()),
   phone: z.string().min(1, 'Phone is required'),
   alternatePhone: z.string().optional(),
+  tradeLicenseNumber: z.string().optional(),
+  taxId: z.string().optional(),
   addressLine1: z.string().min(1, 'Address is required'),
   city: z.string().min(1, 'City is required'),
   country: z.string().min(1, 'Country is required'),

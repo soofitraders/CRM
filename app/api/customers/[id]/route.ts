@@ -166,6 +166,8 @@ export async function PATCH(
       customer.drivingLicenseExpiry = new Date(data.drivingLicenseExpiry)
     if (data.phone !== undefined) customer.phone = data.phone
     if (data.alternatePhone !== undefined) customer.alternatePhone = data.alternatePhone
+    if (data.tradeLicenseNumber !== undefined) customer.tradeLicenseNumber = data.tradeLicenseNumber
+    if (data.taxId !== undefined) customer.taxId = data.taxId
     if (data.addressLine1 !== undefined) customer.addressLine1 = data.addressLine1
     if (data.city !== undefined) customer.city = data.city
     if (data.country !== undefined) customer.country = data.country

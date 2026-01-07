@@ -10,6 +10,8 @@ export interface ICustomerProfile extends Document {
   drivingLicenseExpiry: Date
   phone: string
   alternatePhone?: string
+  tradeLicenseNumber?: string
+  taxId?: string
   addressLine1: string
   city: string
   country: string
@@ -64,6 +66,14 @@ const CustomerProfileSchema = new Schema<ICustomerProfile>(
       type: String,
       trim: true,
     },
+    tradeLicenseNumber: {
+      type: String,
+      trim: true,
+    },
+    taxId: {
+      type: String,
+      trim: true,
+    },
     addressLine1: {
       type: String,
       required: [true, 'Address is required'],
@@ -105,6 +115,8 @@ CustomerProfileSchema.index({ drivingLicenseNumber: 1 })
 CustomerProfileSchema.index({ nationalId: 1 })
 CustomerProfileSchema.index({ passportNumber: 1 })
 CustomerProfileSchema.index({ phone: 1 })
+CustomerProfileSchema.index({ tradeLicenseNumber: 1 })
+CustomerProfileSchema.index({ taxId: 1 })
 
 const CustomerProfile: Model<ICustomerProfile> = mongoose.models.CustomerProfile || mongoose.model<ICustomerProfile>('CustomerProfile', CustomerProfileSchema)
 
