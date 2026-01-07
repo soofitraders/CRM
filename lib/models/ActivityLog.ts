@@ -6,7 +6,9 @@ export type ActivityType =
   | 'BOOKING_DELETED'
   | 'INVOICE_CREATED'
   | 'INVOICE_UPDATED'
+  | 'INVOICE_DELETED'
   | 'INVOICE_PAID'
+  | 'BULK_DELETE'
   | 'VEHICLE_CREATED'
   | 'VEHICLE_UPDATED'
   | 'VEHICLE_DELETED'
@@ -77,7 +79,9 @@ const ActivityLogSchema = new Schema<IActivityLog>(
         'BOOKING_DELETED',
         'INVOICE_CREATED',
         'INVOICE_UPDATED',
+        'INVOICE_DELETED',
         'INVOICE_PAID',
+        'BULK_DELETE',
         'VEHICLE_CREATED',
         'VEHICLE_UPDATED',
         'VEHICLE_DELETED',

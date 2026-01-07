@@ -5,6 +5,8 @@ export type AuditType =
   | 'PAYMENT_PROCESSED'
   | 'INVOICE_ISSUED'
   | 'INVOICE_PAID'
+  | 'INVOICE_DELETED'
+  | 'BULK_DELETE'
   | 'EXPENSE_CREATED'
   | 'EXPENSE_MODIFIED'
   | 'INVESTOR_PAYOUT'
@@ -54,6 +56,8 @@ const AuditLogSchema = new Schema<IAuditLog>(
         'PAYMENT_PROCESSED',
         'INVOICE_ISSUED',
         'INVOICE_PAID',
+        'INVOICE_DELETED',
+        'BULK_DELETE',
         'EXPENSE_CREATED',
         'EXPENSE_MODIFIED',
         'INVESTOR_PAYOUT',

@@ -388,7 +388,7 @@ export async function DELETE(
     }
 
     const invoiceNumber = invoice.invoiceNumber
-    const invoiceId = invoice._id.toString()
+    const invoiceId = String(invoice._id)
 
     // Delete the invoice
     await Invoice.deleteOne({ _id: invoice._id })
@@ -399,7 +399,7 @@ export async function DELETE(
       const { logAudit } = await import('@/lib/services/auditLogService')
 
       await logActivity({
-        activityType: 'DELETE',
+        activityType: 'INVOICE_DELETED',
         module: 'INVOICES',
         action: 'DELETE',
         description: `Deleted invoice ${invoiceNumber}`,
@@ -410,7 +410,7 @@ export async function DELETE(
       })
 
       await logAudit({
-        auditType: 'DELETE',
+        auditType: 'INVOICE_DELETED',
         severity: 'HIGH',
         title: 'Invoice Deletion',
         description: `User ${user.email} deleted invoice ${invoiceNumber}`,
