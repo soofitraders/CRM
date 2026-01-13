@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import SectionCard from '@/components/ui/SectionCard'
 import { getCurrentUser, hasRole } from '@/lib/auth'
 import ClearDatabaseButton from '@/components/admin/ClearDatabaseButton'
+import SelectiveDataDeletion from '@/components/admin/SelectiveDataDeletion'
 
 interface Settings {
   _id?: string
@@ -313,6 +314,17 @@ export default function SettingsPage() {
       {/* System Administration */}
       <SectionCard title="System Administration">
         <div className="space-y-4">
+          <div className="p-4 bg-pageBg border border-borderSoft rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-medium text-headingText mb-1">Selective Data Deletion</h3>
+                <p className="text-sm text-sidebarMuted">
+                  Delete specific types of data from the database. For example, delete all sales data (invoices and payments) to reset Total Sales to 0.
+                </p>
+              </div>
+              <SelectiveDataDeletion />
+            </div>
+          </div>
           <div className="p-4 bg-pageBg border border-borderSoft rounded-lg">
             <div className="flex items-center justify-between">
               <div>

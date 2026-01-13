@@ -151,24 +151,31 @@ export async function PATCH(
       // Calculate subtotal from all items (including deposits as negative amounts)
       const subtotal = data.items.reduce((sum, item) => sum + item.amount, 0)
       
-      // Calculate taxable amount for VAT
-      // VAT applies to: rental + fines + other charges - discounts
-      // VAT does NOT apply to: deposits (which are payments/credits)
-      // Separate items into taxable (positive or discount) and non-taxable (deposits)
-      const taxableItems = data.items.filter(item => {
-        const label = item.label.toLowerCase()
-        // Deposits are non-taxable (they're payments, not charges)
-        return !label.includes('deposit')
-      })
-      const taxableSubtotal = taxableItems.reduce((sum, item) => sum + item.amount, 0)
-      
-      // Get VAT rate from settings
-      const Settings = (await import('@/lib/models/Settings')).default
-      const settings = await Settings.findOne().lean()
-      const vatRate = settings?.defaultTaxPercent || 5
-      
-      // Calculate VAT on taxable amount (ensure non-negative)
-      const taxAmount = Math.max(0, (taxableSubtotal * vatRate) / 100)
+      // Use provided taxAmount if available, otherwise calculate it
+      let taxAmount: number
+      if (data.taxAmount !== undefined) {
+        // Use the explicitly provided tax amount
+        taxAmount = Math.max(0, data.taxAmount)
+      } else {
+        // Calculate taxable amount for VAT
+        // VAT applies to: rental + fines + other charges - discounts
+        // VAT does NOT apply to: deposits (which are payments/credits)
+        // Separate items into taxable (positive or discount) and non-taxable (deposits)
+        const taxableItems = data.items.filter(item => {
+          const label = item.label.toLowerCase()
+          // Deposits are non-taxable (they're payments, not charges)
+          return !label.includes('deposit')
+        })
+        const taxableSubtotal = taxableItems.reduce((sum, item) => sum + item.amount, 0)
+        
+        // Get VAT rate from settings
+        const Settings = (await import('@/lib/models/Settings')).default
+        const settings = await Settings.findOne().lean()
+        const vatRate = settings?.defaultTaxPercent || 5
+        
+        // Calculate VAT on taxable amount (ensure non-negative)
+        taxAmount = Math.max(0, (taxableSubtotal * vatRate) / 100)
+      }
       
       // Total = subtotal (all items including deposits) + VAT
       const total = subtotal + taxAmount
@@ -260,6 +267,22 @@ export async function PATCH(
             subtotal: Math.max(0, subtotal), // Ensure non-negative
             taxAmount,
             total: Math.max(0, total), // Ensure non-negative
+            updatedAt: new Date(),
+          },
+        }
+      )
+    } else if (data.taxAmount !== undefined) {
+      // Update only tax amount if provided without items
+      const subtotal = invoice.subtotal || 0
+      const taxAmount = Math.max(0, data.taxAmount)
+      const total = subtotal + taxAmount
+      
+      await Invoice.collection.updateOne(
+        { _id: invoice._id as any },
+        {
+          $set: {
+            taxAmount,
+            total: Math.max(0, total),
             updatedAt: new Date(),
           },
         }

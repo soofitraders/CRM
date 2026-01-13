@@ -1,6 +1,6 @@
-'use client'
+  'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import SectionCard from '@/components/ui/SectionCard'
 import Table, { TableRow, TableCell } from '@/components/ui/Table'
@@ -58,17 +58,33 @@ export default function BookingsList() {
   })
   const [isLoading, setIsLoading] = useState(true)
 
-  // Memoize fetchBookings to avoid recreating on every render
+  // Use refs to access latest values without causing re-renders
+  const filtersRef = useRef(filters)
+  const paginationRef = useRef(pagination)
+  
+  // Update refs when values change
+  useEffect(() => {
+    filtersRef.current = filters
+  }, [filters])
+  
+  useEffect(() => {
+    paginationRef.current = pagination
+  }, [pagination])
+
+  // Memoize fetchBookings with stable dependencies
   const fetchBookings = useCallback(async (forceRefresh = false) => {
     setIsLoading(true)
     try {
+      const currentFilters = filtersRef.current
+      const currentPagination = paginationRef.current
+      
       const params = new URLSearchParams()
-      if (filters.status) params.append('status', filters.status)
-      if (filters.dateFrom) params.append('dateFrom', filters.dateFrom)
-      if (filters.dateTo) params.append('dateTo', filters.dateTo)
-      if (filters.search) params.append('search', filters.search)
-      params.append('page', pagination.page.toString())
-      params.append('limit', pagination.limit.toString())
+      if (currentFilters.status) params.append('status', currentFilters.status)
+      if (currentFilters.dateFrom) params.append('dateFrom', currentFilters.dateFrom)
+      if (currentFilters.dateTo) params.append('dateTo', currentFilters.dateTo)
+      if (currentFilters.search) params.append('search', currentFilters.search)
+      params.append('page', currentPagination.page.toString())
+      params.append('limit', currentPagination.limit.toString())
       
       // Add cache-busting parameter to force fresh data
       if (forceRefresh) {
@@ -77,7 +93,7 @@ export default function BookingsList() {
 
       logger.log('[Bookings] Fetching bookings with params:', params.toString())
       const response = await fetch(`/api/bookings?${params.toString()}`, {
-        cache: 'no-store', // Always fetch fresh data
+        cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache',
         },
@@ -123,12 +139,12 @@ export default function BookingsList() {
     } finally {
       setIsLoading(false)
     }
-  }, [filters.status, filters.dateFrom, filters.dateTo, filters.search, pagination.page, pagination.limit])
+  }, []) // Empty dependency array - function is stable
 
   // Fetch bookings when filters or page change
   useEffect(() => {
     fetchBookings()
-  }, [fetchBookings])
+  }, [filters.status, filters.dateFrom, filters.dateTo, filters.search, pagination.page, pagination.limit, fetchBookings])
 
   // Listen for data sync events to refresh bookings (force refresh)
   useDataSync('bookings', () => fetchBookings(true))
@@ -151,13 +167,13 @@ export default function BookingsList() {
     return () => window.removeEventListener('force-refresh-bookings', handleForceRefresh)
   }, [fetchBookings])
   
-  // Auto-refresh every 5 seconds when page is visible (reduced from 10 for faster updates)
+  // Auto-refresh every 30 seconds when page is visible (increased from 5 to reduce load)
   useEffect(() => {
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
         fetchBookings(true)
       }
-    }, 5000) // Refresh every 5 seconds
+    }, 30000) // Refresh every 30 seconds instead of 5
     
     return () => clearInterval(interval)
   }, [fetchBookings])

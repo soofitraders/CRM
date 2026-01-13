@@ -22,6 +22,7 @@ export const updateInvoiceStatusSchema = z.object({
     )
     .min(1, 'At least one item is required')
     .optional(),
+  taxAmount: z.number().min(0, 'Tax amount cannot be negative').optional(),
 })
 
 export const createInvoiceSchema = z.object({

@@ -52,6 +52,7 @@ export default function InvoiceDetailPage() {
   const [userRole, setUserRole] = useState<string>('')
   const [isEditingItems, setIsEditingItems] = useState(false)
   const [editedItems, setEditedItems] = useState<InvoiceItem[]>([])
+  const [editedTaxAmount, setEditedTaxAmount] = useState<number>(0)
   const [newFine, setNewFine] = useState({ label: '', amount: '' })
   const [isExportingPDF, setIsExportingPDF] = useState(false)
 
@@ -79,6 +80,7 @@ export default function InvoiceDetailPage() {
       console.log('[Invoice Detail] Invoice loaded:', data.invoice?._id)
       setInvoice(data.invoice)
       setEditedItems([...(data.invoice?.items || [])])
+      setEditedTaxAmount(data.invoice?.taxAmount || 0)
     } catch (error: any) {
       console.error('[Invoice Detail] Error fetching invoice:', error)
       console.error('[Invoice Detail] Error details:', {
@@ -174,13 +176,17 @@ export default function InvoiceDetailPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ items: editedItems }),
+        body: JSON.stringify({ 
+          items: editedItems,
+          taxAmount: editedTaxAmount 
+        }),
       })
 
       if (response.ok) {
         const data = await response.json()
         setInvoice(data.invoice)
         setEditedItems([...data.invoice.items])
+        setEditedTaxAmount(data.invoice.taxAmount || 0)
         setIsEditingItems(false)
         router.refresh()
         alert('Invoice items updated successfully')
@@ -432,6 +438,7 @@ export default function InvoiceDetailPage() {
                     onClick={() => {
                       setIsEditingItems(false)
                       setEditedItems([...invoice.items])
+                      setEditedTaxAmount(invoice.taxAmount || 0)
                       setNewFine({ label: '', amount: '' })
                     }}
                     className="px-3 py-1.5 text-sm bg-pageBg border border-borderSoft rounded-lg text-bodyText hover:bg-borderSoft transition-colors"
@@ -448,7 +455,10 @@ export default function InvoiceDetailPage() {
                 </>
               ) : (
                 <button
-                  onClick={() => setIsEditingItems(true)}
+                  onClick={() => {
+                    setIsEditingItems(true)
+                    setEditedTaxAmount(invoice.taxAmount || 0)
+                  }}
                   className="px-3 py-1.5 text-sm bg-sidebarActiveBg text-white rounded-lg hover:bg-sidebarActiveBg/90 transition-colors flex items-center gap-2"
                 >
                   <Plus className="w-4 h-4" />
@@ -561,7 +571,23 @@ export default function InvoiceDetailPage() {
               <tr>
                 <td className="py-3 px-4 text-sm font-medium text-headingText">Tax</td>
                 <td className="py-3 px-4 text-bodyText text-right">
-                  {formatCurrency(invoice.taxAmount)}
+                  {isEditingItems ? (
+                    <div className="flex items-center justify-end gap-2">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={editedTaxAmount}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value) || 0
+                          setEditedTaxAmount(Math.max(0, value))
+                        }}
+                        className="w-32 px-3 py-1.5 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50 text-right"
+                      />
+                    </div>
+                  ) : (
+                    formatCurrency(invoice.taxAmount)
+                  )}
                 </td>
                 {isEditingItems && <td></td>}
               </tr>
@@ -572,7 +598,7 @@ export default function InvoiceDetailPage() {
                     (isEditingItems ? editedItems : invoice.items).reduce(
                       (sum, item) => sum + item.amount,
                       0
-                    ) + invoice.taxAmount
+                    ) + (isEditingItems ? editedTaxAmount : invoice.taxAmount)
                   )}
                 </td>
                 {isEditingItems && <td></td>}
