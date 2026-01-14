@@ -14,7 +14,7 @@ export default function SectionCard({ title, children, actions, className = '' }
       {(title || actions) && (
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 px-4 sm:px-6 pt-4 sm:pt-6 pb-4 border-b border-borderSoft/50">
           {title && (
-            <h2 className="text-base sm:text-lg font-semibold text-headingText break-words min-w-0 flex-1">
+            <h2 className="text-base sm:text-lg font-semibold text-headingText w-full sm:w-auto sm:flex-1" style={{ wordBreak: 'normal', overflowWrap: 'normal', minWidth: 'fit-content' }}>
               {title}
             </h2>
           )}
