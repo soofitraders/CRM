@@ -3,6 +3,8 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import SectionCard from '@/components/ui/SectionCard'
+import PageHeader from '@/components/ui/PageHeader'
+import Toolbar, { ToolbarGroup, ToolbarInput } from '@/components/ui/Toolbar'
 import Table, { TableRow, TableCell } from '@/components/ui/Table'
 import StatusChip from '@/components/ui/StatusChip'
 import { Search, Filter, Eye, ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react'
@@ -421,12 +423,12 @@ function FinancialsContent() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 min-w-0">
       {/* Page Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-headingText">Financials</h1>
-        <p className="text-bodyText mt-2">Manage invoices and payments</p>
-      </div>
+      <PageHeader
+        title="Financials"
+        subtitle="Manage invoices and payments"
+      />
 
       {/* Tabs */}
       <div className="flex gap-2 border-b border-borderSoft">
@@ -464,62 +466,68 @@ function FinancialsContent() {
           <SectionCard
             title="Invoices"
             actions={
-              <div className="flex items-center gap-2">
-                {selectedInvoices.size > 0 && ['ADMIN', 'SUPER_ADMIN'].includes(userRole) && (
-                  <button
-                    onClick={() => setShowBulkDeleteModal(true)}
-                    className="px-4 py-2 bg-danger text-white rounded-lg font-medium hover:bg-danger/90 transition-colors flex items-center gap-2"
+              <Toolbar>
+                <ToolbarGroup>
+                  {selectedInvoices.size > 0 && ['ADMIN', 'SUPER_ADMIN'].includes(userRole) && (
+                    <button
+                      onClick={() => setShowBulkDeleteModal(true)}
+                      className="w-full sm:w-auto px-4 py-2 bg-danger text-white rounded-lg font-medium hover:bg-danger/90 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Trash2 className="w-5 h-5 flex-shrink-0" />
+                      <span className="text-sm sm:text-base">Delete Selected ({selectedInvoices.size})</span>
+                    </button>
+                  )}
+                  {['FINANCE', 'ADMIN', 'SUPER_ADMIN'].includes(userRole) && (
+                    <button
+                      onClick={() => setShowCreateModal(true)}
+                      className="w-full sm:w-auto px-4 py-2 bg-sidebarActiveBg text-white rounded-lg font-medium hover:bg-sidebarActiveBg/90 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Plus className="w-5 h-5 flex-shrink-0" />
+                      <span className="text-sm sm:text-base">Create Invoice</span>
+                    </button>
+                  )}
+                </ToolbarGroup>
+                <ToolbarInput>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-bodyText pointer-events-none" />
+                    <input
+                      type="text"
+                      placeholder="Search invoice #..."
+                      value={invoiceFilters.search}
+                      onChange={(e) => handleInvoiceFilterChange('search', e.target.value)}
+                      className="w-full sm:w-48 pl-9 pr-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+                    />
+                  </div>
+                </ToolbarInput>
+                <ToolbarGroup>
+                  <select
+                    value={invoiceFilters.status}
+                    onChange={(e) => handleInvoiceFilterChange('status', e.target.value)}
+                    className="w-full sm:w-auto min-w-[140px] px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
                   >
-                    <Trash2 className="w-5 h-5" />
-                    Delete Selected ({selectedInvoices.size})
-                  </button>
-                )}
-                {['FINANCE', 'ADMIN', 'SUPER_ADMIN'].includes(userRole) && (
-                  <button
-                    onClick={() => setShowCreateModal(true)}
-                    className="px-4 py-2 bg-sidebarActiveBg text-white rounded-lg font-medium hover:bg-sidebarActiveBg/90 transition-colors flex items-center gap-2"
-                  >
-                    <Plus className="w-5 h-5" />
-                    Create Invoice
-                  </button>
-                )}
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-bodyText" />
+                    <option value="">All Status</option>
+                    <option value="DRAFT">Draft</option>
+                    <option value="ISSUED">Issued</option>
+                    <option value="PAID">Paid</option>
+                    <option value="VOID">Void</option>
+                  </select>
                   <input
-                    type="text"
-                    placeholder="Search invoice #..."
-                    value={invoiceFilters.search}
-                    onChange={(e) => handleInvoiceFilterChange('search', e.target.value)}
-                    className="pl-9 pr-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50 w-48"
+                    type="date"
+                    value={invoiceFilters.dateFrom}
+                    onChange={(e) => handleInvoiceFilterChange('dateFrom', e.target.value)}
+                    placeholder="From"
+                    className="w-full sm:w-auto min-w-[140px] px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
                   />
-                </div>
-                <select
-                  value={invoiceFilters.status}
-                  onChange={(e) => handleInvoiceFilterChange('status', e.target.value)}
-                  className="px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
-                >
-                  <option value="">All Status</option>
-                  <option value="DRAFT">Draft</option>
-                  <option value="ISSUED">Issued</option>
-                  <option value="PAID">Paid</option>
-                  <option value="VOID">Void</option>
-                </select>
-                <input
-                  type="date"
-                  value={invoiceFilters.dateFrom}
-                  onChange={(e) => handleInvoiceFilterChange('dateFrom', e.target.value)}
-                  placeholder="From"
-                  className="px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
-                />
-                <input
-                  type="date"
-                  value={invoiceFilters.dateTo}
-                  onChange={(e) => handleInvoiceFilterChange('dateTo', e.target.value)}
-                  placeholder="To"
-                  className="px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
-                />
-                <ExportButtonGroup module="INVOICES" filters={invoiceFilters} />
-              </div>
+                  <input
+                    type="date"
+                    value={invoiceFilters.dateTo}
+                    onChange={(e) => handleInvoiceFilterChange('dateTo', e.target.value)}
+                    placeholder="To"
+                    className="w-full sm:w-auto min-w-[140px] px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+                  />
+                  <ExportButtonGroup module="INVOICES" filters={invoiceFilters} />
+                </ToolbarGroup>
+              </Toolbar>
             }
           >
           {isLoading ? (
@@ -945,54 +953,59 @@ function FinancialsContent() {
         <SectionCard
           title="Payments"
           actions={
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-bodyText" />
+            <Toolbar>
+              <ToolbarInput>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-bodyText pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Search transaction ID..."
+                    value={paymentFilters.search}
+                    onChange={(e) => handlePaymentFilterChange('search', e.target.value)}
+                    className="w-full sm:w-48 pl-9 pr-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+                  />
+                </div>
+              </ToolbarInput>
+              <ToolbarGroup>
+                <select
+                  value={paymentFilters.status}
+                  onChange={(e) => handlePaymentFilterChange('status', e.target.value)}
+                  className="w-full sm:w-auto min-w-[140px] px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+                >
+                  <option value="">All Status</option>
+                  <option value="PENDING">Pending</option>
+                  <option value="SUCCESS">Success</option>
+                  <option value="FAILED">Failed</option>
+                  <option value="REFUNDED">Refunded</option>
+                </select>
+                <select
+                  value={paymentFilters.method}
+                  onChange={(e) => handlePaymentFilterChange('method', e.target.value)}
+                  className="w-full sm:w-auto min-w-[140px] px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+                >
+                  <option value="">All Methods</option>
+                  <option value="CASH">Cash</option>
+                  <option value="CARD">Card</option>
+                  <option value="BANK_TRANSFER">Bank Transfer</option>
+                  <option value="ONLINE">Online</option>
+                </select>
                 <input
-                  type="text"
-                  placeholder="Search transaction ID..."
-                  value={paymentFilters.search}
-                  onChange={(e) => handlePaymentFilterChange('search', e.target.value)}
-                  className="pl-9 pr-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50 w-48"
+                  type="date"
+                  value={paymentFilters.dateFrom}
+                  onChange={(e) => handlePaymentFilterChange('dateFrom', e.target.value)}
+                  placeholder="From"
+                  className="w-full sm:w-auto min-w-[140px] px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
                 />
-              </div>
-              <select
-                value={paymentFilters.status}
-                onChange={(e) => handlePaymentFilterChange('status', e.target.value)}
-                className="px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
-              >
-                <option value="">All Status</option>
-                <option value="PENDING">Pending</option>
-                <option value="SUCCESS">Success</option>
-                <option value="FAILED">Failed</option>
-                <option value="REFUNDED">Refunded</option>
-              </select>
-              <select
-                value={paymentFilters.method}
-                onChange={(e) => handlePaymentFilterChange('method', e.target.value)}
-                className="px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
-              >
-                <option value="">All Methods</option>
-                <option value="CASH">Cash</option>
-                <option value="CARD">Card</option>
-                <option value="BANK_TRANSFER">Bank Transfer</option>
-                <option value="ONLINE">Online</option>
-              </select>
-              <input
-                type="date"
-                value={paymentFilters.dateFrom}
-                onChange={(e) => handlePaymentFilterChange('dateFrom', e.target.value)}
-                placeholder="From"
-                className="px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
-              />
-              <input
-                type="date"
-                value={paymentFilters.dateTo}
-                onChange={(e) => handlePaymentFilterChange('dateTo', e.target.value)}
-                placeholder="To"
-                className="px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
-              />
-            </div>
+                <input
+                  type="date"
+                  value={paymentFilters.dateTo}
+                  onChange={(e) => handlePaymentFilterChange('dateTo', e.target.value)}
+                  placeholder="To"
+                  className="w-full sm:w-auto min-w-[140px] px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+                />
+                <ExportButtonGroup module="PAYMENTS" filters={paymentFilters} />
+              </ToolbarGroup>
+            </Toolbar>
           }
         >
           {isLoading ? (

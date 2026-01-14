@@ -6,6 +6,170 @@ import { logger } from '@/lib/utils/performance'
 import fs from 'fs'
 import path from 'path'
 
+// ============= PDF DESIGN SYSTEM =============
+const DESIGN_SYSTEM = {
+  COLORS: {
+    textPrimary: [17, 24, 39] as [number, number, number], // Dark gray/black
+    textMuted: [107, 114, 128] as [number, number, number], // Medium gray
+    textLight: [156, 163, 175] as [number, number, number], // Light gray
+    border: [229, 231, 235] as [number, number, number], // Light border
+    bgSoft: [249, 250, 251] as [number, number, number], // Soft background
+    bgWhite: [255, 255, 255] as [number, number, number], // White
+    accent: [242, 178, 51] as [number, number, number], // Gold #F2B233
+    accentDark: [17, 24, 39] as [number, number, number], // Dark for headers
+  },
+  FONT_SIZES: {
+    xs: 7,
+    sm: 8,
+    base: 9,
+    lg: 11,
+    xl: 14,
+  },
+  SPACING: {
+    xs: 3,
+    sm: 5,
+    md: 8,
+    lg: 12,
+  },
+  BORDER: {
+    radiusSm: 2,
+    radiusMd: 3,
+    lineThin: 0.2,
+    lineMedium: 0.3,
+    lineThick: 0.5,
+  },
+} as const
+
+/**
+ * Helper function to load Poppins fonts into jsPDF
+ */
+async function loadPoppinsFonts(doc: any): Promise<void> {
+  try {
+    const fontsDir = path.join(process.cwd(), 'public', 'fonts')
+    const regularPath = path.join(fontsDir, 'Poppins-Regular.ttf')
+    const semiboldPath = path.join(fontsDir, 'Poppins-SemiBold.ttf')
+
+    // Read and convert fonts to base64
+    const regularFont = fs.readFileSync(regularPath)
+    const semiboldFont = fs.readFileSync(semiboldPath)
+    
+    const regularBase64 = regularFont.toString('base64')
+    const semiboldBase64 = semiboldFont.toString('base64')
+
+    // Add fonts to VFS
+    doc.addFileToVFS('Poppins-Regular.ttf', regularBase64)
+    doc.addFileToVFS('Poppins-SemiBold.ttf', semiboldBase64)
+
+    // Register fonts
+    doc.addFont('Poppins-Regular.ttf', 'Poppins', 'normal')
+    doc.addFont('Poppins-SemiBold.ttf', 'Poppins', 'bold')
+
+    logger.log('[PDF] Poppins fonts loaded successfully')
+  } catch (error: any) {
+    logger.error('[PDF] Failed to load Poppins fonts, falling back to helvetica:', error)
+    // Font loading failure is non-critical, will fallback to helvetica
+  }
+}
+
+/**
+ * Standardized typography helper function
+ * Replaces scattered setFontSize calls with consistent variants
+ */
+function setTextStyle(
+  doc: any,
+  variant: 'sectionLabel' | 'primaryName' | 'secondaryLine' | 'title' | 'totalNumber' | 'regular'
+): void {
+  const styles = {
+    sectionLabel: { size: 7.5, weight: 'bold' as const, color: DESIGN_SYSTEM.COLORS.textMuted },
+    primaryName: { size: 10.5, weight: 'bold' as const, color: DESIGN_SYSTEM.COLORS.textPrimary },
+    secondaryLine: { size: 8.5, weight: 'regular' as const, color: DESIGN_SYSTEM.COLORS.textMuted },
+    title: { size: 17, weight: 'bold' as const, color: DESIGN_SYSTEM.COLORS.textPrimary },
+    totalNumber: { size: 11, weight: 'bold' as const, color: DESIGN_SYSTEM.COLORS.textPrimary },
+    regular: { size: 9, weight: 'regular' as const, color: DESIGN_SYSTEM.COLORS.textPrimary },
+  }
+  
+  const style = styles[variant]
+  const fontMap: { [key: string]: 'normal' | 'bold' } = {
+    regular: 'normal',
+    bold: 'bold',
+  }
+  
+  doc.setFontSize(style.size)
+  
+  // Try to use Poppins, fallback to helvetica if not available
+  try {
+    doc.setFont('Poppins', fontMap[style.weight])
+  } catch (error) {
+    // Fallback to helvetica if Poppins is not loaded
+    doc.setFont('helvetica', fontMap[style.weight])
+  }
+  
+  doc.setTextColor(style.color[0], style.color[1], style.color[2])
+}
+
+/**
+ * Helper function to set font with weight, size, and color
+ * Uses Poppins font if available, falls back to helvetica
+ * @deprecated Use setTextStyle instead for standardized typography
+ */
+function setFont(
+  doc: any,
+  weight: 'regular' | 'medium' | 'semibold' | 'bold',
+  size: number,
+  color?: [number, number, number]
+): void {
+  const fontMap: { [key: string]: 'normal' | 'bold' } = {
+    regular: 'normal',
+    medium: 'normal',
+    semibold: 'bold',
+    bold: 'bold',
+  }
+  
+  doc.setFontSize(size)
+  
+  // Try to use Poppins, fallback to helvetica if not available
+  try {
+    doc.setFont('Poppins', fontMap[weight])
+  } catch (error) {
+    // Fallback to helvetica if Poppins is not loaded
+    doc.setFont('helvetica', fontMap[weight])
+  }
+  
+  if (color) {
+    doc.setTextColor(color[0], color[1], color[2])
+  }
+}
+
+/**
+ * Helper function to draw a card/box with background and border
+ */
+function drawCard(
+  doc: any,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  bgColor?: [number, number, number],
+  borderColor?: [number, number, number],
+  radius: number = DESIGN_SYSTEM.BORDER.radiusSm,
+  lineWidth: number = DESIGN_SYSTEM.BORDER.lineMedium
+): void {
+  if (bgColor) {
+    doc.setFillColor(bgColor[0], bgColor[1], bgColor[2])
+  } else {
+    doc.setFillColor(...DESIGN_SYSTEM.COLORS.bgWhite)
+  }
+  
+  if (borderColor) {
+    doc.setDrawColor(borderColor[0], borderColor[1], borderColor[2])
+  } else {
+    doc.setDrawColor(...DESIGN_SYSTEM.COLORS.border)
+  }
+  
+  doc.setLineWidth(lineWidth)
+  doc.roundedRect(x, y, w, h, radius, radius, bgColor ? 'FD' : 'D')
+}
+
 interface InvoiceData {
   invoice: {
     _id: string
@@ -99,6 +263,9 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
       format: 'a4',
     })
 
+    // Load Poppins fonts
+    await loadPoppinsFonts(doc)
+
     // Get autoTable function
     let autoTableFn: any = null
     if (typeof (doc as any).autoTable === 'function') {
@@ -147,279 +314,285 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
       })}`
     }
 
-    // Load company logo
+    // Load company logo and name from settings
+    const Settings = (await import('@/lib/models/Settings')).default
+    const settings = await Settings.findOne()
+    const companyName = settings?.companyName || 'MisterWheels'
+    
     let logoBase64: string | null = null
     try {
-      const logoPath = path.join(process.cwd(), 'public', 'logo.png')
+      // Try to get logo from settings first
+      const logoPath = settings?.logoUrl 
+        ? path.join(process.cwd(), 'public', settings.logoUrl.replace(/^\//, ''))
+        : path.join(process.cwd(), 'public', 'logo.png')
+      
       if (fs.existsSync(logoPath)) {
         const logoBuffer = fs.readFileSync(logoPath)
-        logoBase64 = `data:image/png;base64,${logoBuffer.toString('base64')}`
-        logger.log('[PDF] Logo loaded successfully')
+        // Detect image format from file extension
+        const ext = path.extname(logoPath).toLowerCase()
+        const imageType = ext === '.jpg' || ext === '.jpeg' ? 'JPEG' : ext === '.png' ? 'PNG' : 'PNG'
+        logoBase64 = `data:image/${imageType.toLowerCase()};base64,${logoBuffer.toString('base64')}`
+        logger.log('[PDF] Logo loaded successfully from:', settings?.logoUrl || '/logo.png')
       }
     } catch (logoError) {
       logger.error('[PDF] Error loading logo:', logoError)
     }
 
-    // ============= HEADER SECTION =============
-    const headerHeight = 40
+    // ============= CLEAN MINIMAL HEADER =============
+    // White background
+    doc.setFillColor(...DESIGN_SYSTEM.COLORS.bgWhite)
+    doc.rect(0, 0, 210, 38, 'F')
     
-    // Black header background with gradient effect (simulated with multiple rectangles)
-    doc.setFillColor(255, 255, 255)
-    doc.rect(0, 0, 210, headerHeight, 'F')
-    
-    // Add decorative accent bar at top
-    doc.setFillColor(255, 215, 0) // Gold accent
+    // Thin accent line at top (2mm)
+    doc.setFillColor(...DESIGN_SYSTEM.COLORS.accent)
     doc.rect(0, 0, 210, 2, 'F')
     
-    // Add logo if available
+    const headerY = 12
+    
+    // Logo - slightly smaller
     if (logoBase64) {
       try {
-        doc.addImage(logoBase64, 'PNG', 20, 20, 30, 20)
+        // Detect image format from base64 data URI
+        const imageType = logoBase64.startsWith('data:image/jpeg') || logoBase64.startsWith('data:image/jpg') 
+          ? 'JPEG' : 'PNG'
+        doc.addImage(logoBase64, imageType, 15, headerY, 28, 16)
       } catch (imgError) {
         logger.error('[PDF] Error adding logo image:', imgError)
       }
     }
     
-    // INVOICE title in white
-    // doc.setTextColor(255, 255, 255)
-    // doc.setFontSize(36)
-    // doc.setFont('helvetica', 'bold')
-    // doc.text('INVOICE', logoBase64 ? 50 : 20, 28)
+    // Invoice details box - reduced height and smaller font, very light border
+    drawCard(doc, 130, headerY - 1, 65, 18, DESIGN_SYSTEM.COLORS.bgWhite, [230, 230, 230], DESIGN_SYSTEM.BORDER.radiusSm, 0.2)
     
-    // Company tagline
-    // doc.setFontSize(9)
-    // doc.setFont('helvetica', 'normal')
-    // doc.setTextColor(200, 200, 200)
-    // doc.text('Professional Car Rental Services', logoBase64 ? 50 : 20, 36)
+    setTextStyle(doc, 'sectionLabel')
+    doc.text('Invoice No:', 135, headerY + 7)
+    doc.text('Date:', 135, headerY + 11.5)
+    
+    setTextStyle(doc, 'regular')
+    doc.text(invoiceNumber, 190, headerY + 7, { align: 'right' })
+    doc.text(issueDate, 190, headerY + 11.5, { align: 'right' })
 
-    // Invoice details box (right side) - white box on black background
-    doc.setFillColor(255, 255, 255)
-    doc.roundedRect(135, 10, 60, 32, 3, 3, 'F')
-    
-    doc.setTextColor(0, 0, 0)
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'bold')
-    doc.text('INVOICE DETAILS', 165, 17, { align: 'center' })
-    
-    doc.setFontSize(8.5)
-    doc.setFont('helvetica', 'normal')
-    doc.text(`#${invoiceNumber}`, 140, 24)
-    doc.text(`Issued: ${issueDate}`, 140, 29)
-    doc.text(`Due: ${dueDate}`, 140, 34)
-    
-    // Status badge
-    const statusColors: { [key: string]: number[] } = {
-      'PAID': [34, 197, 94],
-      'VOID': [239, 68, 68],
-      'ISSUED': [251, 191, 36],
-      'DRAFT': [156, 163, 175],
-    }
-    const statusColor = statusColors[status] || [156, 163, 175]
-    doc.setFillColor(statusColor[0], statusColor[1], statusColor[2])
-    doc.roundedRect(140, 37, 20, 4, 1, 1, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(7)
-    doc.setFont('helvetica', 'bold')
-    doc.text(status, 150, 39.5, { align: 'center' })
-
-    // ============= CUSTOMER & VEHICLE INFO =============
+    // ============= CLEAN INFO CARDS =============
     const booking = invoiceData.booking
     const customer = booking?.customer?.user
     const vehicle = booking?.vehicle
 
-    let startY = 60
+    let cardY = 48 // Moved up from 58 (10mm reduction)
 
-    // Bill To section - elegant bordered box
-    doc.setDrawColor(0, 0, 0)
-    doc.setLineWidth(0.3)
-    doc.setFillColor(255, 255, 255)
-    doc.roundedRect(15, startY, 88, 32, 2, 2, 'FD')
+    // From (Supplier) Card - reduced height and tighter spacing, very light border
+    drawCard(doc, 15, cardY, 88, 34, DESIGN_SYSTEM.COLORS.bgWhite, [230, 230, 230], DESIGN_SYSTEM.BORDER.radiusSm, 0.2)
     
-    // Black header bar for Bill To
-    doc.setFillColor(0, 0, 0)
-    doc.roundedRect(15, startY, 88, 7, 2, 2, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'bold')
-    doc.text('BILL TO', 20, startY + 5)
-
-    doc.setTextColor(0, 0, 0)
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'bold')
-    doc.text(customer?.name || 'N/A', 20, startY + 14)
+    setTextStyle(doc, 'sectionLabel')
+    doc.text('FROM', 20, cardY + 5)
     
-    doc.setFontSize(9)
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(60, 60, 60)
-    doc.text(customer?.email || '', 20, startY + 20)
-    if (customer?.phone) {
-      doc.text(`Phone: ${customer.phone}`, 20, startY + 26)
-    }
+    setTextStyle(doc, 'primaryName')
+    doc.text(companyName, 20, cardY + 11)
+    
+    setTextStyle(doc, 'secondaryLine')
+    doc.text('Car Rental Services', 20, cardY + 16)
+    doc.text('Dubai, United Arab Emirates', 20, cardY + 20)
+    doc.text('info@misterwheels.com', 20, cardY + 24)
 
-    // Vehicle Information section - matching design
+    // To (Customer) Card - reduced height and tighter spacing, very light border
+    drawCard(doc, 107, cardY, 88, 34, DESIGN_SYSTEM.COLORS.bgWhite, [230, 230, 230], DESIGN_SYSTEM.BORDER.radiusSm, 0.2)
+    
+    setTextStyle(doc, 'sectionLabel')
+    doc.text('BILL TO', 112, cardY + 5)
+    
+    setTextStyle(doc, 'primaryName')
+    doc.text(customer?.name || 'N/A', 112, cardY + 11)
+    
+    setTextStyle(doc, 'secondaryLine')
+    doc.text(customer?.email || 'N/A', 112, cardY + 16)
+    doc.text(customer?.phone || 'N/A', 112, cardY + 20)
+    
     if (vehicle) {
-      doc.setDrawColor(0, 0, 0)
-      doc.setLineWidth(0.3)
-      doc.setFillColor(255, 255, 255)
-      doc.roundedRect(107, startY, 88, 32, 2, 2, 'FD')
-      
-      // Black header bar for Vehicle
-      doc.setFillColor(0, 0, 0)
-      doc.roundedRect(107, startY, 88, 7, 2, 2, 'F')
-      doc.setTextColor(255, 255, 255)
-      doc.setFontSize(10)
-      doc.setFont('helvetica', 'bold')
-      doc.text('VEHICLE DETAILS', 112, startY + 5)
-
-      doc.setTextColor(0, 0, 0)
-      doc.setFontSize(10)
-      doc.setFont('helvetica', 'bold')
-      doc.text(`Plate: ${vehicle.plateNumber || 'N/A'}`, 112, startY + 14)
-      
-      doc.setFontSize(9)
-      doc.setFont('helvetica', 'normal')
-      doc.setTextColor(60, 60, 60)
-      doc.text(
-        `${vehicle.brand || ''} ${vehicle.model || ''}`,
-        112,
-        startY + 20
-      )
-      if (vehicle.year) {
-        doc.text(`Year: ${vehicle.year}`, 112, startY + 26)
+      setTextStyle(doc, 'secondaryLine')
+      // Combine plate and vehicle info into 2 lines max
+      const plateText = vehicle.plateNumber || 'N/A'
+      const vehicleInfo = `${vehicle.brand || ''} ${vehicle.model || ''}${vehicle.year ? ` (${vehicle.year})` : ''}`.trim()
+      doc.text(plateText, 112, cardY + 24)
+      if (vehicleInfo) {
+        doc.text(vehicleInfo, 112, cardY + 28)
       }
     }
 
-    // ============= LINE ITEMS TABLE =============
+    // Due date banner - minimal style with light border, 8mm height, with spacing from cards above
+    const bannerY = cardY + 38 // Added 4mm spacing from cards (cards end at cardY + 34)
+    doc.setDrawColor(230, 230, 230)
+    doc.setLineWidth(0.2)
+    doc.roundedRect(15, bannerY, 180, 8, DESIGN_SYSTEM.BORDER.radiusSm, DESIGN_SYSTEM.BORDER.radiusSm, 'D')
+    
+    // Payment Due and Status on same baseline with fontSize 8, with spacing
+    setTextStyle(doc, 'regular')
+    doc.setFontSize(8)
+    doc.text(`Payment Due: ${dueDate}`, 20, bannerY + 5)
+    
+    setTextStyle(doc, 'secondaryLine')
+    doc.setFontSize(8)
+    doc.text(`Status: ${status}`, 185, bannerY + 5, { align: 'right' }) // Moved from 190 to 185 for more space
+
+    // ============= MODERN TABLE =============
     const items = invoiceData.items || []
-    const tableStartY = startY + 42
+    const tableStartY = bannerY + 12 // Adjusted: bannerY + 8 (banner height) + 4 (spacing)
+    
+    const subtotal = invoiceData.subtotal || 0
+    const taxAmount = invoiceData.taxAmount || 0
+    const vatPercent = subtotal > 0 ? ((taxAmount / subtotal) * 100).toFixed(0) : '0'
 
-    // Section header
-    doc.setFillColor(245, 245, 245)
-    doc.rect(15, tableStartY - 8, 180, 6, 'F')
-    doc.setTextColor(0, 0, 0)
-    doc.setFontSize(11)
-    doc.setFont('helvetica', 'bold')
-    doc.text('ITEMIZED CHARGES', 20, tableStartY - 4)
-
-    const tableData = items.map((item: { label: string; amount: number }) => {
-      const isNegative = item.amount < 0
-      const amountStr = isNegative
-        ? `(${formatCurrency(Math.abs(item.amount))})`
-        : formatCurrency(item.amount)
-      return [item.label, amountStr]
+    const tableData = items.map((item: { label: string; amount: number }, index: number) => {
+      const itemSubtotal = Math.abs(item.amount)
+      const itemVAT = (itemSubtotal * parseFloat(vatPercent)) / 100
+      const itemTotal = itemSubtotal + itemVAT
+      
+      return [
+        String(index + 1),
+        item.label,
+        formatCurrency(itemSubtotal),
+        '1',
+        `${vatPercent}%`,
+        formatCurrency(itemVAT),
+        formatCurrency(itemTotal),
+      ]
     })
 
     const autoTableOptions = {
-      head: [['Description', 'Amount']],
+      head: [['#', 'Description', 'Price', 'Qty', 'VAT', 'Tax Amt', 'Total']],
       body: tableData,
       startY: tableStartY,
       theme: 'plain' as any,
       styles: {
-        fontSize: 9,
-        cellPadding: 5,
-        lineColor: [220, 220, 220],
-        lineWidth: 0.1,
+        font: 'Poppins' as any,
+        fontSize: 8.5,
+        cellPadding: 2.5,
+        lineColor: [230, 230, 230],
+        lineWidth: 0.15,
       },
       headStyles: {
-        fillColor: [0, 0, 0],
-        textColor: [255, 255, 255],
+        font: 'Poppins' as any,
+        fillColor: DESIGN_SYSTEM.COLORS.bgSoft,
+        textColor: [75, 85, 99],
         fontStyle: 'bold' as any,
         halign: 'left' as any,
-        fontSize: 10,
-        cellPadding: 6,
+        fontSize: 8,
+        cellPadding: 3,
       },
       bodyStyles: {
-        textColor: [40, 40, 40],
+        font: 'Poppins' as any,
+        textColor: [31, 41, 55],
       },
       alternateRowStyles: {
         fillColor: [250, 250, 250],
       },
       columnStyles: {
-        0: { cellWidth: 'auto' as any, halign: 'left' as any },
-        1: { cellWidth: 50, halign: 'right' as any, fontStyle: 'bold' as any, textColor: [0, 0, 0] },
+        0: { cellWidth: 12, halign: 'center' as any, textColor: DESIGN_SYSTEM.COLORS.textMuted },
+        1: { cellWidth: 'auto' as any, halign: 'left' as any },
+        2: { cellWidth: 28, halign: 'right' as any },
+        3: { cellWidth: 12, halign: 'center' as any },
+        4: { cellWidth: 18, halign: 'right' as any },
+        5: { cellWidth: 25, halign: 'right' as any },
+        6: { cellWidth: 30, halign: 'right' as any, fontStyle: 'bold' as any, textColor: DESIGN_SYSTEM.COLORS.textPrimary },
       },
       margin: { left: 15, right: 15 },
     }
 
-    if (typeof (doc as any).autoTable === 'function' && autoTableFn === (doc as any).autoTable.bind(doc)) {
-      ;(doc as any).autoTable(autoTableOptions)
-    } else {
-      autoTableFn(doc, autoTableOptions)
+    // Try to use Poppins font, fallback silently if autoTable doesn't support it
+    try {
+      if (typeof (doc as any).autoTable === 'function' && autoTableFn === (doc as any).autoTable.bind(doc)) {
+        ;(doc as any).autoTable(autoTableOptions)
+      } else {
+        autoTableFn(doc, autoTableOptions)
+      }
+    } catch (fontError: any) {
+      // If Poppins font causes issues, remove font specification and retry
+      if (fontError.message && fontError.message.includes('font') || fontError.message.includes('Poppins')) {
+        logger.warn('[PDF] Poppins font not supported in autoTable, falling back to default font')
+        const fallbackOptions = {
+          ...autoTableOptions,
+          styles: { ...autoTableOptions.styles, font: undefined },
+          headStyles: { ...autoTableOptions.headStyles, font: undefined },
+          bodyStyles: { ...autoTableOptions.bodyStyles, font: undefined },
+        }
+        if (typeof (doc as any).autoTable === 'function' && autoTableFn === (doc as any).autoTable.bind(doc)) {
+          ;(doc as any).autoTable(fallbackOptions)
+        } else {
+          autoTableFn(doc, fallbackOptions)
+        }
+      } else {
+        throw fontError
+      }
     }
 
     // ============= TOTALS SECTION =============
     const finalY = (doc as any).lastAutoTable.finalY || tableStartY + 50
-    const totalsY = finalY + 10
-    const subtotal = invoiceData.subtotal || 0
-    const taxAmount = invoiceData.taxAmount || 0
+    const totalsY = finalY + DESIGN_SYSTEM.SPACING.sm // Reduced spacing
     const total = invoiceData.total || 0
 
-    // Elegant totals card with black accent
-    doc.setFillColor(255, 255, 255)
-    doc.setDrawColor(0, 0, 0)
-    doc.setLineWidth(0.3)
-    doc.roundedRect(115, totalsY, 80, 42, 3, 3, 'FD')
-
-    // Subtotal
-    doc.setFontSize(9.5)
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(80, 80, 80)
-    doc.text('Subtotal:', 120, totalsY + 8)
-    doc.setTextColor(0, 0, 0)
-    doc.setFont('helvetica', 'bold')
-    doc.text(formatCurrency(subtotal), 190, totalsY + 8, { align: 'right' })
-
-    // Tax
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(80, 80, 80)
-    doc.text('Tax (VAT):', 120, totalsY + 16)
-    doc.setTextColor(0, 0, 0)
-    doc.setFont('helvetica', 'bold')
-    doc.text(formatCurrency(taxAmount), 190, totalsY + 16, { align: 'right' })
-
-    // Separator line
-    doc.setDrawColor(220, 220, 220)
-    doc.setLineWidth(0.2)
-    doc.line(120, totalsY + 20, 190, totalsY + 20)
-
-    // Total - BLACK background bar
-    doc.setFillColor(0, 0, 0)
-    doc.roundedRect(115, totalsY + 25, 80, 12, 2, 2, 'F')
+    // Totals box - minimal white with light border
+    drawCard(doc, 125, totalsY, 70, 24, DESIGN_SYSTEM.COLORS.bgWhite, [230, 230, 230], DESIGN_SYSTEM.BORDER.radiusSm, 0.2)
     
-    doc.setFontSize(12)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(255, 255, 255)
-    doc.text('TOTAL:', 120, totalsY + 32)
-    doc.setFontSize(14)
-    doc.text(formatCurrency(total), 190, totalsY + 32, { align: 'right' })
+    // Subtotal - muted label with bold value
+    setTextStyle(doc, 'secondaryLine')
+    doc.text('Subtotal:', 130, totalsY + 6)
+    setTextStyle(doc, 'regular')
+    try {
+      doc.setFont('Poppins', 'bold')
+    } catch {
+      doc.setFont('helvetica', 'bold')
+    }
+    doc.text(formatCurrency(subtotal), 190, totalsY + 6, { align: 'right' })
+
+    // VAT - muted label with bold value
+    setTextStyle(doc, 'secondaryLine')
+    doc.text(`VAT (${vatPercent}%):`, 130, totalsY + 12)
+    setTextStyle(doc, 'regular')
+    try {
+      doc.setFont('Poppins', 'bold')
+    } catch {
+      doc.setFont('helvetica', 'bold')
+    }
+    doc.text(formatCurrency(taxAmount), 190, totalsY + 12, { align: 'right' })
+
+    // TOTAL - minimal style with black bold amount
+    setTextStyle(doc, 'regular')
+    try {
+      doc.setFont('Poppins', 'bold')
+    } catch {
+      doc.setFont('helvetica', 'bold')
+    }
+    doc.text('TOTAL:', 130, totalsY + 20)
+    
+    // Total amount in black and bold
+    setTextStyle(doc, 'totalNumber')
+    doc.setTextColor(...DESIGN_SYSTEM.COLORS.textPrimary)
+    try {
+      doc.setFont('Poppins', 'bold')
+    } catch {
+      doc.setFont('helvetica', 'bold')
+    }
+    doc.text(formatCurrency(total), 190, totalsY + 20, { align: 'right' })
 
     // ============= FOOTER =============
-    const footerY = 268
+    const footerY = 270 // Pulled up from 280
     
-    // Black footer bar
-    doc.setFillColor(0, 0, 0)
-    doc.rect(0, footerY - 8, 210, 40, 'F')
+    doc.setDrawColor(230, 230, 230)
+    doc.setLineWidth(0.2)
+    doc.line(15, footerY - DESIGN_SYSTEM.SPACING.sm, 195, footerY - DESIGN_SYSTEM.SPACING.sm)
     
-    // Gold accent line
-    doc.setFillColor(255, 215, 0)
-    doc.rect(0, footerY - 8, 210, 1, 'F')
-    
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(255, 255, 255)
-    doc.text('Thank you for your business!', 105, footerY, { align: 'center' })
-    
-    doc.setFontSize(8)
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(180, 180, 180)
-    doc.text('For inquiries, please contact us through the CRM system.', 105, footerY + 7, {
+    setTextStyle(doc, 'secondaryLine')
+    doc.text('1606, Empire Heights Tower B, Business Bay, Dubai', 105, footerY, {
+      align: 'center',
+    })
+    doc.text('+971586840296, +971585282840', 105, footerY + 5, {
+      align: 'center',
+    })
+    doc.text('www.misterwheels.ae', 105, footerY + 10, {
       align: 'center',
     })
     
-    // Page number
-    doc.setFontSize(7)
-    doc.setTextColor(150, 150, 150)
-    doc.text('Page 1 of 1', 190, footerY + 14, { align: 'right' })
+    setTextStyle(doc, 'secondaryLine')
+    doc.setFontSize(7) // Smaller for page number
+    doc.text('Page 1 of 1', 195, 290, { align: 'right' })
 
     logger.log('[PDF] PDF generated successfully')
 
@@ -489,6 +662,9 @@ export async function generateInvestorPayoutPDF(payoutId: string): Promise<Buffe
       format: 'a4',
     })
 
+    // Load Poppins fonts
+    await loadPoppinsFonts(doc)
+
     // Get autoTable function
     let autoTableFn: any = null
     if (typeof (doc as any).autoTable === 'function') {
@@ -529,167 +705,175 @@ export async function generateInvestorPayoutPDF(payoutId: string): Promise<Buffe
       })}`
     }
 
-    // ============= HEADER SECTION =============
-    const headerHeight = 45
+    // Get company name from settings
+    const SettingsPayout = (await import('@/lib/models/Settings')).default
+    const settingsPayout = await SettingsPayout.findOne()
+    const companyNamePayout = settingsPayout?.companyName || 'MisterWheels'
+
+    // ============= CLEAN MINIMAL HEADER =============
+    // White background
+    doc.setFillColor(...DESIGN_SYSTEM.COLORS.bgWhite)
+    doc.rect(0, 0, 210, 42, 'F')
     
-    // Black header background
-    doc.setFillColor(0, 0, 0)
-    doc.rect(0, 0, 210, headerHeight, 'F')
-    
-    // Gold accent bar
-    doc.setFillColor(255, 215, 0)
+    // Thin accent bar at top
+    doc.setFillColor(...DESIGN_SYSTEM.COLORS.accent)
     doc.rect(0, 0, 210, 2, 'F')
     
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(28)
-    doc.setFont('helvetica', 'bold')
-    doc.text('INVESTOR PAYOUT', 20, 18)
-    doc.text('STATEMENT', 20, 28)
+    setTextStyle(doc, 'title')
+    doc.text('INVESTOR', 20, 18)
+    doc.setFontSize(19) // Slightly larger for second line
+    doc.text('PAYOUT STATEMENT', 20, 26)
 
-    doc.setFontSize(9)
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(200, 200, 200)
-    doc.text('MisterWheels CRM - Car Rental Services', 20, 36)
+    setTextStyle(doc, 'secondaryLine')
+    doc.text(`${companyNamePayout} Car Rental Services`, 20, 33)
 
-    // Statement details box
+    // Statement info card - reduced height
     const periodFrom = payoutData.periodFrom
-      ? format(new Date(payoutData.periodFrom), 'MMMM dd, yyyy')
+      ? format(new Date(payoutData.periodFrom), 'MMM dd, yyyy')
       : 'N/A'
     const periodTo = payoutData.periodTo
-      ? format(new Date(payoutData.periodTo), 'MMMM dd, yyyy')
+      ? format(new Date(payoutData.periodTo), 'MMM dd, yyyy')
       : 'N/A'
     const status = payoutData.status || 'DRAFT'
-    const generatedDate = format(new Date(), 'MMMM dd, yyyy HH:mm')
+    const generatedDate = format(new Date(), 'MMM dd, yyyy HH:mm')
 
-    doc.setFillColor(255, 255, 255)
-    doc.roundedRect(130, 8, 65, 30, 3, 3, 'F')
+    drawCard(doc, 130, 8, 65, 28, DESIGN_SYSTEM.COLORS.bgWhite, [230, 230, 230], DESIGN_SYSTEM.BORDER.radiusMd, 0.2)
     
-    doc.setTextColor(0, 0, 0)
-    doc.setFontSize(9)
-    doc.setFont('helvetica', 'bold')
-    doc.text('STATEMENT DETAILS', 162.5, 14, { align: 'center' })
+    setTextStyle(doc, 'sectionLabel')
+    doc.text('PERIOD', 162.5, 13, { align: 'center' })
     
-    doc.setFontSize(8)
-    doc.setFont('helvetica', 'normal')
-    doc.text(`Period: ${periodFrom}`, 135, 20)
-    doc.text(`to ${periodTo}`, 135, 25)
-    doc.text(`Status: ${status}`, 135, 30)
-    doc.text(`Generated: ${generatedDate}`, 135, 35)
-
-    // ============= INVESTOR INFORMATION =============
-    let startY = 55
-
-    // Investor Details box
-    doc.setDrawColor(0, 0, 0)
-    doc.setLineWidth(0.3)
-    doc.setFillColor(255, 255, 255)
-    doc.roundedRect(15, startY, 88, 38, 2, 2, 'FD')
+    setTextStyle(doc, 'secondaryLine')
+    doc.text(`${periodFrom}`, 162.5, 18, { align: 'center' })
+    doc.text('to', 162.5, 22, { align: 'center' })
+    doc.text(`${periodTo}`, 162.5, 26, { align: 'center' })
     
-    doc.setFillColor(0, 0, 0)
-    doc.roundedRect(15, startY, 88, 7, 2, 2, 'F')
+    // Status badge - smaller and more subtle
+    const statusColor = status === 'PAID' ? [34, 197, 94] : status === 'PENDING' ? DESIGN_SYSTEM.COLORS.accent : DESIGN_SYSTEM.COLORS.textMuted
+    doc.setFillColor(statusColor[0], statusColor[1], statusColor[2])
+    doc.roundedRect(138, 30, 18, 3.5, DESIGN_SYSTEM.BORDER.radiusSm, DESIGN_SYSTEM.BORDER.radiusSm, 'F')
+    setTextStyle(doc, 'sectionLabel')
     doc.setTextColor(255, 255, 255)
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'bold')
-    doc.text('INVESTOR DETAILS', 20, startY + 5)
+    doc.text(status, 147, 32.5, { align: 'center' })
 
-    doc.setTextColor(0, 0, 0)
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'bold')
-    doc.text(investorUser?.name || 'N/A', 20, startY + 14)
+    // ============= INFO CARDS =============
+    let startY = 50 // Moved up from 63 (13mm reduction)
+
+    // Investor card - reduced height by 20% (40 -> 32), very light border
+    drawCard(doc, 15, startY, 90, 32, DESIGN_SYSTEM.COLORS.bgWhite, [230, 230, 230], DESIGN_SYSTEM.BORDER.radiusMd, 0.2)
     
-    doc.setFontSize(8.5)
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(60, 60, 60)
+    // Header strip - subtle bgSoft
+    doc.setFillColor(...DESIGN_SYSTEM.COLORS.bgSoft)
+    doc.roundedRect(15, startY, 90, 6, DESIGN_SYSTEM.BORDER.radiusMd, DESIGN_SYSTEM.BORDER.radiusMd, 'F')
+    
+    setTextStyle(doc, 'sectionLabel')
+    doc.text('INVESTOR INFORMATION', 20, startY + 4)
+
+    setTextStyle(doc, 'primaryName')
+    doc.text(investorUser?.name || 'N/A', 20, startY + 12)
+    
+    setTextStyle(doc, 'secondaryLine')
     if (investor?.companyName) {
-      doc.text(`Company: ${investor.companyName}`, 20, startY + 20)
+      doc.text(investor.companyName, 20, startY + 17)
     }
-    doc.text(investorUser?.email || '', 20, startY + 26)
+    doc.text(investorUser?.email || '', 20, startY + 22)
     if (investorUser?.phone) {
-      doc.text(`Phone: ${investorUser.phone}`, 20, startY + 32)
+      doc.text(investorUser.phone, 20, startY + 27)
     }
 
-    // Bank Details box
+    // Bank details card - reduced height by 20% (40 -> 32), very light border
     if (investor) {
-      doc.setDrawColor(0, 0, 0)
-      doc.setLineWidth(0.3)
-      doc.setFillColor(255, 255, 255)
-      doc.roundedRect(107, startY, 88, 38, 2, 2, 'FD')
+      drawCard(doc, 110, startY, 85, 32, DESIGN_SYSTEM.COLORS.bgWhite, [230, 230, 230], DESIGN_SYSTEM.BORDER.radiusMd, 0.2)
       
-      doc.setFillColor(0, 0, 0)
-      doc.roundedRect(107, startY, 88, 7, 2, 2, 'F')
-      doc.setTextColor(255, 255, 255)
-      doc.setFontSize(10)
-      doc.setFont('helvetica', 'bold')
-      doc.text('BANK DETAILS', 112, startY + 5)
+      // Subtle header with bgSoft instead of yellow
+      doc.setFillColor(...DESIGN_SYSTEM.COLORS.bgSoft)
+      doc.roundedRect(110, startY, 85, 6, DESIGN_SYSTEM.BORDER.radiusMd, DESIGN_SYSTEM.BORDER.radiusMd, 'F')
+      
+      setTextStyle(doc, 'sectionLabel')
+      doc.text('BANK DETAILS', 115, startY + 4)
 
-      doc.setTextColor(0, 0, 0)
-      doc.setFontSize(8.5)
-      doc.setFont('helvetica', 'normal')
-      doc.setTextColor(60, 60, 60)
-      doc.text(`Bank: ${investor.bankName || 'N/A'}`, 112, startY + 14)
-      doc.text(`Account: ${investor.bankAccountName || 'N/A'}`, 112, startY + 20)
-      doc.text(`IBAN: ${investor.iban || 'N/A'}`, 112, startY + 26)
+      setTextStyle(doc, 'secondaryLine')
+      doc.text(`Bank: ${investor.bankName || 'N/A'}`, 115, startY + 12)
+      doc.text(`Account: ${investor.bankAccountName || 'N/A'}`, 115, startY + 17)
+      doc.text(`IBAN: ${investor.iban || 'N/A'}`, 115, startY + 22)
       if (investor.swift) {
-        doc.text(`SWIFT: ${investor.swift}`, 112, startY + 32)
+        doc.text(`SWIFT: ${investor.swift}`, 115, startY + 27)
       }
     }
 
-    // ============= PAYOUT SUMMARY =============
-    const summaryY = startY + 48
+    // ============= PAYOUT SUMMARY CARD =============
+    const summaryY = startY + 38 // Reduced spacing (was startY + 48)
     
-    // Summary box with black header
-    doc.setDrawColor(0, 0, 0)
-    doc.setLineWidth(0.3)
-    doc.setFillColor(255, 255, 255)
-    doc.roundedRect(15, summaryY, 180, 36, 2, 2, 'FD')
+    // Reduced height by 20% (48 -> 38), very light border
+    drawCard(doc, 15, summaryY, 180, 38, DESIGN_SYSTEM.COLORS.bgWhite, [230, 230, 230], DESIGN_SYSTEM.BORDER.radiusMd, 0.2)
     
-    doc.setFillColor(0, 0, 0)
-    doc.roundedRect(15, summaryY, 180, 7, 2, 2, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(11)
-    doc.setFont('helvetica', 'bold')
-    doc.text('PAYOUT SUMMARY', 20, summaryY + 5)
+    // Header with subtle bgSoft
+    doc.setFillColor(...DESIGN_SYSTEM.COLORS.bgSoft)
+    doc.roundedRect(15, summaryY, 180, 8, DESIGN_SYSTEM.BORDER.radiusMd, DESIGN_SYSTEM.BORDER.radiusMd, 'F')
+    
+    setTextStyle(doc, 'sectionLabel')
+    doc.setFontSize(8) // Slightly larger for summary header
+    doc.text('PAYOUT SUMMARY', 20, summaryY + 5.5)
 
-    doc.setTextColor(60, 60, 60)
-    doc.setFontSize(9.5)
-    doc.setFont('helvetica', 'normal')
+    // Summary rows with tighter spacing
+    setTextStyle(doc, 'secondaryLine')
     
     // Total Revenue
-    doc.text('Total Revenue:', 20, summaryY + 16)
-    doc.setTextColor(0, 0, 0)
-    doc.setFont('helvetica', 'bold')
-    doc.text(formatCurrency(totals.totalRevenue || 0), 190, summaryY + 16, { align: 'right' })
+    doc.text('Total Revenue:', 20, summaryY + 15)
+    setTextStyle(doc, 'regular')
+    doc.text(formatCurrency(totals.totalRevenue || 0), 190, summaryY + 15, { align: 'right' })
 
-    // Commission
-    doc.setTextColor(60, 60, 60)
-    doc.setFont('helvetica', 'normal')
-    doc.text(`Commission (${totals.commissionPercent || 0}%):`, 20, summaryY + 23)
-    doc.setTextColor(0, 0, 0)
-    doc.setFont('helvetica', 'bold')
-    doc.text(formatCurrency(totals.commissionAmount || 0), 190, summaryY + 23, { align: 'right' })
+    // Commission with percentage
+    setTextStyle(doc, 'secondaryLine')
+    doc.text(`Commission (${totals.commissionPercent || 0}%):`, 20, summaryY + 22)
+    setTextStyle(doc, 'regular')
+    doc.setTextColor(220, 38, 38)
+    doc.text(`- ${formatCurrency(totals.commissionAmount || 0)}`, 190, summaryY + 22, { align: 'right' })
 
-    // Net Payout - highlighted
-    doc.setFillColor(0, 0, 0)
-    doc.roundedRect(15, summaryY + 27, 180, 8, 1, 1, 'F')
+    // Divider line
+    doc.setDrawColor(230, 230, 230)
+    doc.setLineWidth(0.2)
+    doc.line(20, summaryY + 26, 190, summaryY + 26)
+
+    // Net Payout - subtle bgSoft row with thin accent line on the left
+    doc.setFillColor(...DESIGN_SYSTEM.COLORS.bgSoft)
+    doc.roundedRect(15, summaryY + 28, 180, 8, DESIGN_SYSTEM.BORDER.radiusSm, DESIGN_SYSTEM.BORDER.radiusSm, 'F')
     
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(11)
-    doc.setFont('helvetica', 'bold')
-    doc.text('NET PAYOUT:', 20, summaryY + 32)
-    doc.setFontSize(12)
-    doc.text(formatCurrency(totals.netPayout || 0), 190, summaryY + 32, { align: 'right' })
+    // Thin accent line on the left
+    doc.setFillColor(...DESIGN_SYSTEM.COLORS.accent)
+    doc.rect(15, summaryY + 28, 2, 8, 'F')
+    
+    setTextStyle(doc, 'regular')
+    try {
+      doc.setFont('Poppins', 'bold')
+    } catch {
+      doc.setFont('helvetica', 'bold')
+    }
+    doc.text('NET PAYOUT', 20, summaryY + 33)
+    
+    // Net payout amount in accent color and bold
+    setTextStyle(doc, 'totalNumber')
+    doc.setTextColor(...DESIGN_SYSTEM.COLORS.accent)
+    try {
+      doc.setFont('Poppins', 'bold')
+    } catch {
+      doc.setFont('helvetica', 'bold')
+    }
+    doc.text(formatCurrency(totals.netPayout || 0), 190, summaryY + 33, { align: 'right' })
 
-    // ============= BREAKDOWN TABLE =============
-    const tableStartY = summaryY + 45
+    // ============= VEHICLE BREAKDOWN TABLE =============
+    const tableStartY = summaryY + 45 // Reduced spacing (was summaryY + 58)
 
     if (breakdown.length > 0) {
-      // Section header
-      doc.setFillColor(245, 245, 245)
-      doc.rect(15, tableStartY - 8, 180, 6, 'F')
-      doc.setTextColor(0, 0, 0)
-      doc.setFontSize(10)
-      doc.setFont('helvetica', 'bold')
-      doc.text('VEHICLE BREAKDOWN', 20, tableStartY - 4)
+      // Section header with icon-style design
+      doc.setFillColor(...DESIGN_SYSTEM.COLORS.bgSoft)
+      doc.roundedRect(15, tableStartY - 10, 180, 8, DESIGN_SYSTEM.BORDER.radiusSm, DESIGN_SYSTEM.BORDER.radiusSm, 'F')
+      
+      setTextStyle(doc, 'sectionLabel')
+      doc.setFontSize(8) // Slightly larger for section header
+      doc.text('VEHICLE BREAKDOWN', 20, tableStartY - 5)
+      
+      setTextStyle(doc, 'secondaryLine')
+      doc.text(`${breakdown.length} vehicle(s)`, 190, tableStartY - 5, { align: 'right' })
 
       const tableData = breakdown.map((item: any) => [
         item.plateNumber || 'N/A',
@@ -700,49 +884,137 @@ export async function generateInvestorPayoutPDF(payoutId: string): Promise<Buffe
       ])
 
       const autoTableOptions = {
-        head: [['Plate No', 'Vehicle', 'Category', 'Bookings', 'Revenue (AED)']],
+        head: [['Plate No', 'Vehicle', 'Category', 'Bookings', 'Revenue']],
         body: tableData,
         startY: tableStartY,
-        theme: 'striped' as any,
+        theme: 'plain' as any,
         styles: {
-          fontSize: 9,
-          cellPadding: 3,
+          font: 'Poppins' as any,
+          fontSize: 8.5,
+          cellPadding: 2.5,
+          lineColor: [230, 230, 230],
+          lineWidth: 0.15,
         },
         headStyles: {
-          fillColor: [240, 240, 240],
-          textColor: [0, 0, 0],
+          font: 'Poppins' as any,
+          fillColor: DESIGN_SYSTEM.COLORS.bgSoft,
+          textColor: [71, 85, 105],
           fontStyle: 'bold' as any,
+          halign: 'left' as any,
+          fontSize: 8,
+          cellPadding: 3,
+        },
+        bodyStyles: {
+          font: 'Poppins' as any,
+          textColor: [51, 65, 85],
+        },
+        alternateRowStyles: {
+          fillColor: [250, 250, 250],
         },
         columnStyles: {
-          0: { cellWidth: 30, halign: 'left' as any },
-          1: { cellWidth: 50, halign: 'left' as any },
+          0: { cellWidth: 30, halign: 'left' as any, fontStyle: 'bold' as any },
+          1: { cellWidth: 55, halign: 'left' as any },
           2: { cellWidth: 30, halign: 'left' as any },
-          3: { cellWidth: 25, halign: 'center' as any },
-          4: { cellWidth: 35, halign: 'right' as any },
+          3: { cellWidth: 25, halign: 'center' as any, textColor: [100, 116, 139] },
+          4: { cellWidth: 35, halign: 'right' as any, fontStyle: 'bold' as any, textColor: DESIGN_SYSTEM.COLORS.textPrimary },
         },
-        margin: { top: tableStartY, left: 20, right: 20 },
+        margin: { left: 15, right: 15 },
       }
 
-      if (typeof (doc as any).autoTable === 'function' && autoTableFn === (doc as any).autoTable.bind(doc)) {
-        ;(doc as any).autoTable(autoTableOptions)
-      } else {
-        autoTableFn(doc, autoTableOptions)
+      // Try to use Poppins font, fallback silently if autoTable doesn't support it
+      try {
+        if (typeof (doc as any).autoTable === 'function' && autoTableFn === (doc as any).autoTable.bind(doc)) {
+          ;(doc as any).autoTable(autoTableOptions)
+        } else {
+          autoTableFn(doc, autoTableOptions)
+        }
+      } catch (fontError: any) {
+        // If Poppins font causes issues, remove font specification and retry
+        if (fontError.message && (fontError.message.includes('font') || fontError.message.includes('Poppins'))) {
+          logger.warn('[PDF] Poppins font not supported in autoTable, falling back to default font')
+          const fallbackOptions = {
+            ...autoTableOptions,
+            styles: { ...autoTableOptions.styles, font: undefined },
+            headStyles: { ...autoTableOptions.headStyles, font: undefined },
+            bodyStyles: { ...autoTableOptions.bodyStyles, font: undefined },
+          }
+          if (typeof (doc as any).autoTable === 'function' && autoTableFn === (doc as any).autoTable.bind(doc)) {
+            ;(doc as any).autoTable(fallbackOptions)
+          } else {
+            autoTableFn(doc, fallbackOptions)
+          }
+        } else {
+          throw fontError
+        }
       }
     }
 
-    // Footer
-    const footerY = 270
-    doc.setFontSize(8)
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(100, 100, 100)
-    doc.text('This is an automatically generated payout statement.', 105, footerY, { align: 'center' })
-    doc.text('For inquiries, please contact us through the CRM system.', 105, footerY + 6, {
+    // ============= PAYMENT INFORMATION =============
+    const paymentY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 15 : tableStartY + 50
+    
+    if (payoutData.payment) {
+      const payment = payoutData.payment
+      
+      doc.setFillColor(236, 253, 245)
+      doc.roundedRect(15, paymentY, 180, 28, 3, 3, 'F')
+      doc.setDrawColor(167, 243, 208)
+      doc.setLineWidth(0.3)
+      doc.roundedRect(15, paymentY, 180, 28, 3, 3, 'D')
+      
+      doc.setFontSize(10)
+      try {
+        doc.setFont('Poppins', 'bold')
+      } catch {
+        doc.setFont('helvetica', 'bold')
+      }
+      doc.setTextColor(5, 150, 105)
+      doc.text('PAYMENT INFORMATION', 20, paymentY + 7)
+      
+      doc.setFontSize(8.5)
+      try {
+        doc.setFont('Poppins', 'normal')
+      } catch {
+        doc.setFont('helvetica', 'normal')
+      }
+      doc.setTextColor(6, 78, 59)
+      
+      if (payment.method) {
+        doc.text(`Method: ${payment.method}`, 20, paymentY + 15)
+      }
+      if (payment.transactionId) {
+        doc.text(`Transaction ID: ${payment.transactionId}`, 20, paymentY + 21)
+      }
+      if (payment.paidAt) {
+        doc.text(`Paid: ${format(new Date(payment.paidAt), 'MMMM dd, yyyy')}`, 120, paymentY + 15)
+      }
+      if (payment.status) {
+        doc.text(`Status: ${payment.status}`, 120, paymentY + 21)
+      }
+    }
+
+    // ============= FOOTER =============
+    const footerY = 272
+    
+    doc.setDrawColor(230, 230, 230)
+    doc.setLineWidth(0.2)
+    doc.line(15, footerY, 195, footerY)
+    
+    setTextStyle(doc, 'secondaryLine')
+    doc.text('This is an automatically generated payout statement.', 105, footerY + DESIGN_SYSTEM.SPACING.md, { align: 'center' })
+    doc.text('For inquiries, please contact us through the CRM system.', 105, footerY + 11, {
       align: 'center',
     })
-    doc.setTextColor(0, 0, 0)
 
+    // Confidential notice
+    setTextStyle(doc, 'secondaryLine')
+    doc.setFontSize(7) // Smaller for notice
+    doc.setTextColor(148, 163, 184)
+    doc.text('CONFIDENTIAL - For authorized recipients only', 105, footerY + 17, { align: 'center' })
+    
     // Page number
-    doc.text('Page 1 of 1', 190, 290, { align: 'right' })
+    setTextStyle(doc, 'secondaryLine')
+    doc.setFontSize(7) // Smaller for page number
+    doc.text('Page 1 of 1', 195, 290, { align: 'right' })
 
     logger.log('[PDF] PDF generated successfully')
 

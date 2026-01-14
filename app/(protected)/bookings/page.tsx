@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/authOptions'
 import { redirect } from 'next/navigation'
 import SectionCard from '@/components/ui/SectionCard'
+import PageHeader from '@/components/ui/PageHeader'
 import Table, { TableRow, TableCell } from '@/components/ui/Table'
 import StatusChip from '@/components/ui/StatusChip'
 import { Plus, Search, Filter } from 'lucide-react'
@@ -16,21 +17,21 @@ export default async function BookingsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 min-w-0">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-headingText">Bookings</h1>
-          <p className="text-bodyText mt-2">Manage all rental bookings</p>
-        </div>
-        <Link
-          href="/bookings/new"
-          className="px-4 py-2 bg-sidebarActiveBg text-white rounded-lg font-medium hover:bg-sidebarActiveBg/90 transition-colors flex items-center gap-2"
-        >
-          <Plus className="w-5 h-5" />
-          New Booking
-        </Link>
-      </div>
+      <PageHeader
+        title="Bookings"
+        subtitle="Manage all rental bookings"
+        actions={
+          <Link
+            href="/bookings/new"
+            className="w-full sm:w-auto px-4 py-2 bg-sidebarActiveBg text-white rounded-lg font-medium hover:bg-sidebarActiveBg/90 transition-colors flex items-center justify-center gap-2"
+          >
+            <Plus className="w-5 h-5 flex-shrink-0" />
+            <span className="text-sm sm:text-base">New Booking</span>
+          </Link>
+        }
+      />
 
       {/* Bookings List */}
       <Suspense fallback={<div className="text-bodyText">Loading...</div>}>

@@ -314,42 +314,46 @@ export default function InvoiceDetailPage() {
   const isOverdue = invoice.status !== 'PAID' && invoice.status !== 'VOID' && new Date(invoice.dueDate) < new Date()
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
-        <div className="flex items-center gap-4">
+    <div className="space-y-4 sm:space-y-6 min-w-0">
+      {/* Header - Responsive */}
+      <div className="flex flex-col gap-3 sm:gap-4">
+        <div className="flex items-start gap-2 sm:gap-4">
           <Link
             href="/financials"
-            className="p-2 hover:bg-borderSoft rounded-lg transition-colors"
+            className="p-2 hover:bg-borderSoft rounded-lg transition-colors flex-shrink-0"
           >
             <ArrowLeft className="w-5 h-5 text-bodyText" />
           </Link>
-          <div>
-            <h1 className="text-3xl font-bold text-headingText">Invoice Details</h1>
-            <p className="text-bodyText mt-2">Invoice {invoice.invoiceNumber}</p>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl sm:text-3xl font-bold text-headingText break-words">Invoice Details</h1>
+            <p className="text-sm sm:text-base text-bodyText mt-1 sm:mt-2 break-words">Invoice {invoice.invoiceNumber}</p>
           </div>
         </div>
-        <div className="flex items-center gap-3 flex-wrap w-full sm:w-auto">
+        
+        {/* Action Buttons - Stack on mobile */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
           <button
             onClick={handleExportPDF}
             disabled={isExportingPDF}
             type="button"
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap shrink-0 shadow-md"
+            className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md"
             title="Export as PDF"
             aria-label="Export invoice as PDF"
           >
             <Download className="w-4 h-4 flex-shrink-0" />
-            <span className="font-semibold">{isExportingPDF ? 'Generating...' : 'Export PDF'}</span>
+            <span className="font-semibold text-sm sm:text-base">{isExportingPDF ? 'Generating...' : 'Export PDF'}</span>
           </button>
-          <StatusChip
-            status={invoice.status}
-            variant={getStatusVariant(invoice.status)}
-          />
-          {isOverdue && (
-            <span className="px-3 py-1 bg-red-500/10 text-red-500 rounded-lg text-sm font-medium whitespace-nowrap">
-              Overdue
-            </span>
-          )}
+          <div className="flex items-center gap-2 sm:gap-3">
+            <StatusChip
+              status={invoice.status}
+              variant={getStatusVariant(invoice.status)}
+            />
+            {isOverdue && (
+              <span className="px-3 py-1 bg-red-500/10 text-red-500 rounded-lg text-sm font-medium whitespace-nowrap">
+                Overdue
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -377,47 +381,36 @@ export default function InvoiceDetailPage() {
             </p>
           </div>
         </div>
-        <div className="mt-6 pt-6 border-t border-borderSoft">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-borderSoft">
+          <div className="flex flex-col gap-4">
             <div>
               <label className="block text-sm font-medium text-headingText mb-1">
                 Total Amount
               </label>
-              <p className="text-3xl font-bold text-headingText">
+              <p className="text-2xl sm:text-3xl font-bold text-headingText break-words">
                 {formatCurrency(invoice.total)}
               </p>
             </div>
-            <button
-              onClick={handleExportPDF}
-              disabled={isExportingPDF}
-              type="button"
-              className="px-5 py-2.5 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap shadow-lg"
-              title="Export as PDF"
-              aria-label="Export invoice as PDF"
-            >
-              <Download className="w-5 h-5" />
-              <span>{isExportingPDF ? 'Generating PDF...' : 'Export as PDF'}</span>
-            </button>
             {canUpdateStatus && (
-              <div className="flex gap-3">
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                 {canMarkPaid && (
                   <button
                     onClick={() => handleStatusUpdate('PAID')}
                     disabled={isUpdating}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    className="w-full sm:w-auto px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     <CheckCircle className="w-4 h-4" />
-                    Mark as Paid
+                    <span className="text-sm sm:text-base">Mark as Paid</span>
                   </button>
                 )}
                 {canVoid && (
                   <button
                     onClick={() => handleStatusUpdate('VOID')}
                     disabled={isUpdating}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    className="w-full sm:w-auto px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     <XCircle className="w-4 h-4" />
-                    Void Invoice
+                    <span className="text-sm sm:text-base">Void Invoice</span>
                   </button>
                 )}
               </div>
@@ -469,8 +462,9 @@ export default function InvoiceDetailPage() {
           )
         }
       >
-        <div className="overflow-x-auto">
-          <table className="w-full">
+        <div className="w-full overflow-x-auto -mx-4 sm:mx-0">
+          <div className="inline-block min-w-full align-middle">
+            <table className="w-full min-w-[600px]">
             <thead>
               <tr className="border-b border-borderSoft">
                 <th className="text-left py-3 px-4 text-sm font-medium text-headingText">
@@ -605,6 +599,7 @@ export default function InvoiceDetailPage() {
               </tr>
             </tfoot>
           </table>
+          </div>
         </div>
       </SectionCard>
 

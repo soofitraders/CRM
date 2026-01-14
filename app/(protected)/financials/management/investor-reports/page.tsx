@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 import StatCard from '@/components/ui/StatCard'
 import SectionCard from '@/components/ui/SectionCard'
+import PageHeader from '@/components/ui/PageHeader'
 import Table, { TableRow, TableCell } from '@/components/ui/Table'
 import ReportExportButton from '@/components/export/ReportExportButton'
 import AdvancedFilters from '@/components/reports/AdvancedFilters'
@@ -217,22 +218,22 @@ export default function InvestorReportsPage() {
     .slice(0, 5)
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-headingText">Investor Reports</h1>
-          <p className="text-bodyText mt-2">Comprehensive investor performance and payout analysis</p>
-        </div>
-        <ReportExportButton
-          module="investors"
-          filters={{
-            dateFrom,
-            dateTo,
-            ...(branchId && { branchId }),
-            ...(investorId && { investorId }),
-          }}
-        />
-      </div>
+    <div className="space-y-4 sm:space-y-6 min-w-0">
+      <PageHeader
+        title="Investor Reports"
+        subtitle="Comprehensive investor performance and payout analysis"
+        actions={
+          <ReportExportButton
+            module="investors"
+            filters={{
+              dateFrom,
+              dateTo,
+              ...(branchId && { branchId }),
+              ...(investorId && { investorId }),
+            }}
+          />
+        }
+      />
 
       {/* Advanced Filters */}
       <AdvancedFilters

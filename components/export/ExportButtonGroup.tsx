@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Download, FileText, FileSpreadsheet, File, ChevronDown } from 'lucide-react'
 import { logger } from '@/lib/utils/logger'
 
-export type ExportModule = 'BOOKINGS' | 'INVOICES' | 'CLIENTS' | 'VEHICLES' | 'EXPENSES'
+export type ExportModule = 'BOOKINGS' | 'INVOICES' | 'CLIENTS' | 'VEHICLES' | 'EXPENSES' | 'PAYMENTS'
 
 interface ExportButtonGroupProps {
   module: ExportModule
@@ -137,9 +137,9 @@ export default function ExportButtonGroup({ module, filters }: ExportButtonGroup
           <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
         </button>
         
-        {/* Dropdown menu */}
+        {/* Dropdown menu - Responsive */}
         {isOpen && (
-          <div className="absolute right-0 mt-2 w-48 bg-pageBg border border-borderSoft rounded-lg shadow-lg z-50">
+          <div className="absolute right-0 mt-2 w-48 max-w-[calc(100vw-24px)] bg-pageBg border border-borderSoft rounded-lg shadow-lg z-50">
             <div className="py-1">
               <button
                 type="button"

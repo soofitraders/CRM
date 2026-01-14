@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import SectionCard from '@/components/ui/SectionCard'
+import PageHeader from '@/components/ui/PageHeader'
+import Toolbar, { ToolbarGroup } from '@/components/ui/Toolbar'
 import Table, { TableRow, TableCell } from '@/components/ui/Table'
 import ExportButtonGroup from '@/components/export/ExportButtonGroup'
 import { Plus, X, Edit, Trash2, Settings } from 'lucide-react'
@@ -219,51 +221,53 @@ export default function ExpensesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-headingText">Expenses</h1>
-          <p className="text-bodyText mt-2">Manage operational expenses</p>
-        </div>
-        <div className="flex gap-2">
-          <ExportButtonGroup
-            module="EXPENSES"
-            filters={{
-              dateFrom,
-              dateTo,
-              categoryId,
-              branchId,
-            }}
-          />
-          <button
-            onClick={() => setShowCategoryModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-cardBg border border-borderSoft rounded-lg text-bodyText hover:bg-sidebarMuted/10"
-          >
-            <Settings className="w-4 h-4" />
-            Manage Categories
-          </button>
-          <button
-            onClick={() => {
-              setEditingExpense(null)
-              setFormData({
-                category: '',
-                description: '',
-                amount: '',
-                currency: 'AED',
-                dateIncurred: format(new Date(), 'yyyy-MM-dd'),
-                branchId: '',
-                investor: '',
-                vehicle: '',
-              })
-              setShowForm(true)
-            }}
-            className="flex items-center gap-2 px-4 py-2 bg-sidebarActiveBg text-white rounded-lg hover:opacity-90"
-          >
-            <Plus className="w-4 h-4" />
-            Add Expense
-          </button>
-        </div>
-      </div>
+    <div className="space-y-4 sm:space-y-6 min-w-0">
+      <PageHeader
+        title="Expenses"
+        subtitle="Manage operational expenses"
+        actions={
+          <Toolbar>
+            <ToolbarGroup>
+              <ExportButtonGroup
+                module="EXPENSES"
+                filters={{
+                  dateFrom,
+                  dateTo,
+                  categoryId,
+                  branchId,
+                }}
+              />
+              <button
+                onClick={() => setShowCategoryModal(true)}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-cardBg border border-borderSoft rounded-lg text-bodyText hover:bg-sidebarMuted/10"
+              >
+                <Settings className="w-4 h-4 flex-shrink-0" />
+                <span className="text-sm sm:text-base">Manage Categories</span>
+              </button>
+              <button
+                onClick={() => {
+                  setEditingExpense(null)
+                  setFormData({
+                    category: '',
+                    description: '',
+                    amount: '',
+                    currency: 'AED',
+                    dateIncurred: format(new Date(), 'yyyy-MM-dd'),
+                    branchId: '',
+                    investor: '',
+                    vehicle: '',
+                  })
+                  setShowForm(true)
+                }}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-sidebarActiveBg text-white rounded-lg hover:opacity-90"
+              >
+                <Plus className="w-4 h-4 flex-shrink-0" />
+                <span className="text-sm sm:text-base">Add Expense</span>
+              </button>
+            </ToolbarGroup>
+          </Toolbar>
+        }
+      />
 
       {/* Filters */}
       <SectionCard>
@@ -413,10 +417,10 @@ export default function ExpensesPage() {
 
       {/* Expense Form Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-cardBg rounded-lg shadow-lg w-full max-w-2xl m-4 max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-borderSoft flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-headingText">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-cardBg rounded-lg shadow-lg w-full max-w-[calc(100vw-32px)] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-4 sm:p-6 border-b border-borderSoft flex items-center justify-between gap-4">
+              <h2 className="text-lg sm:text-xl font-semibold text-headingText break-words min-w-0 flex-1">
                 {editingExpense ? 'Edit Expense' : 'Add Expense'}
               </h2>
               <button
@@ -424,7 +428,8 @@ export default function ExpensesPage() {
                   setShowForm(false)
                   setEditingExpense(null)
                 }}
-                className="text-bodyText hover:text-headingText"
+                className="text-bodyText hover:text-headingText p-1 flex-shrink-0"
+                aria-label="Close"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -632,15 +637,15 @@ function CategoryManagementModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-cardBg rounded-lg shadow-lg w-full max-w-2xl m-4 max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-borderSoft flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-headingText">Manage Categories</h2>
-          <button onClick={onClose} className="text-bodyText hover:text-headingText">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-cardBg rounded-lg shadow-lg w-full max-w-[calc(100vw-32px)] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="p-4 sm:p-6 border-b border-borderSoft flex items-center justify-between gap-4">
+          <h2 className="text-lg sm:text-xl font-semibold text-headingText break-words min-w-0 flex-1">Manage Categories</h2>
+          <button onClick={onClose} className="text-bodyText hover:text-headingText p-1 flex-shrink-0" aria-label="Close">
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           <form onSubmit={handleSubmit} className="mb-6 space-y-4">
             <div>
               <label className="block text-sm font-medium text-bodyText mb-1">Name *</label>

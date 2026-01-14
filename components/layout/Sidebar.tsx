@@ -4,6 +4,51 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
+
+// Logo component that fetches from settings
+function LogoDisplay() {
+  const [logoUrl, setLogoUrl] = useState('/logo.png?v=3')
+  
+  useEffect(() => {
+    // Fetch logo URL from settings
+    fetch('/api/settings')
+      .then(res => res.json())
+      .then(data => {
+        if (data.settings?.logoUrl) {
+          setLogoUrl(data.settings.logoUrl + '?v=' + Date.now())
+        }
+      })
+      .catch(() => {
+        // Keep default logo on error
+      })
+  }, [])
+
+  return (
+    <div className="p-6 border-b border-sidebarMuted/20 flex-shrink-0">
+      <div className="flex items-center justify-center">
+        <img 
+          src={logoUrl}
+          alt="MisterWheels Logo" 
+          className="h-10 w-auto object-contain max-w-full"
+          style={{ imageRendering: 'auto' }}
+          loading="eager"
+          onError={(e) => {
+            // Fallback to text if logo not found
+            const target = e.target as HTMLImageElement
+            target.style.display = 'none'
+            const parent = target.parentElement
+            if (parent && !parent.querySelector('.logo-fallback')) {
+              const fallback = document.createElement('div')
+              fallback.className = 'logo-fallback'
+              fallback.innerHTML = '<h1 class="text-sidebarText text-xl font-bold leading-tight tracking-tight">MISTERWHEELS</h1><p class="text-sidebarMuted text-xs mt-1.5 font-medium">RENT A CAR LLC</p>'
+              parent.appendChild(fallback)
+            }
+          }}
+        />
+      </div>
+    </div>
+  )
+}
 import {
   LayoutDashboard,
   Calendar,
@@ -131,7 +176,12 @@ const menuSections: MenuSection[] = [
   },
 ]
 
-export default function Sidebar() {
+interface SidebarProps {
+  isOpen?: boolean
+  onClose?: () => void
+}
+
+export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const pathname = usePathname()
   const { data: session } = useSession()
   const userRole = (session?.user as any)?.role || 'CUSTOMER'
@@ -139,6 +189,13 @@ export default function Sidebar() {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     new Set(['dashboard', 'bookings']) // Default expanded sections
   )
+
+  // Close sidebar when route changes on mobile
+  useEffect(() => {
+    if (isOpen && onClose) {
+      onClose()
+    }
+  }, [pathname]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleSection = (sectionId: string) => {
     setExpandedSections((prev) => {
@@ -198,31 +255,16 @@ export default function Sidebar() {
   }, [pathname, filteredSections, isSectionActive])
 
   return (
-    <aside className="w-64 bg-sidebarBg h-screen flex flex-col fixed left-0 top-0 z-50 shadow-lg overflow-hidden">
+    <aside
+      className={`
+        w-64 bg-sidebarBg h-screen flex flex-col fixed left-0 top-0 z-50 shadow-lg overflow-hidden
+        transform transition-transform duration-300 ease-in-out
+        lg:translate-x-0
+        ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}
+    >
       {/* Logo */}
-      <div className="p-6 border-b border-sidebarMuted/20 flex-shrink-0">
-        <div className="flex items-center justify-center">
-          <img 
-            src="/logo.png?v=2"
-            alt="MisterWheels Logo" 
-            className="h-10 w-auto object-contain max-w-full"
-            style={{ imageRendering: 'auto' }}
-            loading="eager"
-            onError={(e) => {
-              // Fallback to text if logo not found
-              const target = e.target as HTMLImageElement
-              target.style.display = 'none'
-              const parent = target.parentElement
-              if (parent && !parent.querySelector('.logo-fallback')) {
-                const fallback = document.createElement('div')
-                fallback.className = 'logo-fallback'
-                fallback.innerHTML = '<h1 class="text-sidebarText text-xl font-bold leading-tight tracking-tight">MISTERWHEELS</h1><p class="text-sidebarMuted text-xs mt-1.5 font-medium">RENT A CAR LLC</p>'
-                parent.appendChild(fallback)
-              }
-            }}
-          />
-        </div>
-      </div>
+      <LogoDisplay />
 
       {/* Navigation Menu */}
       <nav className="flex-1 py-4 overflow-y-auto overflow-x-hidden custom-scrollbar min-h-0">
@@ -270,6 +312,12 @@ export default function Sidebar() {
                         <Link
                           key={item.path}
                           href={item.path}
+                          onClick={() => {
+                            // Close sidebar on mobile when clicking a link
+                            if (onClose && window.innerWidth < 1024) {
+                              onClose()
+                            }
+                          }}
                           className={`flex items-center px-3 py-2 text-sm font-medium transition-all duration-200 rounded-lg group ${
                             active
                               ? 'bg-sidebarActiveBg text-white shadow-md'

@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/authOptions'
+import mongoose from 'mongoose'
 import connectDB from '@/lib/db'
 import Booking from '@/lib/models/Booking'
 import Vehicle from '@/lib/models/Vehicle'
@@ -19,9 +20,12 @@ import { invalidateBookingCache, invalidateDashboardCache } from '@/lib/cache/ca
 import { logger } from '@/lib/utils/performance'
 
 // Ensure models are registered by accessing them
-// This ensures Mongoose knows about CustomerProfile when populating
+// This ensures Mongoose knows about these models when populating
 if (typeof CustomerProfile !== 'undefined') {
   // Model is registered
+}
+if (typeof Vehicle !== 'undefined') {
+  // Vehicle model is registered
 }
 
 // GET - List bookings with filters
@@ -34,10 +38,25 @@ export async function GET(request: NextRequest) {
 
     await connectDB()
 
-    // Ensure CustomerProfile model is registered before populate
-    // Access the model to ensure it's initialized
+    // Ensure models are registered before populate
+    // This is critical in Next.js to prevent "Schema hasn't been registered" errors
     if (!CustomerProfile) {
       throw new Error('CustomerProfile model not available')
+    }
+    if (!Vehicle) {
+      throw new Error('Vehicle model not available')
+    }
+    
+    // Explicitly ensure Vehicle model is registered with Mongoose
+    // Access the model to trigger registration if it hasn't been registered yet
+    // This prevents errors during hot reload in development
+    if (!mongoose.models.Vehicle) {
+      // Re-import to ensure Vehicle model is registered
+      const VehicleModule = await import('@/lib/models/Vehicle')
+      // Access the default export to trigger model registration
+      if (VehicleModule.default) {
+        // Model registration triggered
+      }
     }
 
     const searchParams = request.nextUrl.searchParams

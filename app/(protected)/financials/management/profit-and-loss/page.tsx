@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfQuarter, endOfQuarter, startOfYear, endOfYear } from 'date-fns'
 import StatCard from '@/components/ui/StatCard'
 import SectionCard from '@/components/ui/SectionCard'
+import PageHeader from '@/components/ui/PageHeader'
 import Table, { TableRow, TableCell } from '@/components/ui/Table'
 import ReportExportButton from '@/components/export/ReportExportButton'
 import AdvancedFilters from '@/components/reports/AdvancedFilters'
@@ -313,23 +314,23 @@ export default function ProfitAndLossPage() {
     : []
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-headingText">Profit & Loss</h1>
-          <p className="text-bodyText mt-2">Detailed financial performance analysis</p>
-        </div>
-        <ReportExportButton
-          module="pnl"
-          filters={{
-            dateFrom,
-            dateTo,
-            periodType,
-            ...(branchId && { branchId }),
-            ...(compareWith && { compareWith }),
-          }}
-        />
-      </div>
+    <div className="space-y-4 sm:space-y-6 min-w-0">
+      <PageHeader
+        title="Profit & Loss"
+        subtitle="Detailed financial performance analysis"
+        actions={
+          <ReportExportButton
+            module="pnl"
+            filters={{
+              dateFrom,
+              dateTo,
+              periodType,
+              ...(branchId && { branchId }),
+              ...(compareWith && { compareWith }),
+            }}
+          />
+        }
+      />
 
       {/* Advanced Filters */}
       <AdvancedFilters

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import SectionCard from '@/components/ui/SectionCard'
+import Toolbar, { ToolbarGroup, ToolbarInput } from '@/components/ui/Toolbar'
 import Table, { TableRow, TableCell } from '@/components/ui/Table'
 import StatusChip from '@/components/ui/StatusChip'
 import { Search, Filter, ChevronLeft, ChevronRight, Edit } from 'lucide-react'
@@ -214,45 +215,49 @@ export default function BookingsList() {
     <SectionCard
       title="All Bookings"
       actions={
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-bodyText" />
+        <Toolbar>
+          <ToolbarInput>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-bodyText pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search..."
+                value={filters.search}
+                onChange={(e) => handleFilterChange('search', e.target.value)}
+                className="w-full sm:w-48 pl-9 pr-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+              />
+            </div>
+          </ToolbarInput>
+          <ToolbarGroup>
+            <select
+              value={filters.status}
+              onChange={(e) => handleFilterChange('status', e.target.value)}
+              className="w-full sm:w-auto min-w-[140px] px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+            >
+              <option value="">All Status</option>
+              <option value="PENDING">Pending</option>
+              <option value="CONFIRMED">Confirmed</option>
+              <option value="CHECKED_OUT">Checked Out</option>
+              <option value="CHECKED_IN">Checked In</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
             <input
-              type="text"
-              placeholder="Search..."
-              value={filters.search}
-              onChange={(e) => handleFilterChange('search', e.target.value)}
-              className="pl-9 pr-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50 w-48"
+              type="date"
+              value={filters.dateFrom}
+              onChange={(e) => handleFilterChange('dateFrom', e.target.value)}
+              placeholder="From"
+              className="w-full sm:w-auto min-w-[140px] px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
             />
-          </div>
-          <select
-            value={filters.status}
-            onChange={(e) => handleFilterChange('status', e.target.value)}
-            className="px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
-          >
-            <option value="">All Status</option>
-            <option value="PENDING">Pending</option>
-            <option value="CONFIRMED">Confirmed</option>
-            <option value="CHECKED_OUT">Checked Out</option>
-            <option value="CHECKED_IN">Checked In</option>
-            <option value="CANCELLED">Cancelled</option>
-          </select>
-          <input
-            type="date"
-            value={filters.dateFrom}
-            onChange={(e) => handleFilterChange('dateFrom', e.target.value)}
-            placeholder="From"
-            className="px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
-          />
-          <input
-            type="date"
-            value={filters.dateTo}
-            onChange={(e) => handleFilterChange('dateTo', e.target.value)}
-            placeholder="To"
-            className="px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
-          />
-          <ExportButtonGroup module="BOOKINGS" filters={filters} />
-        </div>
+            <input
+              type="date"
+              value={filters.dateTo}
+              onChange={(e) => handleFilterChange('dateTo', e.target.value)}
+              placeholder="To"
+              className="w-full sm:w-auto min-w-[140px] px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+            />
+            <ExportButtonGroup module="BOOKINGS" filters={filters} />
+          </ToolbarGroup>
+        </Toolbar>
       }
     >
       {isLoading ? (
@@ -261,18 +266,20 @@ export default function BookingsList() {
         <div className="text-center py-8 text-bodyText">No bookings found</div>
       ) : (
         <>
-          <Table
-            headers={[
-              'Booking #',
-              'Vehicle',
-              'Customer',
-              'Start',
-              'End',
-              'Status',
-              'Payment',
-              'Actions',
-            ]}
-          >
+          <div className="w-full overflow-x-auto -mx-4 sm:mx-0">
+            <div className="inline-block min-w-full align-middle">
+              <Table
+                headers={[
+                  'Booking #',
+                  'Vehicle',
+                  'Customer',
+                  'Start',
+                  'End',
+                  'Status',
+                  'Payment',
+                  'Actions',
+                ]}
+              >
             {(Array.isArray(bookings) ? bookings : []).map((booking: any) => {
               // Safety check for booking ID
               let bookingIdDisplay = 'N/A'
@@ -345,6 +352,8 @@ export default function BookingsList() {
               )
             })}
           </Table>
+            </div>
+          </div>
 
           {/* Pagination */}
           {pagination.pages > 1 && (

@@ -3,6 +3,8 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import SectionCard from '@/components/ui/SectionCard'
+import PageHeader from '@/components/ui/PageHeader'
+import Toolbar, { ToolbarGroup, ToolbarInput } from '@/components/ui/Toolbar'
 import Table, { TableRow, TableCell } from '@/components/ui/Table'
 import StatusChip from '@/components/ui/StatusChip'
 import { Search, Plus, Edit, Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -139,61 +141,65 @@ function UsersContent() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 min-w-0">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-headingText">Manage Users</h1>
-          <p className="text-bodyText mt-2">Manage system users and their roles</p>
-        </div>
-        <button
-          onClick={handleCreateUser}
-          className="px-4 py-2 bg-sidebarActiveBg text-white rounded-lg font-medium hover:bg-sidebarActiveBg/90 transition-colors flex items-center gap-2"
-        >
-          <Plus className="w-5 h-5" />
-          Invite User
-        </button>
-      </div>
+      <PageHeader
+        title="Manage Users"
+        subtitle="Manage system users and their roles"
+        actions={
+          <button
+            onClick={handleCreateUser}
+            className="w-full sm:w-auto px-4 py-2 bg-sidebarActiveBg text-white rounded-lg font-medium hover:bg-sidebarActiveBg/90 transition-colors flex items-center justify-center gap-2"
+          >
+            <Plus className="w-5 h-5 flex-shrink-0" />
+            <span className="text-sm sm:text-base">Invite User</span>
+          </button>
+        }
+      />
 
       {/* Users List */}
       <SectionCard
         title="All Users"
         actions={
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-bodyText" />
-              <input
-                type="text"
-                placeholder="Search name or email..."
-                value={filters.search}
-                onChange={(e) => handleFilterChange('search', e.target.value)}
-                className="pl-9 pr-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50 w-48"
-              />
-            </div>
-            <select
-              value={filters.role}
-              onChange={(e) => handleFilterChange('role', e.target.value)}
-              className="px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
-            >
-              <option value="">All Roles</option>
-              <option value="SUPER_ADMIN">Super Admin</option>
-              <option value="ADMIN">Admin</option>
-              <option value="MANAGER">Manager</option>
-              <option value="SALES_AGENT">Sales Agent</option>
-              <option value="FINANCE">Finance</option>
-              <option value="INVESTOR">Investor</option>
-              <option value="CUSTOMER">Customer</option>
-            </select>
+          <Toolbar>
+            <ToolbarInput>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-bodyText pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Search name or email..."
+                  value={filters.search}
+                  onChange={(e) => handleFilterChange('search', e.target.value)}
+                  className="w-full sm:w-48 pl-9 pr-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+                />
+              </div>
+            </ToolbarInput>
+            <ToolbarGroup>
+              <select
+                value={filters.role}
+                onChange={(e) => handleFilterChange('role', e.target.value)}
+                className="w-full sm:w-auto min-w-[140px] px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+              >
+                <option value="">All Roles</option>
+                <option value="SUPER_ADMIN">Super Admin</option>
+                <option value="ADMIN">Admin</option>
+                <option value="MANAGER">Manager</option>
+                <option value="SALES_AGENT">Sales Agent</option>
+                <option value="FINANCE">Finance</option>
+                <option value="INVESTOR">Investor</option>
+                <option value="CUSTOMER">Customer</option>
+              </select>
             <select
               value={filters.status}
               onChange={(e) => handleFilterChange('status', e.target.value)}
-              className="px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+              className="w-full sm:w-auto min-w-[140px] px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
             >
               <option value="">All Status</option>
               <option value="ACTIVE">Active</option>
               <option value="INACTIVE">Inactive</option>
             </select>
-          </div>
+            </ToolbarGroup>
+          </Toolbar>
         }
       >
         {isLoading ? (

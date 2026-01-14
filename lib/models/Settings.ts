@@ -2,6 +2,7 @@ import mongoose, { Schema, Document, Model } from 'mongoose'
 
 export interface ISettings extends Document {
   companyName: string
+  logoUrl?: string // URL or path to logo file
   defaultCurrency: string
   timezone: string
   defaultTaxPercent: number
@@ -15,6 +16,11 @@ const SettingsSchema = new Schema<ISettings>(
       required: [true, 'Company name is required'],
       trim: true,
       default: 'MisterWheels',
+    },
+    logoUrl: {
+      type: String,
+      trim: true,
+      default: '/logo.png', // Default to public logo.png
     },
     defaultCurrency: {
       type: String,

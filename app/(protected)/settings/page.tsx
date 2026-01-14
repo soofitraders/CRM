@@ -10,6 +10,7 @@ import SelectiveDataDeletion from '@/components/admin/SelectiveDataDeletion'
 interface Settings {
   _id?: string
   companyName: string
+  logoUrl?: string
   defaultCurrency: string
   timezone: string
   defaultTaxPercent: number
@@ -24,10 +25,13 @@ export default function SettingsPage() {
   const { data: session } = useSession()
   const [settings, setSettings] = useState<Settings>({
     companyName: 'MisterWheels',
+    logoUrl: '/logo.png',
     defaultCurrency: 'AED',
     timezone: 'Asia/Dubai',
     defaultTaxPercent: 5,
   })
+  const [logoPreview, setLogoPreview] = useState<string>('')
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false)
   const [preferences, setPreferences] = useState<NotificationPreferences>({
     emailNotifications: true,
     smsNotifications: false,
@@ -50,6 +54,11 @@ export default function SettingsPage() {
       if (response.ok) {
         const data = await response.json()
         setSettings(data.settings)
+        if (data.settings.logoUrl) {
+          setLogoPreview(data.settings.logoUrl + '?v=' + Date.now())
+        } else {
+          setLogoPreview('/logo.png?v=' + Date.now())
+        }
       }
     } catch (error) {
       console.error('Error fetching settings:', error)
@@ -118,6 +127,52 @@ export default function SettingsPage() {
     }
   }
 
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setMessage({ type: 'error', text: 'File must be an image' })
+      return
+    }
+
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      setMessage({ type: 'error', text: 'File size must be less than 2MB' })
+      return
+    }
+
+    setIsUploadingLogo(true)
+    setMessage(null)
+
+    try {
+      const formData = new FormData()
+      formData.append('logo', file)
+
+      const response = await fetch('/api/settings/logo', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setSettings({ ...settings, logoUrl: data.logoUrl })
+        setLogoPreview(data.logoUrl + '?v=' + Date.now())
+        setMessage({ type: 'success', text: 'Logo uploaded successfully' })
+      } else {
+        const error = await response.json()
+        setMessage({ type: 'error', text: error.error || 'Failed to upload logo' })
+      }
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error.message || 'Failed to upload logo' })
+    } finally {
+      setIsUploadingLogo(false)
+      // Reset input
+      e.target.value = ''
+    }
+  }
+
   const handlePreferencesChange = async (key: keyof NotificationPreferences, value: boolean) => {
     const newPreferences = { ...preferences, [key]: value }
     setPreferences(newPreferences)
@@ -178,6 +233,40 @@ export default function SettingsPage() {
               {message.text}
             </div>
           )}
+
+          {/* Logo Upload Section */}
+          <div className="mb-6 pb-6 border-b border-borderSoft">
+            <label className="block text-sm font-medium text-headingText mb-3">
+              Company Logo
+            </label>
+            <div className="flex items-start gap-6">
+              <div className="flex-shrink-0">
+                {logoPreview && (
+                  <img
+                    src={logoPreview}
+                    alt="Company Logo"
+                    className="w-32 h-20 object-contain border border-borderSoft rounded-lg bg-pageBg p-2"
+                    onError={() => setLogoPreview('/logo.png')}
+                  />
+                )}
+              </div>
+              <div className="flex-1">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLogoUpload}
+                  disabled={!canEditSettings || isUploadingLogo}
+                  className="block w-full text-sm text-bodyText file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-sidebarActiveBg file:text-white hover:file:bg-sidebarActiveBg/90 file:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+                <p className="text-xs text-sidebarMuted mt-2">
+                  Upload a logo image (PNG, JPG, or GIF). Max size: 2MB. Recommended: 200x60px or similar aspect ratio.
+                </p>
+                {isUploadingLogo && (
+                  <p className="text-xs text-sidebarActiveBg mt-2">Uploading logo...</p>
+                )}
+              </div>
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
@@ -315,25 +404,29 @@ export default function SettingsPage() {
       <SectionCard title="System Administration">
         <div className="space-y-4">
           <div className="p-4 bg-pageBg border border-borderSoft rounded-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-medium text-headingText mb-1">Selective Data Deletion</h3>
-                <p className="text-sm text-sidebarMuted">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <h3 className="font-medium text-headingText mb-1 break-words">Selective Data Deletion</h3>
+                <p className="text-sm text-sidebarMuted break-words">
                   Delete specific types of data from the database. For example, delete all sales data (invoices and payments) to reset Total Sales to 0.
                 </p>
               </div>
-              <SelectiveDataDeletion />
+              <div className="flex-shrink-0 w-full sm:w-auto">
+                <SelectiveDataDeletion />
+              </div>
             </div>
           </div>
           <div className="p-4 bg-pageBg border border-borderSoft rounded-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-medium text-headingText mb-1">Database Management</h3>
-                <p className="text-sm text-sidebarMuted">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <h3 className="font-medium text-headingText mb-1 break-words">Database Management</h3>
+                <p className="text-sm text-sidebarMuted break-words">
                   Clear all database data except the super admin user. This action is irreversible.
                 </p>
               </div>
-              <ClearDatabaseButton />
+              <div className="flex-shrink-0 w-full sm:w-auto">
+                <ClearDatabaseButton />
+              </div>
             </div>
           </div>
         </div>

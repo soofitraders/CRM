@@ -132,20 +132,20 @@ export default function SelectiveDataDeletion() {
   }
 
   return (
-    <div className="relative">
+    <div className="relative w-full sm:w-auto">
       <button
         onClick={() => setShowConfirm(true)}
-        className="px-4 py-2 bg-danger text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 text-sm font-medium"
+        className="w-full sm:w-auto px-4 py-2 bg-danger text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
         disabled={isDeleting}
       >
-        <Trash2 className="w-4 h-4" />
-        Delete Selective Data
+        <Trash2 className="w-4 h-4 flex-shrink-0" />
+        <span className="text-sm sm:text-base whitespace-nowrap">Delete Selective Data</span>
       </button>
 
       {/* Confirmation Modal */}
       {showConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-cardBg rounded-lg p-6 max-w-2xl w-full mx-4 shadow-xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-cardBg rounded-lg p-4 sm:p-6 max-w-[calc(100vw-32px)] sm:max-w-2xl w-full shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 bg-danger/10 rounded-full">
                 <AlertTriangle className="w-6 h-6 text-danger" />

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import SectionCard from '@/components/ui/SectionCard'
+import Toolbar, { ToolbarGroup, ToolbarInput } from '@/components/ui/Toolbar'
 import Table, { TableRow, TableCell } from '@/components/ui/Table'
 import { Search, Edit } from 'lucide-react'
 import Link from 'next/link'
@@ -98,19 +99,23 @@ export default function ClientsList() {
     <SectionCard
       title="All Customers"
       actions={
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-bodyText" />
-            <input
-              type="text"
-              placeholder="Search by name, email, phone, license..."
-              value={search}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              className="pl-9 pr-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50 w-64"
-            />
-          </div>
-          <ExportButtonGroup module="CLIENTS" filters={{ search, activeOnly: false }} />
-        </div>
+        <Toolbar>
+          <ToolbarInput>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-bodyText pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search by name, email, phone, license..."
+                value={search}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                className="w-full sm:w-64 pl-9 pr-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+              />
+            </div>
+          </ToolbarInput>
+          <ToolbarGroup>
+            <ExportButtonGroup module="CLIENTS" filters={{ search, activeOnly: false }} />
+          </ToolbarGroup>
+        </Toolbar>
       }
     >
       {isLoading ? (

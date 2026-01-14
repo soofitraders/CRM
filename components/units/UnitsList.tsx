@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import SectionCard from '@/components/ui/SectionCard'
+import Toolbar, { ToolbarGroup, ToolbarInput } from '@/components/ui/Toolbar'
 import Table, { TableRow, TableCell } from '@/components/ui/Table'
 import StatusChip from '@/components/ui/StatusChip'
 import { Search, Edit, AlertTriangle, BarChart3 } from 'lucide-react'
@@ -155,39 +156,43 @@ export default function UnitsList() {
     <SectionCard
       title="All Vehicles"
       actions={
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-bodyText" />
-            <input
-              type="text"
-              placeholder="Search..."
-              value={filters.search}
-              onChange={(e) => handleFilterChange('search', e.target.value)}
-              className="pl-9 pr-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50 w-48"
-            />
-          </div>
-          <select
-            value={filters.status}
-            onChange={(e) => handleFilterChange('status', e.target.value)}
-            className="px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
-          >
-            <option value="">All Status</option>
-            <option value="AVAILABLE">Available</option>
-            <option value="BOOKED">Booked</option>
-            <option value="IN_MAINTENANCE">In Maintenance</option>
-            <option value="INACTIVE">Inactive</option>
-          </select>
-          <select
-            value={filters.ownershipType}
-            onChange={(e) => handleFilterChange('ownershipType', e.target.value)}
-            className="px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
-          >
-            <option value="">All Ownership</option>
-            <option value="COMPANY">Company</option>
-            <option value="INVESTOR">Investor</option>
-          </select>
-          <ExportButtonGroup module="VEHICLES" filters={filters} />
-        </div>
+        <Toolbar>
+          <ToolbarInput>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-bodyText pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search..."
+                value={filters.search}
+                onChange={(e) => handleFilterChange('search', e.target.value)}
+                className="w-full sm:w-48 pl-9 pr-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+              />
+            </div>
+          </ToolbarInput>
+          <ToolbarGroup>
+            <select
+              value={filters.status}
+              onChange={(e) => handleFilterChange('status', e.target.value)}
+              className="w-full sm:w-auto min-w-[140px] px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+            >
+              <option value="">All Status</option>
+              <option value="AVAILABLE">Available</option>
+              <option value="BOOKED">Booked</option>
+              <option value="IN_MAINTENANCE">In Maintenance</option>
+              <option value="INACTIVE">Inactive</option>
+            </select>
+            <select
+              value={filters.ownershipType}
+              onChange={(e) => handleFilterChange('ownershipType', e.target.value)}
+              className="w-full sm:w-auto min-w-[140px] px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+            >
+              <option value="">All Ownership</option>
+              <option value="COMPANY">Company</option>
+              <option value="INVESTOR">Investor</option>
+            </select>
+            <ExportButtonGroup module="VEHICLES" filters={filters} />
+          </ToolbarGroup>
+        </Toolbar>
       }
     >
       {isLoading ? (

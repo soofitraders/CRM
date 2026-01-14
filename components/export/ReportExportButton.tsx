@@ -60,34 +60,34 @@ export default function ReportExportButton({ module, filters }: ReportExportButt
   }
 
   return (
-    <div className="relative">
-      <div className="flex items-center gap-2">
+    <div className="relative min-w-0">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={() => handleExport('csv')}
           disabled={isExporting}
-          className="flex items-center gap-2 px-4 py-2 bg-cardBg border border-borderSoft rounded-lg text-bodyText hover:bg-sidebarMuted/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-cardBg border border-borderSoft rounded-lg text-bodyText hover:bg-sidebarMuted/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
           title="Export as CSV"
         >
-          <FileText className="w-4 h-4" />
-          {isExporting ? 'Exporting...' : 'CSV'}
+          <FileText className="w-4 h-4 flex-shrink-0" />
+          <span className="text-sm sm:text-base whitespace-nowrap">{isExporting ? 'Exporting...' : 'CSV'}</span>
         </button>
         <button
           onClick={() => handleExport('excel')}
           disabled={isExporting}
-          className="flex items-center gap-2 px-4 py-2 bg-cardBg border border-borderSoft rounded-lg text-bodyText hover:bg-sidebarMuted/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-cardBg border border-borderSoft rounded-lg text-bodyText hover:bg-sidebarMuted/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
           title="Export as Excel"
         >
-          <FileSpreadsheet className="w-4 h-4" />
-          {isExporting ? 'Exporting...' : 'Excel'}
+          <FileSpreadsheet className="w-4 h-4 flex-shrink-0" />
+          <span className="text-sm sm:text-base whitespace-nowrap">{isExporting ? 'Exporting...' : 'Excel'}</span>
         </button>
         <button
           onClick={() => handleExport('pdf')}
           disabled={isExporting}
-          className="flex items-center gap-2 px-4 py-2 bg-cardBg border border-borderSoft rounded-lg text-bodyText hover:bg-sidebarMuted/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-cardBg border border-borderSoft rounded-lg text-bodyText hover:bg-sidebarMuted/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
           title="Export as PDF"
         >
-          <File className="w-4 h-4" />
-          {isExporting ? 'Exporting...' : 'PDF'}
+          <File className="w-4 h-4 flex-shrink-0" />
+          <span className="text-sm sm:text-base whitespace-nowrap">{isExporting ? 'Exporting...' : 'PDF'}</span>
         </button>
       </div>
       {error && (
