@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { createBookingSchema, CreateBookingInput } from '@/lib/validation/booking'
-import { Calendar, X } from 'lucide-react'
+import { Calendar, X, Search, ChevronDown } from 'lucide-react'
 import { logger } from '@/lib/utils/logger'
 
 interface BookingFormProps {
@@ -38,9 +38,15 @@ export default function BookingForm({
 }: BookingFormProps) {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
+  const [customerSearchTerm, setCustomerSearchTerm] = useState('')
   const [calculatedTotal, setCalculatedTotal] = useState(0)
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null)
   const [currentMileage, setCurrentMileage] = useState<number | null>(null)
+  const [vehicleSearchTerm, setVehicleSearchTerm] = useState('')
+  const [showVehicleDropdown, setShowVehicleDropdown] = useState(false)
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
+  const vehicleDropdownRef = useRef<HTMLDivElement>(null)
+  const customerDropdownRef = useRef<HTMLDivElement>(null)
 
   const {
     register,
@@ -100,15 +106,16 @@ export default function BookingForm({
   useEffect(() => {
     async function fetchData() {
       try {
-        // Fetch available vehicles
-        const vehiclesRes = await fetch('/api/vehicles?status=AVAILABLE&limit=1000')
+        // Fetch available vehicles with cache busting to ensure fresh data
+        const vehiclesRes = await fetch(`/api/vehicles?status=AVAILABLE&limit=1000&_t=${Date.now()}`)
         if (vehiclesRes.ok) {
           const vehiclesData = await vehiclesRes.json()
           setVehicles(vehiclesData.vehicles || [])
+          logger.log(`[BookingForm] Loaded ${vehiclesData.vehicles?.length || 0} available vehicles`)
         }
 
-        // Fetch customers
-        const customersRes = await fetch('/api/customers')
+        // Fetch customers with a higher limit so all customers show in the dropdown
+        const customersRes = await fetch('/api/customers?limit=1000&page=1')
         if (customersRes.ok) {
           const customersData = await customersRes.json()
           setCustomers(customersData.customers || [])
@@ -119,6 +126,46 @@ export default function BookingForm({
     }
     fetchData()
   }, [])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (vehicleDropdownRef.current && !vehicleDropdownRef.current.contains(target)) {
+        setShowVehicleDropdown(false)
+      }
+      if (customerDropdownRef.current && !customerDropdownRef.current.contains(target)) {
+        setShowCustomerDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Filter vehicles based on search term
+  const filteredVehicles = vehicles.filter((vehicle) => {
+    const searchLower = vehicleSearchTerm.toLowerCase()
+    const plateNumber = vehicle.plateNumber?.toLowerCase() || ''
+    const brand = vehicle.brand?.toLowerCase() || ''
+    const model = vehicle.model?.toLowerCase() || ''
+    return plateNumber.includes(searchLower) || brand.includes(searchLower) || model.includes(searchLower)
+  })
+
+  const filteredCustomers = customers.filter((customer) => {
+    const searchLower = customerSearchTerm.toLowerCase()
+    const name = customer.user.name?.toLowerCase() || ''
+    const email = customer.user.email?.toLowerCase() || ''
+    return name.includes(searchLower) || email.includes(searchLower)
+  })
+
+  const selectedCustomerId = watch('customer')
+  const selectedCustomer = customers.find((customer) => customer._id === selectedCustomerId)
+
+  const handleVehicleSelect = (vehicleId: string) => {
+    setValue('vehicle', vehicleId)
+    setShowVehicleDropdown(false)
+    setVehicleSearchTerm('')
+  }
 
   const onFormSubmit = async (data: CreateBookingInput) => {
     // Include mileage in the submission
@@ -134,21 +181,65 @@ export default function BookingForm({
     <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Vehicle */}
-        <div>
+        <div className="relative" ref={vehicleDropdownRef}>
           <label className="block text-sm font-medium text-headingText mb-2">
             Vehicle *
           </label>
-          <select
-            {...register('vehicle')}
-            className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+          <input type="hidden" {...register('vehicle')} />
+          <button
+            type="button"
+            onClick={() => {
+              setShowVehicleDropdown((prev) => !prev)
+              setVehicleSearchTerm('')
+            }}
+            className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-left text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50 flex items-center justify-between"
           >
-            <option value="">Select vehicle</option>
-            {vehicles.map((vehicle) => (
-              <option key={vehicle._id} value={vehicle._id}>
-                {vehicle.plateNumber} - {vehicle.brand} {vehicle.model}
-              </option>
-            ))}
-          </select>
+            <span className="truncate">
+              {selectedVehicle
+                ? `${selectedVehicle.plateNumber} - ${selectedVehicle.brand} ${selectedVehicle.model}`
+                : 'Select vehicle'}
+            </span>
+            <ChevronDown className="w-4 h-4 text-bodyText ml-2" />
+          </button>
+          {showVehicleDropdown && (
+            <div className="absolute z-50 w-full mt-1 bg-cardBg border border-borderSoft rounded-lg shadow-lg">
+              <div className="p-2 border-b border-borderSoft">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-sidebarMuted" />
+                  <input
+                    type="text"
+                    value={vehicleSearchTerm}
+                    autoFocus
+                    onChange={(e) => setVehicleSearchTerm(e.target.value)}
+                    placeholder="Search plate, brand, or model..."
+                    className="w-full pl-10 pr-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+                  />
+                </div>
+              </div>
+              <div className="max-h-60 overflow-y-auto">
+                {filteredVehicles.length === 0 ? (
+                  <div className="px-4 py-3 text-sm text-bodyText text-center">
+                    {vehicleSearchTerm ? 'No vehicles found' : 'No vehicles available'}
+                  </div>
+                ) : (
+                  filteredVehicles.map((vehicle) => (
+                    <button
+                      key={vehicle._id}
+                      type="button"
+                      onClick={() => handleVehicleSelect(vehicle._id)}
+                      className={`w-full px-4 py-2 text-left text-sm hover:bg-pageBg transition-colors ${
+                        selectedVehicleId === vehicle._id ? 'bg-sidebarActiveBg/10' : ''
+                      }`}
+                    >
+                      <div className="font-medium text-headingText">
+                        {vehicle.plateNumber} - {vehicle.brand} {vehicle.model}
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
           {errors.vehicle && (
             <p className="text-danger text-xs mt-1">{errors.vehicle.message}</p>
           )}
@@ -189,17 +280,64 @@ export default function BookingForm({
           <label className="block text-sm font-medium text-headingText mb-2">
             Customer *
           </label>
-          <select
-            {...register('customer')}
-            className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
-          >
-            <option value="">Select customer</option>
-            {customers.map((customer) => (
-              <option key={customer._id} value={customer._id}>
-                {customer.user.name} ({customer.user.email})
-              </option>
-            ))}
-          </select>
+          <div className="relative" ref={customerDropdownRef}>
+            <input type="hidden" {...register('customer')} />
+            <button
+              type="button"
+              onClick={() => {
+                setShowCustomerDropdown((prev) => !prev)
+                setCustomerSearchTerm('')
+              }}
+              className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-left text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50 flex items-center justify-between"
+            >
+              <span className="truncate">
+                {selectedCustomer ? `${selectedCustomer.user.name} (${selectedCustomer.user.email})` : 'Select customer'}
+              </span>
+              <ChevronDown className="w-4 h-4 text-bodyText ml-2" />
+            </button>
+            {showCustomerDropdown && (
+              <div className="absolute z-50 w-full mt-1 bg-cardBg border border-borderSoft rounded-lg shadow-lg">
+                <div className="p-2 border-b border-borderSoft">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-sidebarMuted" />
+                    <input
+                      type="text"
+                      value={customerSearchTerm}
+                      autoFocus
+                      onChange={(e) => setCustomerSearchTerm(e.target.value)}
+                      placeholder="Search name or email..."
+                      className="w-full pl-10 pr-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
+                    />
+                  </div>
+                </div>
+                <div className="max-h-60 overflow-y-auto">
+                  {filteredCustomers.length === 0 ? (
+                    <div className="px-4 py-3 text-sm text-bodyText text-center">No customers found</div>
+                  ) : (
+                    filteredCustomers.map((customer) => (
+                      <button
+                        key={customer._id}
+                        type="button"
+                        onClick={() => {
+                          setValue('customer', customer._id)
+                          setShowCustomerDropdown(false)
+                          setCustomerSearchTerm('')
+                        }}
+                        className={`w-full px-4 py-2 text-left text-sm hover:bg-pageBg transition-colors ${
+                          selectedCustomerId === customer._id ? 'bg-sidebarActiveBg/10' : ''
+                        }`}
+                      >
+                        <div className="font-medium text-headingText">
+                          {customer.user.name}
+                        </div>
+                        <div className="text-xs text-sidebarMuted">{customer.user.email}</div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
           {errors.customer && (
             <p className="text-danger text-xs mt-1">{errors.customer.message}</p>
           )}

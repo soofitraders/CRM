@@ -21,10 +21,41 @@ interface TopbarProps {
 }
 
 export default function Topbar({ onMenuClick }: TopbarProps) {
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
   const router = useRouter()
   const userName = session?.user?.name || 'Admin User'
   const userEmail = session?.user?.email || 'admin@misterwheels.com'
+  
+  // Prevent rendering if session is still loading (prevents infinite loading)
+  if (status === 'loading') {
+    return (
+      <header className="h-16 lg:h-20 bg-cardBg border-b border-borderSoft flex items-center justify-between px-4 sm:px-6 lg:px-8 sticky top-0 z-40 shadow-sm">
+        <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+          <button
+            onClick={onMenuClick}
+            className="lg:hidden p-2 text-bodyText hover:bg-pageBg rounded-lg transition-colors flex-shrink-0"
+            aria-label="Toggle menu"
+          >
+            <Menu className="w-6 h-6" />
+          </button>
+          <div className="flex-1 min-w-0 max-w-lg">
+            <div className="relative">
+              <Search className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-bodyText" />
+              <input
+                type="text"
+                placeholder="Search anything..."
+                className="w-full pl-9 sm:pl-12 pr-3 sm:pr-4 py-2 sm:py-2.5 bg-pageBg border border-borderSoft rounded-xl text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50 transition-all text-sm sm:text-base"
+                disabled
+              />
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 sm:gap-4 lg:gap-5 flex-shrink-0">
+          <div className="w-10 h-10 bg-sidebarMuted/20 rounded-full animate-pulse" />
+        </div>
+      </header>
+    )
+  }
   
   const [showNotifications, setShowNotifications] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
@@ -35,11 +66,26 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
   const { data: notificationsData, refetch: refetchNotifications } = useQuery({
     queryKey: ['notifications'],
     queryFn: async () => {
-      const response = await fetch('/api/notifications?limit=10')
-      if (!response.ok) throw new Error('Failed to fetch notifications')
-      return response.json()
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
+      try {
+        const response = await fetch('/api/notifications?limit=10', {
+          signal: controller.signal,
+        })
+        clearTimeout(timeoutId)
+        if (!response.ok) throw new Error('Failed to fetch notifications')
+        return response.json()
+      } catch (error: any) {
+        clearTimeout(timeoutId)
+        if (error.name === 'AbortError') {
+          console.warn('Notifications fetch timed out')
+        }
+        throw error
+      }
     },
     refetchInterval: 30000, // Refetch every 30 seconds
+    retry: 1, // Only retry once
+    staleTime: 60000, // Consider data stale after 1 minute
   })
 
   const notifications = notificationsData?.notifications || []

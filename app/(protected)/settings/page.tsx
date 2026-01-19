@@ -412,7 +412,7 @@ export default function SettingsPage() {
                 </p>
               </div>
               <div className="flex-shrink-0 w-full sm:w-auto">
-                <SelectiveDataDeletion />
+              <SelectiveDataDeletion />
               </div>
             </div>
           </div>
@@ -425,7 +425,7 @@ export default function SettingsPage() {
                 </p>
               </div>
               <div className="flex-shrink-0 w-full sm:w-auto">
-                <ClearDatabaseButton />
+              <ClearDatabaseButton />
               </div>
             </div>
           </div>

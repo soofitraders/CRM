@@ -213,6 +213,9 @@ export async function POST(request: NextRequest) {
       (booking.customer as any)?.toString(),
       (booking.vehicle as any)?.toString()
     )
+    // Invalidate vehicle cache since availability depends on bookings
+    const { invalidateVehicleCache } = await import('@/lib/cache/cacheUtils')
+    invalidateVehicleCache((booking.vehicle as any)?.toString())
     invalidateDashboardCache()
 
     // Log activity

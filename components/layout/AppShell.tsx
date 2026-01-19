@@ -1,6 +1,7 @@
 'use client'
 
 import { ReactNode, useState, useEffect } from 'react'
+import { useSession } from 'next-auth/react'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 
@@ -10,6 +11,7 @@ interface AppShellProps {
 
 export default function AppShell({ children }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const { status } = useSession()
 
   // Close sidebar on ESC key
   useEffect(() => {
@@ -33,6 +35,18 @@ export default function AppShell({ children }: AppShellProps) {
       document.body.style.overflow = ''
     }
   }, [sidebarOpen])
+
+  // Show loading state while session is being checked (prevents infinite loading)
+  if (status === 'loading') {
+    return (
+      <div className="flex min-h-screen bg-pageBg items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-sidebarActiveBg border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-bodyText">Loading...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex min-h-screen bg-pageBg overflow-x-hidden">
