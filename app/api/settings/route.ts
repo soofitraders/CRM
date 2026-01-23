@@ -71,6 +71,9 @@ export async function PATCH(request: NextRequest) {
     if (data.logoUrl !== undefined) {
       settings.logoUrl = data.logoUrl
     }
+    if (data.invoiceLogoUrl !== undefined) {
+      settings.invoiceLogoUrl = data.invoiceLogoUrl
+    }
     if (data.defaultCurrency !== undefined) {
       settings.defaultCurrency = data.defaultCurrency
     }

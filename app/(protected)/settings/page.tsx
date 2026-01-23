@@ -11,6 +11,7 @@ interface Settings {
   _id?: string
   companyName: string
   logoUrl?: string
+  invoiceLogoUrl?: string
   defaultCurrency: string
   timezone: string
   defaultTaxPercent: number
@@ -26,12 +27,15 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings>({
     companyName: 'MisterWheels',
     logoUrl: '/logo.png',
+    invoiceLogoUrl: '/logo.png',
     defaultCurrency: 'AED',
     timezone: 'Asia/Dubai',
     defaultTaxPercent: 5,
   })
   const [logoPreview, setLogoPreview] = useState<string>('')
+  const [invoiceLogoPreview, setInvoiceLogoPreview] = useState<string>('')
   const [isUploadingLogo, setIsUploadingLogo] = useState(false)
+  const [isUploadingInvoiceLogo, setIsUploadingInvoiceLogo] = useState(false)
   const [preferences, setPreferences] = useState<NotificationPreferences>({
     emailNotifications: true,
     smsNotifications: false,
@@ -58,6 +62,11 @@ export default function SettingsPage() {
           setLogoPreview(data.settings.logoUrl + '?v=' + Date.now())
         } else {
           setLogoPreview('/logo.png?v=' + Date.now())
+        }
+        if (data.settings.invoiceLogoUrl) {
+          setInvoiceLogoPreview(data.settings.invoiceLogoUrl + '?v=' + Date.now())
+        } else {
+          setInvoiceLogoPreview('/logo.png?v=' + Date.now())
         }
       }
     } catch (error) {
@@ -173,6 +182,52 @@ export default function SettingsPage() {
     }
   }
 
+  const handleInvoiceLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setMessage({ type: 'error', text: 'File must be an image' })
+      return
+    }
+
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      setMessage({ type: 'error', text: 'File size must be less than 2MB' })
+      return
+    }
+
+    setIsUploadingInvoiceLogo(true)
+    setMessage(null)
+
+    try {
+      const formData = new FormData()
+      formData.append('logo', file)
+
+      const response = await fetch('/api/settings/invoice-logo', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setSettings({ ...settings, invoiceLogoUrl: data.logoUrl })
+        setInvoiceLogoPreview(data.logoUrl + '?v=' + Date.now())
+        setMessage({ type: 'success', text: 'Invoice logo uploaded successfully' })
+      } else {
+        const error = await response.json()
+        setMessage({ type: 'error', text: error.error || 'Failed to upload invoice logo' })
+      }
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error.message || 'Failed to upload invoice logo' })
+    } finally {
+      setIsUploadingInvoiceLogo(false)
+      // Reset input
+      e.target.value = ''
+    }
+  }
+
   const handlePreferencesChange = async (key: keyof NotificationPreferences, value: boolean) => {
     const newPreferences = { ...preferences, [key]: value }
     setPreferences(newPreferences)
@@ -263,6 +318,40 @@ export default function SettingsPage() {
                 </p>
                 {isUploadingLogo && (
                   <p className="text-xs text-sidebarActiveBg mt-2">Uploading logo...</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Invoice Logo Upload Section */}
+          <div className="mb-6 pb-6 border-b border-borderSoft">
+            <label className="block text-sm font-medium text-headingText mb-3">
+              Invoice Logo
+            </label>
+            <div className="flex items-start gap-6">
+              <div className="flex-shrink-0">
+                {invoiceLogoPreview && (
+                  <img
+                    src={invoiceLogoPreview}
+                    alt="Invoice Logo"
+                    className="w-32 h-20 object-contain border border-borderSoft rounded-lg bg-pageBg p-2"
+                    onError={() => setInvoiceLogoPreview('/logo.png')}
+                  />
+                )}
+              </div>
+              <div className="flex-1">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleInvoiceLogoUpload}
+                  disabled={!canEditSettings || isUploadingInvoiceLogo}
+                  className="block w-full text-sm text-bodyText file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-sidebarActiveBg file:text-white hover:file:bg-sidebarActiveBg/90 file:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+                <p className="text-xs text-sidebarMuted mt-2">
+                  Upload a logo image that will only appear on invoice PDFs (PNG, JPG, or GIF). Max size: 2MB. Recommended: 200x60px or similar aspect ratio.
+                </p>
+                {isUploadingInvoiceLogo && (
+                  <p className="text-xs text-sidebarActiveBg mt-2">Uploading invoice logo...</p>
                 )}
               </div>
             </div>

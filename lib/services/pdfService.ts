@@ -321,10 +321,9 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
     
     let logoBase64: string | null = null
     try {
-      // Try to get logo from settings first
-      const logoPath = settings?.logoUrl 
-        ? path.join(process.cwd(), 'public', settings.logoUrl.replace(/^\//, ''))
-        : path.join(process.cwd(), 'public', 'logo.png')
+      // Use invoiceLogoUrl if available, otherwise fall back to logoUrl, then default
+      const logoUrl = settings?.invoiceLogoUrl || settings?.logoUrl || '/logo.png'
+      const logoPath = path.join(process.cwd(), 'public', logoUrl.replace(/^\//, ''))
       
       if (fs.existsSync(logoPath)) {
         const logoBuffer = fs.readFileSync(logoPath)
@@ -332,10 +331,10 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
         const ext = path.extname(logoPath).toLowerCase()
         const imageType = ext === '.jpg' || ext === '.jpeg' ? 'JPEG' : ext === '.png' ? 'PNG' : 'PNG'
         logoBase64 = `data:image/${imageType.toLowerCase()};base64,${logoBuffer.toString('base64')}`
-        logger.log('[PDF] Logo loaded successfully from:', settings?.logoUrl || '/logo.png')
+        logger.log('[PDF] Invoice logo loaded successfully from:', logoUrl)
       }
     } catch (logoError) {
-      logger.error('[PDF] Error loading logo:', logoError)
+      logger.error('[PDF] Error loading invoice logo:', logoError)
     }
 
     // ============= CLEAN MINIMAL HEADER =============

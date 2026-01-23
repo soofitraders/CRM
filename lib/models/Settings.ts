@@ -3,6 +3,7 @@ import mongoose, { Schema, Document, Model } from 'mongoose'
 export interface ISettings extends Document {
   companyName: string
   logoUrl?: string // URL or path to logo file
+  invoiceLogoUrl?: string // URL or path to logo file for invoices only
   defaultCurrency: string
   timezone: string
   defaultTaxPercent: number
@@ -18,6 +19,11 @@ const SettingsSchema = new Schema<ISettings>(
       default: 'MisterWheels',
     },
     logoUrl: {
+      type: String,
+      trim: true,
+      default: '/logo.png', // Default to public logo.png
+    },
+    invoiceLogoUrl: {
       type: String,
       trim: true,
       default: '/logo.png', // Default to public logo.png

@@ -58,13 +58,14 @@ export async function createInvoiceFromBooking(bookingId: string): Promise<any> 
       throw new Error('Vehicle not found')
     }
 
-    // Calculate number of days
+    // Calculate number of days based on hours (24 hours = 1 day)
     let numberOfDays = 1 // Default to 1 day if no end date
     if (booking.endDateTime) {
       const startDate = new Date(booking.startDateTime)
       const endDate = new Date(booking.endDateTime)
       const diffTime = endDate.getTime() - startDate.getTime()
-      numberOfDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)))
+      const diffHours = diffTime / (1000 * 60 * 60)
+      numberOfDays = Math.max(1, Math.ceil(diffHours / 24))
     }
 
     // Use the booking's baseRate (entered during booking creation) instead of vehicle rates
