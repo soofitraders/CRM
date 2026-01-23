@@ -87,7 +87,6 @@ const InvestorProfileSchema = new Schema<IInvestorProfile>(
 )
 
 // Create indexes
-InvestorProfileSchema.index({ user: 1 }, { unique: true })
 InvestorProfileSchema.index({ type: 1 })
 InvestorProfileSchema.index({ taxId: 1 })
 InvestorProfileSchema.index({ iban: 1 })

@@ -99,7 +99,6 @@ const InvoiceSchema = new Schema<IInvoice>(
 )
 
 // Create indexes
-InvoiceSchema.index({ invoiceNumber: 1 }, { unique: true })
 InvoiceSchema.index({ booking: 1 })
 InvoiceSchema.index({ status: 1 })
 InvoiceSchema.index({ issueDate: -1 })

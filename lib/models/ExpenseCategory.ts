@@ -47,7 +47,6 @@ const ExpenseCategorySchema = new Schema<IExpenseCategory>(
 )
 
 // Create indexes
-ExpenseCategorySchema.index({ code: 1 }, { unique: true })
 ExpenseCategorySchema.index({ name: 1 })
 ExpenseCategorySchema.index({ type: 1 })
 ExpenseCategorySchema.index({ isActive: 1 })

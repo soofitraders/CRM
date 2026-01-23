@@ -101,7 +101,6 @@ const RoleSchema = new Schema<IRole>(
 )
 
 // Create indexes
-RoleSchema.index({ name: 1 }, { unique: true })
 RoleSchema.index({ isSystemRole: 1 })
 RoleSchema.index({ createdBy: 1 })
 

@@ -110,7 +110,6 @@ const CustomerProfileSchema = new Schema<ICustomerProfile>(
 )
 
 // Create indexes
-CustomerProfileSchema.index({ user: 1 }, { unique: true })
 CustomerProfileSchema.index({ drivingLicenseNumber: 1 })
 CustomerProfileSchema.index({ nationalId: 1 })
 CustomerProfileSchema.index({ passportNumber: 1 })

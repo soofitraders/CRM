@@ -148,8 +148,6 @@ const VehicleSchema = new Schema<IVehicle>(
 )
 
 // Create indexes
-VehicleSchema.index({ plateNumber: 1 }, { unique: true })
-VehicleSchema.index({ vin: 1 }, { unique: true })
 VehicleSchema.index({ status: 1 })
 VehicleSchema.index({ ownershipType: 1 })
 VehicleSchema.index({ investor: 1 })
