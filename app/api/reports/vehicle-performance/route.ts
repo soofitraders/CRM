@@ -204,10 +204,12 @@ export async function GET(request: NextRequest) {
         .filter((item: any) => {
           const label = (item.label || '').toLowerCase()
           return item.amount > 0 && (
-            label.includes('fine') || 
-            label.includes('penalty') || 
+            label.includes('fine') ||
+            label.includes('penalty') ||
             label.includes('government') ||
-            label.includes('traffic')
+            label.includes('traffic') ||
+            label.includes('salik') ||
+            label.includes('toll')
           )
         })
         .reduce((sum: number, item: any) => sum + item.amount, 0)

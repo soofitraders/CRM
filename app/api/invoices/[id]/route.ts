@@ -184,10 +184,12 @@ export async function PATCH(
       const fineItems = data.items.filter(item => {
         const label = item.label.toLowerCase()
         return item.amount > 0 && (
-          label.includes('fine') || 
-          label.includes('penalty') || 
+          label.includes('fine') ||
+          label.includes('penalty') ||
           label.includes('government') ||
-          label.includes('traffic')
+          label.includes('traffic') ||
+          label.includes('salik') ||
+          label.includes('toll')
         )
       })
       
@@ -198,10 +200,12 @@ export async function PATCH(
           .filter((item: any) => {
             const label = item.label.toLowerCase()
             return item.amount > 0 && (
-              label.includes('fine') || 
-              label.includes('penalty') || 
+              label.includes('fine') ||
+              label.includes('penalty') ||
               label.includes('government') ||
-              label.includes('traffic')
+              label.includes('traffic') ||
+              label.includes('salik') ||
+              label.includes('toll')
             )
           })
           .map((item: any) => item.label)

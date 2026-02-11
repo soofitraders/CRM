@@ -28,7 +28,13 @@ export async function GET(request: NextRequest) {
     await connectDB()
 
     const searchParams = request.nextUrl.searchParams
-    const type = searchParams.get('type') as 'REVENUE' | 'AR' | 'INVESTOR' | 'UTILIZATION' | null
+    const type = searchParams.get('type') as
+      | 'REVENUE'
+      | 'AR'
+      | 'INVESTOR'
+      | 'UTILIZATION'
+      | 'CARS'
+      | null
 
     const filter: any = { user: user._id }
     if (type) {

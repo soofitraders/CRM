@@ -101,25 +101,85 @@ export async function GET(request: NextRequest) {
       logger.log('No invoices found matching criteria')
     }
 
+    const isSalikCharge = (item: any): boolean => {
+      if (!item || typeof item.label !== 'string') return false
+      const label = item.label.toLowerCase()
+      return item.amount > 0 && (label.includes('salik') || label.includes('toll'))
+    }
+
+    const isFineCharge = (item: any): boolean => {
+      if (!item || typeof item.label !== 'string') return false
+      const label = item.label.toLowerCase()
+      return item.amount > 0 && (
+        label.includes('fine') ||
+        label.includes('penalty') ||
+        label.includes('government') ||
+        label.includes('traffic')
+      )
+    }
+
+    const sumCharges = (items: any[], predicate: (item: any) => boolean): number => {
+      if (!items || !Array.isArray(items)) return 0
+      return items.filter(predicate).reduce((sum, item) => sum + item.amount, 0)
+    }
+
     // 7. Map to export-friendly format
-    const exportData = invoices.map((invoice: any) => {
+    const exportRows = invoices.map((invoice: any) => {
       const customerName = invoice.booking?.customer?.user?.name || 'N/A'
-      const customerEmail = invoice.booking?.customer?.user?.email || 'N/A'
-      
+      const items = invoice.items || []
+      const salikCharges = sumCharges(items, isSalikCharge)
+      const finesAmount = sumCharges(items, isFineCharge)
+      const advanceAmount = invoice.paidAmount || 0
+      const totalAmount = invoice.total || 0
+
       return {
         invoiceNumber: invoice.invoiceNumber || 'N/A',
         issueDate: invoice.issueDate ? formatDate(new Date(invoice.issueDate), 'yyyy-MM-dd') : 'N/A',
         dueDate: invoice.dueDate ? formatDate(new Date(invoice.dueDate), 'yyyy-MM-dd') : 'N/A',
         customerName,
-        customerEmail,
         status: invoice.status || 'N/A',
         subtotal: invoice.subtotal || 0,
         taxAmount: invoice.taxAmount || 0,
-        total: invoice.total || 0,
-        paidAmount: invoice.paidAmount || 0,
-        balance: (invoice.total || 0) - (invoice.paidAmount || 0),
+        salikCharges,
+        finesAmount,
+        total: totalAmount,
+        advanceAmount,
+        balance: totalAmount - advanceAmount,
       }
     })
+
+    const totals = exportRows.reduce(
+      (acc, row) => ({
+        subtotal: acc.subtotal + (row.subtotal || 0),
+        taxAmount: acc.taxAmount + (row.taxAmount || 0),
+        salikCharges: acc.salikCharges + (row.salikCharges || 0),
+        finesAmount: acc.finesAmount + (row.finesAmount || 0),
+        total: acc.total + (row.total || 0),
+        advanceAmount: acc.advanceAmount + (row.advanceAmount || 0),
+        balance: acc.balance + (row.balance || 0),
+      }),
+      {
+        subtotal: 0,
+        taxAmount: 0,
+        salikCharges: 0,
+        finesAmount: 0,
+        total: 0,
+        advanceAmount: 0,
+        balance: 0,
+      }
+    )
+
+    const exportData = [
+      ...exportRows,
+      {
+        invoiceNumber: 'TOTAL',
+        issueDate: '',
+        dueDate: '',
+        customerName: '',
+        status: '',
+        ...totals,
+      },
+    ]
 
     // 8. Define columns
     const columns = [
@@ -127,12 +187,13 @@ export async function GET(request: NextRequest) {
       { key: 'issueDate' as const, label: 'Issue Date' },
       { key: 'dueDate' as const, label: 'Due Date' },
       { key: 'customerName' as const, label: 'Customer Name' },
-      { key: 'customerEmail' as const, label: 'Customer Email' },
       { key: 'status' as const, label: 'Status' },
       { key: 'subtotal' as const, label: 'Subtotal' },
       { key: 'taxAmount' as const, label: 'Tax Amount' },
+      { key: 'salikCharges' as const, label: 'Salik Charges' },
+      { key: 'finesAmount' as const, label: 'Fines Amount' },
       { key: 'total' as const, label: 'Total' },
-      { key: 'paidAmount' as const, label: 'Paid Amount' },
+      { key: 'advanceAmount' as const, label: 'Advance Amount' },
       { key: 'balance' as const, label: 'Balance' },
     ]
 

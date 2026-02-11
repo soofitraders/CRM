@@ -27,6 +27,8 @@ interface RevenueOverviewResult {
     discounts: number
     taxCollected: number
     netRentalRevenue: number
+    salikCharges: number
+    otherFines: number
     totalBookings: number
     averageBookingValue: number
   }
@@ -36,6 +38,8 @@ interface RevenueOverviewResult {
     discounts: number
     tax: number
     netRevenue: number
+    salikCharges: number
+    otherFines: number
     bookings: number
   }>
   byBranch: Array<{
@@ -99,6 +103,18 @@ interface InvestorPayoutResult {
     totalPayout: number
     investorCount: number
   }
+}
+
+interface CarsReportResult {
+  rows: Array<{
+    vehicleId?: string
+    plateNumber: string
+    vehicleName: string
+    purchaseDate: Date
+    purchaseCost: number
+    branchId?: string
+  }>
+  totalCost: number
 }
 
 interface UtilizationParams {
@@ -207,20 +223,26 @@ export async function getRevenueOverview(
     })
   }
 
-  // Helper function to identify fines in invoice items
-  const getFinesAmount = (items: any[]): number => {
+  const isSalikCharge = (item: any): boolean => {
+    if (!item || typeof item.label !== 'string') return false
+    const label = item.label.toLowerCase()
+    return item.amount > 0 && (label.includes('salik') || label.includes('toll'))
+  }
+
+  const isOtherFineCharge = (item: any): boolean => {
+    if (!item || typeof item.label !== 'string') return false
+    const label = item.label.toLowerCase()
+    return item.amount > 0 && (
+      label.includes('fine') ||
+      label.includes('penalty') ||
+      label.includes('government') ||
+      label.includes('traffic')
+    )
+  }
+
+  const sumCharges = (items: any[], predicate: (item: any) => boolean): number => {
     if (!items || !Array.isArray(items)) return 0
-    return items
-      .filter(item => {
-        const label = (item.label || '').toLowerCase()
-        return item.amount > 0 && (
-          label.includes('fine') || 
-          label.includes('penalty') || 
-          label.includes('government') ||
-          label.includes('traffic')
-        )
-      })
-      .reduce((sum, item) => sum + item.amount, 0)
+    return items.filter(predicate).reduce((sum, item) => sum + item.amount, 0)
   }
 
   // Calculate summary metrics
@@ -228,33 +250,29 @@ export async function getRevenueOverview(
   let discounts = 0
   let taxCollected = 0
   let netRentalRevenue = 0
-  let totalFines = 0
+  let salikCharges = 0
+  let otherFines = 0
 
   filteredInvoices.forEach((invoice: any) => {
     const items = invoice.items || []
-    const finesAmount = getFinesAmount(items)
-    totalFines += finesAmount
+    const salikAmount = sumCharges(items, isSalikCharge)
+    const otherFinesAmount = sumCharges(items, isOtherFineCharge)
+    salikCharges += salikAmount
+    otherFines += otherFinesAmount
     
     items.forEach((item: { label: string; amount: number }) => {
       if (item.amount < 0) {
         discounts += Math.abs(item.amount)
       } else {
         // Exclude fines from gross rental revenue (they're expenses)
-        const label = (item.label || '').toLowerCase()
-        const isFine = item.amount > 0 && (
-          label.includes('fine') || 
-          label.includes('penalty') || 
-          label.includes('government') ||
-          label.includes('traffic')
-        )
-        if (!isFine) {
+        if (!isSalikCharge(item) && !isOtherFineCharge(item)) {
           grossRentalRevenue += item.amount
         }
       }
     })
     taxCollected += invoice.taxAmount || 0
     // Net revenue excludes fines (they're pass-through costs)
-    netRentalRevenue += (invoice.total || 0) - finesAmount
+    netRentalRevenue += (invoice.total || 0) - salikAmount - otherFinesAmount
   })
 
   // Group by period
@@ -281,21 +299,27 @@ export async function getRevenueOverview(
         discounts: 0,
         tax: 0,
         netRevenue: 0,
+        salikCharges: 0,
+        otherFines: 0,
         bookings: 0,
       })
     }
 
     const period = byPeriodMap.get(periodKey)!
     const items = invoice.items || []
-    items.forEach((item: { amount: number }) => {
+    items.forEach((item: { amount: number; label?: string }) => {
       if (item.amount < 0) {
         period.discounts += Math.abs(item.amount)
+      } else if (isSalikCharge(item)) {
+        period.salikCharges += item.amount
+      } else if (isOtherFineCharge(item)) {
+        period.otherFines += item.amount
       } else {
         period.grossRevenue += item.amount
       }
     })
     period.tax += invoice.taxAmount || 0
-    period.netRevenue += invoice.total || 0
+    period.netRevenue += (invoice.total || 0) - sumCharges(items, isSalikCharge) - sumCharges(items, isOtherFineCharge)
     period.bookings += 1
   })
 
@@ -342,6 +366,8 @@ export async function getRevenueOverview(
       discounts,
       taxCollected,
       netRentalRevenue,
+      salikCharges,
+      otherFines,
       totalBookings,
       averageBookingValue,
     },
@@ -457,6 +483,56 @@ export async function getAccountsReceivable(
     buckets,
     invoices: invoiceList.sort((a, b) => b.daysOverdue - a.daysOverdue),
   }
+}
+
+/**
+ * Get company car purchase report
+ */
+export async function getCarsReport(): Promise<CarsReportResult> {
+  await connectDB()
+
+  const { default: Expense } = await import('@/lib/models/Expense')
+  const { default: ExpenseCategory } = await import('@/lib/models/ExpenseCategory')
+
+  await ExpenseCategory.ensureDefaultCategories()
+  const purchaseCategory = await ExpenseCategory.findOne({ code: 'VEHICLE_PURCHASE' }).lean()
+
+  if (!purchaseCategory) {
+    return { rows: [], totalCost: 0 }
+  }
+
+  const expenseFilter: any = {
+    category: purchaseCategory._id,
+    isDeleted: false,
+    dateIncurred: { $exists: true },
+  }
+
+  const expenses = await Expense.find(expenseFilter)
+    .populate('vehicle', 'plateNumber brand model year ownershipType')
+    .sort({ dateIncurred: -1 })
+    .lean()
+
+  const rows = expenses
+    .filter((exp: any) => {
+      const vehicle = exp.vehicle as any
+      return vehicle && vehicle.ownershipType === 'COMPANY'
+    })
+    .map((exp: any) => {
+      const vehicle = exp.vehicle as any
+      const vehicleName = `${vehicle.brand || ''} ${vehicle.model || ''} ${vehicle.year || ''}`.trim()
+      return {
+        vehicleId: vehicle?._id ? String(vehicle._id) : undefined,
+        plateNumber: vehicle?.plateNumber || 'N/A',
+        vehicleName: vehicleName || 'N/A',
+        purchaseDate: exp.dateIncurred,
+        purchaseCost: exp.amount || 0,
+        branchId: exp.branchId,
+      }
+    })
+
+  const totalCost = rows.reduce((sum, row) => sum + (row.purchaseCost || 0), 0)
+
+  return { rows, totalCost }
 }
 
 /**

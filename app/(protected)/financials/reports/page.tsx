@@ -24,7 +24,7 @@ import {
   Cell,
 } from 'recharts'
 
-type ReportType = 'revenue' | 'ar' | 'investors' | 'utilization'
+type ReportType = 'revenue' | 'ar' | 'investors' | 'utilization' | 'cars'
 
 interface ReportPreset {
   _id: string
@@ -59,6 +59,7 @@ export default function ReportsPage() {
   const [arData, setArData] = useState<any>(null)
   const [investorData, setInvestorData] = useState<any>(null)
   const [utilizationData, setUtilizationData] = useState<any>(null)
+  const [carsData, setCarsData] = useState<any>(null)
 
   // Presets state
   const [presets, setPresets] = useState<ReportPreset[]>([])
@@ -157,6 +158,14 @@ export default function ReportsPage() {
           setUtilizationData(data)
         } else {
           throw new Error(data.error || 'Failed to load utilization report')
+        }
+      } else if (activeTab === 'cars') {
+        response = await fetch('/api/reports/cars')
+        data = await response.json()
+        if (response.ok) {
+          setCarsData(data)
+        } else {
+          throw new Error(data.error || 'Failed to load cars report')
         }
       }
     } catch (err: any) {
@@ -259,6 +268,7 @@ export default function ReportsPage() {
   }
 
   const getExportFilters = () => {
+    if (activeTab === 'cars') return {}
     const base: Record<string, any> = {
       dateFrom,
       dateTo,
@@ -284,7 +294,7 @@ export default function ReportsPage() {
 
       {/* Tabs */}
       <div className="flex gap-2 border-b border-borderSoft">
-        {(['revenue', 'ar', 'investors', 'utilization'] as ReportType[]).map((tab) => (
+        {(['revenue', 'ar', 'investors', 'utilization', 'cars'] as ReportType[]).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -294,139 +304,141 @@ export default function ReportsPage() {
                 : 'text-bodyText hover:text-headingText'
             }`}
           >
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {tab === 'cars' ? 'Cars Report' : tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
         ))}
       </div>
 
-      {/* Advanced Filters */}
-      <AdvancedFilters
-        dateFrom={dateFrom}
-        dateTo={dateTo}
-        onDateChange={(from, to) => {
-          setDateFrom(from)
-          setDateTo(to)
-        }}
-        branchId={branchId}
-        onBranchChange={setBranchId}
-        vehicleCategory={vehicleCategory}
-        onVehicleCategoryChange={setVehicleCategory}
-        customerType={customerType}
-        onCustomerTypeChange={setCustomerType}
-        branches={branches}
-        vehicleCategories={vehicleCategories}
-        showCustomerFilter={activeTab === 'revenue'}
-      />
+      {activeTab !== 'cars' && (
+        <AdvancedFilters
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onDateChange={(from, to) => {
+            setDateFrom(from)
+            setDateTo(to)
+          }}
+          branchId={branchId}
+          onBranchChange={setBranchId}
+          vehicleCategory={vehicleCategory}
+          onVehicleCategoryChange={setVehicleCategory}
+          customerType={customerType}
+          onCustomerTypeChange={setCustomerType}
+          branches={branches}
+          vehicleCategories={vehicleCategories}
+          showCustomerFilter={activeTab === 'revenue'}
+        />
+      )}
 
-      {/* Additional Report-Specific Filters */}
-      <SectionCard>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-headingText">Report Options</h3>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowSavePreset(!showSavePreset)}
-                className="flex items-center gap-2 px-4 py-2 bg-cardBg border border-borderSoft rounded-lg text-bodyText hover:bg-sidebarMuted/10"
-              >
-                <Save className="w-4 h-4" />
-                Save Preset
-              </button>
-              {presets.length > 0 && (
-                <select
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      const preset = presets.find((p) => p._id === e.target.value)
-                      if (preset) handlePresetLoad(preset)
-                    }
-                  }}
-                  className="px-4 py-2 bg-cardBg border border-borderSoft rounded-lg text-bodyText"
+      {activeTab !== 'cars' && (
+        <SectionCard>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-headingText">Report Options</h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowSavePreset(!showSavePreset)}
+                  className="flex items-center gap-2 px-4 py-2 bg-cardBg border border-borderSoft rounded-lg text-bodyText hover:bg-sidebarMuted/10"
                 >
-                  <option value="">Load Preset...</option>
-                  {presets.map((preset) => (
-                    <option key={preset._id} value={preset._id}>
-                      {preset.name}
-                    </option>
-                  ))}
-                </select>
+                  <Save className="w-4 h-4" />
+                  Save Preset
+                </button>
+                {presets.length > 0 && (
+                  <select
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        const preset = presets.find((p) => p._id === e.target.value)
+                        if (preset) handlePresetLoad(preset)
+                      }
+                    }}
+                    className="px-4 py-2 bg-cardBg border border-borderSoft rounded-lg text-bodyText"
+                  >
+                    <option value="">Load Preset...</option>
+                    {presets.map((preset) => (
+                      <option key={preset._id} value={preset._id}>
+                        {preset.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </div>
+
+            {showSavePreset && (
+              <div className="flex items-center gap-2 p-3 bg-sidebarMuted/5 rounded-lg">
+                <input
+                  type="text"
+                  value={presetName}
+                  onChange={(e) => setPresetName(e.target.value)}
+                  placeholder="Preset name..."
+                  className="flex-1 px-3 py-2 bg-cardBg border border-borderSoft rounded text-bodyText"
+                />
+                <button
+                  onClick={handlePresetSave}
+                  className="px-4 py-2 bg-sidebarActiveBg text-white rounded hover:opacity-90"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => {
+                    setShowSavePreset(false)
+                    setPresetName('')
+                  }}
+                  className="px-4 py-2 bg-cardBg border border-borderSoft rounded text-bodyText hover:bg-sidebarMuted/10"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {activeTab === 'ar' && (
+                <div>
+                  <label className="block text-sm font-medium text-bodyText mb-1">Date As Of</label>
+                  <input
+                    type="date"
+                    value={dateAsOf}
+                    onChange={(e) => setDateAsOf(e.target.value)}
+                    className="w-full px-3 py-2 bg-cardBg border border-borderSoft rounded text-bodyText"
+                  />
+                </div>
+              )}
+              {activeTab === 'revenue' && (
+                <div>
+                  <label className="block text-sm font-medium text-bodyText mb-1">Group By</label>
+                  <select
+                    value={groupBy}
+                    onChange={(e) => setGroupBy(e.target.value as 'day' | 'week' | 'month')}
+                    className="w-full px-3 py-2 bg-cardBg border border-borderSoft rounded text-bodyText"
+                  >
+                    <option value="day">Day</option>
+                    <option value="week">Week</option>
+                    <option value="month">Month</option>
+                  </select>
+                </div>
+              )}
+              {activeTab === 'investors' && (
+                <div>
+                  <label className="block text-sm font-medium text-bodyText mb-1">
+                    Commission %
+                  </label>
+                  <input
+                    type="number"
+                    value={commissionPercent}
+                    onChange={(e) => setCommissionPercent(parseFloat(e.target.value) || 20)}
+                    className="w-full px-3 py-2 bg-cardBg border border-borderSoft rounded text-bodyText"
+                    min="0"
+                    max="100"
+                  />
+                </div>
               )}
             </div>
-          </div>
 
-          {showSavePreset && (
-            <div className="flex items-center gap-2 p-3 bg-sidebarMuted/5 rounded-lg">
-              <input
-                type="text"
-                value={presetName}
-                onChange={(e) => setPresetName(e.target.value)}
-                placeholder="Preset name..."
-                className="flex-1 px-3 py-2 bg-cardBg border border-borderSoft rounded text-bodyText"
-              />
-              <button
-                onClick={handlePresetSave}
-                className="px-4 py-2 bg-sidebarActiveBg text-white rounded hover:opacity-90"
-              >
-                Save
-              </button>
-              <button
-                onClick={() => {
-                  setShowSavePreset(false)
-                  setPresetName('')
-                }}
-                className="px-4 py-2 bg-cardBg border border-borderSoft rounded text-bodyText hover:bg-sidebarMuted/10"
-              >
-                Cancel
-              </button>
+            <div className="flex items-center justify-end">
+              <ReportExportButton module={activeTab} filters={getExportFilters()} />
             </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {activeTab === 'ar' && (
-              <div>
-                <label className="block text-sm font-medium text-bodyText mb-1">Date As Of</label>
-                <input
-                  type="date"
-                  value={dateAsOf}
-                  onChange={(e) => setDateAsOf(e.target.value)}
-                  className="w-full px-3 py-2 bg-cardBg border border-borderSoft rounded text-bodyText"
-                />
-              </div>
-            )}
-            {activeTab === 'revenue' && (
-              <div>
-                <label className="block text-sm font-medium text-bodyText mb-1">Group By</label>
-                <select
-                  value={groupBy}
-                  onChange={(e) => setGroupBy(e.target.value as 'day' | 'week' | 'month')}
-                  className="w-full px-3 py-2 bg-cardBg border border-borderSoft rounded text-bodyText"
-                >
-                  <option value="day">Day</option>
-                  <option value="week">Week</option>
-                  <option value="month">Month</option>
-                </select>
-              </div>
-            )}
-            {activeTab === 'investors' && (
-              <div>
-                <label className="block text-sm font-medium text-bodyText mb-1">
-                  Commission %
-                </label>
-                <input
-                  type="number"
-                  value={commissionPercent}
-                  onChange={(e) => setCommissionPercent(parseFloat(e.target.value) || 20)}
-                  className="w-full px-3 py-2 bg-cardBg border border-borderSoft rounded text-bodyText"
-                  min="0"
-                  max="100"
-                />
-              </div>
-            )}
           </div>
-
-          <div className="flex items-center justify-end">
-            <ReportExportButton module={activeTab} filters={getExportFilters()} />
-          </div>
-        </div>
-      </SectionCard>
+        </SectionCard>
+      )}
 
       {/* Loading State */}
       {loading && (
@@ -514,7 +526,16 @@ export default function ReportsPage() {
           <SectionCard>
             <h3 className="text-lg font-semibold text-headingText mb-4">Revenue by Period</h3>
             <Table
-              headers={['Period', 'Gross Revenue', 'Discounts', 'Tax', 'Net Revenue', 'Bookings']}
+              headers={[
+                'Period',
+                'Gross Revenue',
+                'Discounts',
+                'Tax',
+                'Net Revenue',
+                'Salik Charges',
+                'Other Fines',
+                'Bookings',
+              ]}
             >
               {revenueData.byPeriod.map((period: any, idx: number) => (
                 <TableRow key={idx}>
@@ -539,6 +560,18 @@ export default function ReportsPage() {
                   </TableCell>
                   <TableCell>
                     AED {period.netRevenue.toLocaleString('en-US', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </TableCell>
+                  <TableCell>
+                    AED {period.salikCharges.toLocaleString('en-US', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </TableCell>
+                  <TableCell>
+                    AED {period.otherFines.toLocaleString('en-US', {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,
                     })}
@@ -666,6 +699,44 @@ export default function ReportsPage() {
                   <TableCell>{invoice.bucket}</TableCell>
                 </TableRow>
               ))}
+            </Table>
+          </SectionCard>
+        </div>
+      )}
+
+      {/* Cars Report */}
+      {activeTab === 'cars' && carsData && !loading && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-end">
+            <ReportExportButton module="cars" filters={{}} />
+          </div>
+          <SectionCard>
+            <h3 className="text-lg font-semibold text-headingText mb-4">Company Car Purchases</h3>
+            <Table headers={['Vehicle', 'Plate Number', 'Purchase Date', 'Purchase Price']}>
+              {carsData.rows.map((row: any, idx: number) => (
+                <TableRow key={idx}>
+                  <TableCell>{row.vehicleName}</TableCell>
+                  <TableCell>{row.plateNumber}</TableCell>
+                  <TableCell>{format(new Date(row.purchaseDate), 'MMM dd, yyyy')}</TableCell>
+                  <TableCell>
+                    AED {row.purchaseCost.toLocaleString('en-US', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </TableCell>
+                </TableRow>
+              ))}
+              <TableRow>
+                <TableCell className="font-semibold">Total</TableCell>
+                <TableCell>{''}</TableCell>
+                <TableCell>{''}</TableCell>
+                <TableCell className="font-semibold">
+                  AED {carsData.totalCost.toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </TableCell>
+              </TableRow>
             </Table>
           </SectionCard>
         </div>

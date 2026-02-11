@@ -7,7 +7,7 @@ import connectDB from '@/lib/db'
 import { hasRole, getCurrentUser } from '@/lib/auth'
 import { exportToCSV, exportToExcel, exportToPDF } from '@/lib/services/exportService'
 import ExportLog from '@/lib/models/ExportLog'
-import { getRevenueOverview } from '@/lib/services/reportingService'
+import { getCarsReport } from '@/lib/services/reportingService'
 import { format as formatDate } from 'date-fns'
 import { logger } from '@/lib/utils/performance'
 
@@ -37,87 +37,31 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams
     const format = searchParams.get('format') || 'csv'
-    const dateFrom = searchParams.get('dateFrom')
-    const dateTo = searchParams.get('dateTo')
-    const branchId = searchParams.get('branchId') || undefined
-    const vehicleCategory = searchParams.get('vehicleCategory') || undefined
-    const customerType = searchParams.get('customerType') || undefined
-    const groupBy = (searchParams.get('groupBy') || 'day') as 'day' | 'week' | 'month'
 
-    if (!dateFrom || !dateTo) {
-      clearTimeout(timeoutId)
-      return NextResponse.json({ error: 'dateFrom and dateTo are required' }, { status: 400 })
-    }
+    const carsData = await getCarsReport()
 
-    logger.log(`Revenue export - Format: ${format}, User: ${user.email}`)
+    const exportRows = carsData.rows.map((row) => ({
+      vehicleName: row.vehicleName,
+      plateNumber: row.plateNumber,
+      purchaseDate: row.purchaseDate ? formatDate(new Date(row.purchaseDate), 'yyyy-MM-dd') : 'N/A',
+      purchaseCost: row.purchaseCost || 0,
+    }))
 
-    // Get revenue data
-    const revenueData = await getRevenueOverview({
-      dateFrom: new Date(dateFrom),
-      dateTo: new Date(dateTo),
-      branchId,
-      vehicleCategory: vehicleCategory as any,
-      customerType: customerType as any,
-      groupBy,
-    })
-
-    // Prepare export data
     const exportData = [
-      // Summary row
+      ...exportRows,
       {
-        metric: 'Gross Rental Revenue',
-        value: revenueData.summary.grossRentalRevenue,
+        vehicleName: 'TOTAL',
+        plateNumber: '',
+        purchaseDate: '',
+        purchaseCost: carsData.totalCost || 0,
       },
-      {
-        metric: 'Discounts',
-        value: revenueData.summary.discounts,
-      },
-      {
-        metric: 'Tax Collected',
-        value: revenueData.summary.taxCollected,
-      },
-      {
-        metric: 'Net Rental Revenue',
-        value: revenueData.summary.netRentalRevenue,
-      },
-      {
-        metric: 'Salik Charges',
-        value: revenueData.summary.salikCharges,
-      },
-      {
-        metric: 'Other Fines',
-        value: revenueData.summary.otherFines,
-      },
-      {
-        metric: 'Total Bookings',
-        value: revenueData.summary.totalBookings,
-      },
-      {
-        metric: 'Average Booking Value',
-        value: revenueData.summary.averageBookingValue,
-      },
-      // Period breakdown
-      ...revenueData.byPeriod.map((p) => ({
-        period: p.period,
-        grossRevenue: p.grossRevenue,
-        discounts: p.discounts,
-        tax: p.tax,
-        netRevenue: p.netRevenue,
-        salikCharges: p.salikCharges,
-        otherFines: p.otherFines,
-        bookings: p.bookings,
-      })),
     ]
 
     const columns = [
-      { key: 'period' as const, label: 'Period' },
-      { key: 'grossRevenue' as const, label: 'Gross Revenue' },
-      { key: 'discounts' as const, label: 'Discounts' },
-      { key: 'tax' as const, label: 'Tax' },
-      { key: 'netRevenue' as const, label: 'Net Revenue' },
-      { key: 'salikCharges' as const, label: 'Salik Charges' },
-      { key: 'otherFines' as const, label: 'Other Fines' },
-      { key: 'bookings' as const, label: 'Bookings' },
+      { key: 'vehicleName' as const, label: 'Vehicle' },
+      { key: 'plateNumber' as const, label: 'Plate Number' },
+      { key: 'purchaseDate' as const, label: 'Purchase Date' },
+      { key: 'purchaseCost' as const, label: 'Purchase Price' },
     ]
 
     let fileBuffer: Buffer
@@ -135,7 +79,7 @@ export async function GET(request: NextRequest) {
         contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         fileExtension = 'xlsx'
       } else if (format === 'pdf') {
-        fileBuffer = await exportToPDF('Revenue Report', exportData as any, columns as any)
+        fileBuffer = await exportToPDF('Cars Report', exportData as any, columns as any)
         contentType = 'application/pdf'
         fileExtension = 'pdf'
       } else {
@@ -156,31 +100,29 @@ export async function GET(request: NextRequest) {
         user: user._id,
         module: 'FINANCIALS',
         format: format.toUpperCase() as 'CSV' | 'EXCEL' | 'PDF',
-        filters: { dateFrom, dateTo, branchId, vehicleCategory, customerType, groupBy },
+        filters: {},
         rowCount: exportData.length,
       })
     } catch (logError) {
-      logger.error('Export logging failed:', logError)
+      logger.error('Failed to log export:', logError)
     }
 
-    clearTimeout(timeoutId)
     const timestamp = formatDate(new Date(), 'yyyyMMdd-HHmmss')
-    const filename = `revenue-report-${timestamp}.${fileExtension}`
+    const filename = `cars-report-${timestamp}.${fileExtension}`
 
+    clearTimeout(timeoutId)
     return new NextResponse(fileBuffer as any, {
       headers: {
         'Content-Type': contentType,
         'Content-Disposition': `attachment; filename="${filename}"`,
         'Content-Length': fileBuffer.length.toString(),
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
       },
     })
   } catch (error: any) {
-    logger.error('Revenue export error:', error)
+    logger.error('Error exporting cars report:', error)
     return NextResponse.json(
-      { error: error.message || 'Failed to export revenue report' },
+      { error: error.message || 'Failed to export cars report' },
       { status: 500 }
     )
   }
 }
-

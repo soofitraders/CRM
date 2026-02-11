@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document, Model } from 'mongoose'
 
-export type ReportType = 'REVENUE' | 'AR' | 'INVESTOR' | 'UTILIZATION'
+export type ReportType = 'REVENUE' | 'AR' | 'INVESTOR' | 'UTILIZATION' | 'CARS'
 
 export interface IReportPreset extends Document {
   _id: string
@@ -26,7 +26,7 @@ const ReportPresetSchema = new Schema<IReportPreset>(
     },
     type: {
       type: String,
-      enum: ['REVENUE', 'AR', 'INVESTOR', 'UTILIZATION'],
+      enum: ['REVENUE', 'AR', 'INVESTOR', 'UTILIZATION', 'CARS'],
       required: true,
     },
     filters: {

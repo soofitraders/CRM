@@ -5,7 +5,7 @@ import { Download, FileText, FileSpreadsheet, File } from 'lucide-react'
 import { logger } from '@/lib/utils/logger'
 
 interface ReportExportButtonProps {
-  module: 'revenue' | 'ar' | 'investors' | 'utilization' | 'pnl'
+  module: 'revenue' | 'ar' | 'investors' | 'utilization' | 'pnl' | 'cars'
   filters: Record<string, any>
 }
 
