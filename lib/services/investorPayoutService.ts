@@ -406,6 +406,15 @@ export async function updateInvestorPayoutStatus(
     }
   }
 
+  if (updates.status === 'PAID') {
+    try {
+      const { safeLedger, ledgerFromInvestorPayout } = await import('@/lib/services/ledgerService')
+      void safeLedger(() => ledgerFromInvestorPayout(String(id)))
+    } catch {
+      /* non-fatal */
+    }
+  }
+
   // Return updated payout
   const updatedPayout = await InvestorPayout.findById(id)
     .populate({

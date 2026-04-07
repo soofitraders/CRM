@@ -77,6 +77,15 @@ export async function createSalaryWithExpense(
   salaryRecord.expense = expense._id as mongoose.Types.ObjectId
   await salaryRecord.save()
 
+  if (salaryRecord.status === 'PAID') {
+    try {
+      const { safeLedger, ledgerFromSalaryRecord } = await import('@/lib/services/ledgerService')
+      void safeLedger(() => ledgerFromSalaryRecord(String(salaryRecord._id)))
+    } catch {
+      /* non-fatal */
+    }
+  }
+
   // Return populated salary record
   return await SalaryRecord.findById(salaryRecord._id)
     .populate('staffUser', 'name email role')
@@ -189,6 +198,15 @@ export async function updateSalaryWithExpense(
   }
 
   await salaryRecord.save()
+
+  if (salaryRecord.status === 'PAID') {
+    try {
+      const { safeLedger, ledgerFromSalaryRecord } = await import('@/lib/services/ledgerService')
+      void safeLedger(() => ledgerFromSalaryRecord(String(salaryRecord._id)))
+    } catch {
+      /* non-fatal */
+    }
+  }
 
   // Return updated salary record
   return await SalaryRecord.findById(salaryRecord._id)

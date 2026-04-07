@@ -211,7 +211,7 @@ export default function VehiclePerformancePage() {
               </p>
               {!purchaseCost.hasPurchaseCost && (
                 <p className="text-xs text-sidebarMuted mt-1">
-                  Add expense with "PURCHASE PRICE FROM AUCTION" category
+                  {`Add expense with "PURCHASE PRICE FROM AUCTION" category`}
                 </p>
               )}
             </div>

@@ -75,6 +75,7 @@ import {
   User,
   Home,
   ClipboardList,
+  BookOpen,
 } from 'lucide-react'
 
 interface MenuSection {
@@ -126,6 +127,7 @@ const menuSections: MenuSection[] = [
     icon: DollarSign,
     items: [
       { label: 'Financial Overview', path: '/financials', icon: DollarSign },
+      { label: 'General Ledger', path: '/ledger', icon: BookOpen, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'FINANCE'] },
       { label: 'Reports', path: '/financials/reports', icon: BarChart3 },
       { label: 'Expenses', path: '/financials/management/expenses', icon: Receipt, roles: ['SUPER_ADMIN', 'ADMIN', 'FINANCE'] },
       { label: 'Recurring Expenses', path: '/financials/management/recurring-expenses', icon: CalendarIcon, roles: ['SUPER_ADMIN', 'ADMIN', 'FINANCE'] },

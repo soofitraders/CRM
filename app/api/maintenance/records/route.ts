@@ -204,6 +204,13 @@ export async function POST(request: NextRequest) {
     await record.populate('maintenanceSchedule', 'serviceType scheduleType')
     await record.populate('createdBy', 'name email')
 
+    try {
+      const { safeLedger, ledgerFromMaintenanceRecord } = await import('@/lib/services/ledgerService')
+      void safeLedger(() => ledgerFromMaintenanceRecord(String(record._id)))
+    } catch {
+      /* non-fatal */
+    }
+
     return NextResponse.json({ record }, { status: 201 })
   } catch (error: any) {
     logger.error('Error creating maintenance record:', error)

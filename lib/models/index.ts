@@ -17,6 +17,7 @@ export { default as Expense } from './Expense'
 export { default as SalaryRecord } from './SalaryRecord'
 export { default as InvestorPayout } from './InvestorPayout'
 export { default as DashboardWidget } from './DashboardWidget'
+export { default as LedgerEntry } from './LedgerEntry'
 
 // Export types
 export type { IUser, UserRole, UserStatus } from './User'
@@ -37,4 +38,6 @@ export type { IExpense } from './Expense'
 export type { ISalaryRecord, SalaryStatus } from './SalaryRecord'
 export type { IInvestorPayout, InvestorPayoutStatus } from './InvestorPayout'
 export type { IDashboardWidget, WidgetType, TimeRange } from './DashboardWidget'
+export type { ILedgerEntry as ILedgerEntryModel } from './LedgerEntry'
+export type { LedgerDirection, LedgerEntryType } from '@/types/ledger'
 

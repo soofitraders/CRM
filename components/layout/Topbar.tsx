@@ -25,8 +25,52 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
   const router = useRouter()
   const userName = session?.user?.name || 'Admin User'
   const userEmail = session?.user?.email || 'admin@misterwheels.com'
-  
-  // Prevent rendering if session is still loading (prevents infinite loading)
+
+  const [showNotifications, setShowNotifications] = useState(false)
+  const [showProfile, setShowProfile] = useState(false)
+  const notificationsRef = useRef<HTMLDivElement>(null)
+  const profileRef = useRef<HTMLDivElement>(null)
+
+  const { data: notificationsData, refetch: refetchNotifications } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: async () => {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
+      try {
+        const response = await fetch('/api/notifications?limit=10', {
+          signal: controller.signal,
+        })
+        clearTimeout(timeoutId)
+        if (!response.ok) throw new Error('Failed to fetch notifications')
+        return response.json()
+      } catch (error: any) {
+        clearTimeout(timeoutId)
+        if (error.name === 'AbortError') {
+          console.warn('Notifications fetch timed out')
+        }
+        throw error
+      }
+    },
+    refetchInterval: 30000, // Refetch every 30 seconds
+    retry: 1, // Only retry once
+    staleTime: 60000, // Consider data stale after 1 minute
+    enabled: status === 'authenticated',
+  })
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
+        setShowNotifications(false)
+      }
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setShowProfile(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   if (status === 'loading') {
     return (
       <header className="h-16 lg:h-20 bg-cardBg border-b border-borderSoft flex items-center justify-between px-4 sm:px-6 lg:px-8 sticky top-0 z-40 shadow-sm">
@@ -56,55 +100,9 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
       </header>
     )
   }
-  
-  const [showNotifications, setShowNotifications] = useState(false)
-  const [showProfile, setShowProfile] = useState(false)
-  const notificationsRef = useRef<HTMLDivElement>(null)
-  const profileRef = useRef<HTMLDivElement>(null)
-
-  // Fetch notifications
-  const { data: notificationsData, refetch: refetchNotifications } = useQuery({
-    queryKey: ['notifications'],
-    queryFn: async () => {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
-      try {
-        const response = await fetch('/api/notifications?limit=10', {
-          signal: controller.signal,
-        })
-        clearTimeout(timeoutId)
-        if (!response.ok) throw new Error('Failed to fetch notifications')
-        return response.json()
-      } catch (error: any) {
-        clearTimeout(timeoutId)
-        if (error.name === 'AbortError') {
-          console.warn('Notifications fetch timed out')
-        }
-        throw error
-      }
-    },
-    refetchInterval: 30000, // Refetch every 30 seconds
-    retry: 1, // Only retry once
-    staleTime: 60000, // Consider data stale after 1 minute
-  })
 
   const notifications = notificationsData?.notifications || []
   const unreadCount = notificationsData?.unreadCount || 0
-
-  // Close dropdowns when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
-        setShowNotifications(false)
-      }
-      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
-        setShowProfile(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
 
   const handleMarkAsRead = async (notificationId: string) => {
     try {

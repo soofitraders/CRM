@@ -200,6 +200,13 @@ export async function PATCH(
     )
     invalidateDashboardCache()
 
+    try {
+      const { safeLedger, ledgerFromBookingDeposit } = await import('@/lib/services/ledgerService')
+      void safeLedger(() => ledgerFromBookingDeposit(String(booking._id)))
+    } catch {
+      /* non-fatal */
+    }
+
     const updatedBooking = await Booking.findById(booking._id)
       .populate('vehicle', 'plateNumber brand model')
       .populate('customer')

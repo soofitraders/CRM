@@ -161,6 +161,13 @@ export async function createInvoiceFromBooking(bookingId: string): Promise<any> 
       throw new Error('Failed to create invoice')
     }
 
+    try {
+      const { safeLedger, ledgerFromInvoice } = await import('@/lib/services/ledgerService')
+      void safeLedger(() => ledgerFromInvoice(String(invoice._id)))
+    } catch {
+      /* non-fatal */
+    }
+
     return invoice
   } catch (error: any) {
     logger.error('Error creating invoice from booking:', error)
@@ -235,6 +242,13 @@ export async function createCustomInvoice(data: {
     })
 
     await invoice.save()
+
+    try {
+      const { safeLedger, ledgerFromInvoice } = await import('@/lib/services/ledgerService')
+      void safeLedger(() => ledgerFromInvoice(String(invoice._id)))
+    } catch {
+      /* non-fatal */
+    }
 
     // Create expense records for fines
     const fineItems = data.items.filter(item => {

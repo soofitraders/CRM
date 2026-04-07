@@ -275,6 +275,13 @@ export async function POST(request: NextRequest) {
       .populate('bookedBy', 'name email')
       .lean()
 
+    try {
+      const { safeLedger, ledgerFromBookingDeposit } = await import('@/lib/services/ledgerService')
+      void safeLedger(() => ledgerFromBookingDeposit(String(booking._id)))
+    } catch {
+      /* non-fatal */
+    }
+
     return NextResponse.json({ booking: populatedBooking }, { status: 201 })
   } catch (error: any) {
     if (error.name === 'ZodError') {

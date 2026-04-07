@@ -66,14 +66,6 @@ function FinancialsContent() {
     (searchParams.get('tab') as 'invoices' | 'payments') || 'invoices'
   )
   const [invoices, setInvoices] = useState<Invoice[]>([])
-  
-  // Debug: Log invoices state changes
-  useEffect(() => {
-    console.log('[Financials] Invoices state updated:', invoices?.length || 0, 'invoices')
-    if (invoices && invoices.length > 0) {
-      console.log('[Financials] First invoice structure:', JSON.stringify(invoices[0], null, 2))
-    }
-  }, [invoices])
   const [payments, setPayments] = useState<Payment[]>([])
   const [invoicesPagination, setInvoicesPagination] = useState({
     page: 1,
@@ -137,11 +129,8 @@ function FinancialsContent() {
       params.append('page', invoicesPagination.page.toString())
       params.append('limit', invoicesPagination.limit.toString())
 
-      console.log('[Financials] Fetching invoices with params:', params.toString())
       const response = await fetch(`/api/invoices?${params.toString()}`)
-      
-      console.log('[Financials] Invoice response status:', response.status, response.statusText)
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
         console.error('[Financials] Invoice fetch error:', errorData)
@@ -151,9 +140,7 @@ function FinancialsContent() {
       }
       
       const data: InvoicesResponse = await response.json()
-      console.log('[Financials] Invoices loaded:', data.invoices?.length || 0, 'invoices')
-      console.log('[Financials] Invoice data structure:', JSON.stringify(data.invoices?.[0] || {}, null, 2))
-      
+
       // Ensure invoices is always an array and clean up any invalid entries
       let invoicesArray: Invoice[] = []
       if (Array.isArray(data.invoices)) {
@@ -164,7 +151,6 @@ function FinancialsContent() {
           return inv._id != null
         })
       }
-      console.log('[Financials] Cleaned invoices array:', invoicesArray.length, 'valid invoices')
       setInvoices(invoicesArray)
       // Clear selections when data changes
       setSelectedInvoices(new Set())
@@ -556,7 +542,6 @@ function FinancialsContent() {
                       'Booking #',
                       'Customer',
                       'Issue Date',
-                      'Due Date',
                       'Total',
                       'Status',
                       'Actions',
@@ -683,7 +668,6 @@ function FinancialsContent() {
                         )}
                       </TableCell>
                       <TableCell>{invoice.issueDate ? formatDate(invoice.issueDate) : 'N/A'}</TableCell>
-                      <TableCell>{invoice.dueDate ? formatDate(invoice.dueDate) : 'N/A'}</TableCell>
                       <TableCell className="font-medium">
                         {formatCurrency(invoice.total || 0)}
                       </TableCell>
