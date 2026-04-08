@@ -222,13 +222,6 @@ export async function POST(request: NextRequest) {
       .populate('createdBy', 'name email')
       .lean()
 
-    try {
-      const { safeLedger, ledgerFromExpense } = await import('@/lib/services/ledgerService')
-      void safeLedger(() => ledgerFromExpense(String(expense._id)))
-    } catch {
-      /* ledger is non-fatal */
-    }
-
     return NextResponse.json({ expense: populatedExpense }, { status: 201 })
   } catch (error: any) {
       logger.error('Error creating expense:', error)

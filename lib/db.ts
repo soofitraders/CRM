@@ -72,19 +72,30 @@ async function connectDB(): Promise<typeof mongoose> {
     throw e
   }
 
+  try {
+    const { startAutoPurge } = await import('@/lib/startup')
+    startAutoPurge()
+  } catch {
+    /* cache purge is optional; avoid breaking DB if startup fails to load */
+  }
+
   return cached.conn
 }
 
-mongoose.connection.on('connected', () => {
-  logger.log('Mongoose connected to MongoDB')
-})
-
-mongoose.connection.on('error', (err) => {
-  logger.error('Mongoose connection error:', err)
-})
-
-mongoose.connection.on('disconnected', () => {
-  logger.log('Mongoose disconnected from MongoDB')
-})
+// Register once: dev HMR can re-evaluate this module and stack listeners otherwise.
+const g = globalThis as typeof globalThis & { __ledgerMongooseLogHooks?: boolean }
+if (!g.__ledgerMongooseLogHooks) {
+  g.__ledgerMongooseLogHooks = true
+  mongoose.connection.setMaxListeners(32)
+  mongoose.connection.on('connected', () => {
+    logger.log('Mongoose connected to MongoDB')
+  })
+  mongoose.connection.on('error', (err) => {
+    logger.error('Mongoose connection error:', err)
+  })
+  mongoose.connection.on('disconnected', () => {
+    logger.log('Mongoose disconnected from MongoDB')
+  })
+}
 
 export default connectDB

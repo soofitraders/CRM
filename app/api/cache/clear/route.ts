@@ -1,44 +1,42 @@
 export const dynamic = 'force-dynamic'
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
+import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/authOptions'
-import { invalidateAllCache, invalidateCache } from '@/lib/cache/cacheUtils'
-import { isSuperAdmin } from '@/lib/auth'
-import { getCurrentUser } from '@/lib/auth'
-import { logger } from '@/lib/utils/performance'
+import { NextResponse } from 'next/server'
+import { cache } from '@/lib/cache'
 
-// POST - Clear cache (admin only)
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
+    if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const user = await getCurrentUser()
-    if (!isSuperAdmin(user)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
     const body = await request.json().catch(() => ({}))
-    const { pattern } = body
+    const prefix = body.prefix as string | undefined
 
-    if (pattern) {
-      const count = invalidateCache(pattern)
-      return NextResponse.json({ 
-        message: `Cleared ${count} cache entries matching pattern: ${pattern}` 
-      })
+    let cleared: number
+    if (prefix) {
+      cleared = cache.deletePrefix(prefix)
+      console.log(`[CACHE] Cleared ${cleared} entries with prefix: ${prefix}`)
     } else {
-      invalidateAllCache()
-      return NextResponse.json({ message: 'All cache cleared' })
+      const stats = cache.stats()
+      cleared = stats.size
+      cache.clear()
     }
-  } catch (error: any) {
-    logger.error('Error clearing cache:', error)
-    return NextResponse.json(
-      { error: 'Failed to clear cache' },
-      { status: 500 }
-    )
+
+    return NextResponse.json({ success: true, cleared })
+  } catch (error) {
+    return NextResponse.json({ error: String(error) }, { status: 500 })
   }
 }
 
+export async function GET() {
+  try {
+    const purged = cache.purgeExpired()
+    const stats = cache.stats()
+    return NextResponse.json({ ...stats, purged })
+  } catch (error) {
+    return NextResponse.json({ error: String(error) }, { status: 500 })
+  }
+}

@@ -113,12 +113,6 @@ export async function processRecurringExpenses(): Promise<{
         expenseId: String(expense._id),
       })
 
-      try {
-        const { safeLedger, ledgerFromExpense } = await import('@/lib/services/ledgerService')
-        void safeLedger(() => ledgerFromExpense(String(expense._id)))
-      } catch {
-        /* non-fatal */
-      }
     } catch (error: any) {
       logger.error(
         `Error processing recurring expense ${recurringExpense._id}:`,

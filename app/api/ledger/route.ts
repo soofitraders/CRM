@@ -6,45 +6,24 @@ import { authOptions } from '@/lib/authOptions'
 import connectDB from '@/lib/db'
 import { getCurrentUser, hasRole } from '@/lib/auth'
 import LedgerEntry from '@/lib/models/LedgerEntry'
-import { buildLedgerMatch, computeBalance } from '@/lib/services/ledgerService'
-import { logger } from '@/lib/utils/performance'
 
 const LEDGER_ROLES = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'FINANCE'] as const
 
-function toJson(e: Record<string, unknown>) {
-  const refId = e.referenceId != null ? String(e.referenceId) : ''
+function serializeEntry(doc: Record<string, unknown>) {
+  const refId = doc.referenceId != null ? String(doc.referenceId) : undefined
   return {
-    _id: String(e._id),
-    date: e.date instanceof Date ? e.date.toISOString() : e.date,
-    valueDate: e.valueDate ? (e.valueDate instanceof Date ? e.valueDate.toISOString() : e.valueDate) : undefined,
-    entryType: e.entryType,
-    direction: e.direction,
-    amount: e.amount,
-    currency: e.currency,
-    description: e.description,
-    referenceModel: e.referenceModel ?? '',
+    ...doc,
+    _id: String(doc._id),
+    date: doc.date instanceof Date ? doc.date.toISOString() : doc.date,
+    valueDate: doc.valueDate instanceof Date ? (doc.valueDate as Date).toISOString() : doc.valueDate,
     referenceId: refId,
-    bookingId: e.bookingId ? String(e.bookingId) : undefined,
-    customerId: e.customerId ? String(e.customerId) : undefined,
-    vehicleId: e.vehicleId ? String(e.vehicleId) : undefined,
-    userId: e.userId ? String(e.userId) : undefined,
-    accountType: e.accountType,
-    accountLabel: e.accountLabel,
-    bankName: e.bankName,
-    transferToAccount: e.transferToAccount,
-    transferFromAccount: e.transferFromAccount,
-    pairedEntryId: e.pairedEntryId ? String(e.pairedEntryId) : undefined,
-    category: e.category,
-    subCategory: e.subCategory,
-    isReconciled: !!e.isReconciled,
-    isVoided: !!e.isVoided,
-    voidReason: e.voidReason,
-    note: e.note,
-    runningBalance: e.runningBalance,
-    tags: e.tags,
-    attachmentUrl: e.attachmentUrl,
-    createdBy: e.createdBy ? String(e.createdBy) : undefined,
-    createdAt: e.createdAt instanceof Date ? e.createdAt.toISOString() : e.createdAt,
+    bookingId: doc.bookingId ? String(doc.bookingId) : undefined,
+    customerId: doc.customerId ? String(doc.customerId) : undefined,
+    vehicleId: doc.vehicleId ? String(doc.vehicleId) : undefined,
+    userId: doc.userId ? String(doc.userId) : undefined,
+    createdAt: doc.createdAt instanceof Date ? (doc.createdAt as Date).toISOString() : doc.createdAt,
+    updatedAt: doc.updatedAt instanceof Date ? (doc.updatedAt as Date).toISOString() : doc.updatedAt,
+    reconciledAt: doc.reconciledAt instanceof Date ? (doc.reconciledAt as Date).toISOString() : doc.reconciledAt,
   }
 }
 
@@ -59,99 +38,89 @@ export async function GET(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 401 })
     }
-
     if (!hasRole(user, [...LEDGER_ROLES])) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     await connectDB()
 
-    const searchParams = request.nextUrl.searchParams
+    const { searchParams } = new URL(request.url)
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
-    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50', 10)))
-    const startDateStr = searchParams.get('startDate')
-    const endDateStr = searchParams.get('endDate')
-    const direction = searchParams.get('direction') || 'ALL'
-    const entryTypeParam = searchParams.get('entryType')
-    const entryTypes = entryTypeParam
-      ? entryTypeParam.split(',').map((s) => s.trim()).filter(Boolean)
-      : undefined
-    const bookingId = searchParams.get('bookingId') || undefined
-    const customerId = searchParams.get('customerId') || undefined
-    const vehicleId = searchParams.get('vehicleId') || undefined
-    const accountType = searchParams.get('accountType') || undefined
-    const accountLabel = searchParams.get('accountLabel') || undefined
-    const isReconciled = searchParams.get('isReconciled')
-    const isVoided = searchParams.get('isVoided')
-    const minAmount = searchParams.get('minAmount')
-    const maxAmount = searchParams.get('maxAmount')
-    const search = searchParams.get('search') || undefined
-    const sortBy = searchParams.get('sortBy') || 'date'
-    const sortDir = searchParams.get('sortOrder') === 'asc' ? 1 : -1
-
-    const startDate = startDateStr ? new Date(startDateStr) : undefined
-    const endDate = endDateStr ? new Date(endDateStr) : undefined
-
-    const dirFilter = direction === 'ALL' ? undefined : (direction as 'CREDIT' | 'DEBIT' | 'INTERNAL')
-
-    const dimensionalMatch = buildLedgerMatch({
-      direction: dirFilter,
-      entryTypes,
-      bookingId,
-      customerId,
-      vehicleId,
-      accountType,
-      accountLabel,
-      isReconciled: isReconciled === null ? undefined : isReconciled === 'true',
-      isVoided: isVoided === null ? false : isVoided === 'true',
-      minAmount: minAmount ? Number(minAmount) : undefined,
-      maxAmount: maxAmount ? Number(maxAmount) : undefined,
-      search,
-    })
-
-    const fullMatch = buildLedgerMatch({
-      startDate,
-      endDate,
-      direction: dirFilter,
-      entryTypes,
-      bookingId,
-      customerId,
-      vehicleId,
-      accountType,
-      accountLabel,
-      isReconciled: isReconciled === null ? undefined : isReconciled === 'true',
-      isVoided: isVoided === null ? false : isVoided === 'true',
-      minAmount: minAmount ? Number(minAmount) : undefined,
-      maxAmount: maxAmount ? Number(maxAmount) : undefined,
-      search,
-    })
-
-    let openingBalance = 0
-    if (startDate) {
-      const priorMatch = { ...dimensionalMatch, date: { $lt: startDate } }
-      openingBalance = (await computeBalance(priorMatch)).net
-    }
-
-    const sortSpec: Record<string, 1 | -1> =
-      sortBy === 'amount'
-        ? { amount: sortDir as 1 | -1, date: -1 as const, _id: -1 as const }
-        : { date: sortDir as 1 | -1, _id: sortDir as 1 | -1 }
-
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50', 10)))
     const skip = (page - 1) * limit
 
-    const [entries, total, periodBalance] = await Promise.all([
-      LedgerEntry.find(fullMatch).sort(sortSpec).skip(skip).limit(limit).lean(),
-      LedgerEntry.countDocuments(fullMatch),
-      computeBalance(fullMatch),
+    const filter: Record<string, unknown> = { isVoided: { $ne: true } }
+
+    const startDate = searchParams.get('startDate')
+    const endDate = searchParams.get('endDate')
+    if (startDate || endDate) {
+      filter.date = {} as Record<string, Date>
+      if (startDate) (filter.date as { $gte: Date }).$gte = new Date(startDate)
+      if (endDate) {
+        const e = new Date(endDate)
+        e.setHours(23, 59, 59, 999)
+        ;(filter.date as { $lte?: Date }).$lte = e
+      }
+    }
+
+    const direction = searchParams.get('direction')
+    if (direction && direction !== 'ALL') {
+      filter.direction = direction
+    }
+
+    const entryType = searchParams.get('entryType')
+    if (entryType && entryType !== 'ALL') {
+      filter.entryType = entryType
+    }
+
+    const category = searchParams.get('category')
+    if (category && category !== 'ALL') {
+      filter.category = { $regex: category, $options: 'i' }
+    }
+
+    const search = searchParams.get('search')
+    if (search?.trim()) {
+      const q = search.trim()
+      filter.$or = [
+        { description: { $regex: q, $options: 'i' } },
+        { category: { $regex: q, $options: 'i' } },
+        { note: { $regex: q, $options: 'i' } },
+        { accountLabel: { $regex: q, $options: 'i' } },
+        { entryType: { $regex: q, $options: 'i' } },
+      ]
+    }
+
+    const [rows, total] = await Promise.all([
+      LedgerEntry.find(filter).sort({ date: -1, createdAt: -1 }).skip(skip).limit(limit).lean(),
+      LedgerEntry.countDocuments(filter),
     ])
 
-    const totalCredits = periodBalance.credits
-    const totalDebits = periodBalance.debits
-    const netPeriod = periodBalance.net
-    const closingBalance = openingBalance + netPeriod
+    const agg = await LedgerEntry.aggregate([
+      { $match: filter as never },
+      {
+        $group: {
+          _id: null,
+          totalCredits: {
+            $sum: { $cond: [{ $eq: ['$direction', 'CREDIT'] }, { $ifNull: ['$amount', 0] }, 0] },
+          },
+          totalDebits: {
+            $sum: { $cond: [{ $eq: ['$direction', 'DEBIT'] }, { $ifNull: ['$amount', 0] }, 0] },
+          },
+          count: { $sum: 1 },
+        },
+      },
+    ])
+
+    const cr = Number(agg[0]?.totalCredits ?? 0)
+    const dr = Number(agg[0]?.totalDebits ?? 0)
+
+    const unreconciledCount = await LedgerEntry.countDocuments({
+      ...filter,
+      isReconciled: false,
+    })
 
     return NextResponse.json({
-      entries: entries.map((doc) => toJson(doc as unknown as Record<string, unknown>)),
+      entries: rows.map((r) => serializeEntry(r as unknown as Record<string, unknown>)),
       pagination: {
         total,
         page,
@@ -159,23 +128,17 @@ export async function GET(request: NextRequest) {
         pages: total === 0 ? 0 : Math.ceil(total / limit),
       },
       summary: {
-        totalCredits,
-        totalDebits,
-        netBalance: netPeriod,
-        openingBalance,
-        closingBalance,
-        period: {
-          start: startDate?.toISOString(),
-          end: endDate?.toISOString(),
-        },
+        totalCredits: cr,
+        totalDebits: dr,
+        netBalance: cr - dr,
+        totalEntries: Number(agg[0]?.count ?? 0),
+        unreconciledCount,
       },
     })
-  } catch (error: unknown) {
-    console.error('[LEDGER_GET] Error:', error)
-    logger.error('Ledger GET error:', error)
-    const message = error instanceof Error ? error.message : 'Unknown error'
+  } catch (error) {
+    console.error('[GET /api/ledger]', error)
     return NextResponse.json(
-      { error: 'Internal server error', details: message },
+      { error: 'Failed to load ledger', details: String(error) },
       { status: 500 }
     )
   }

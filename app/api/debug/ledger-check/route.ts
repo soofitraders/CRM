@@ -8,7 +8,8 @@ import { getCurrentUser, hasRole } from '@/lib/auth'
 import LedgerEntry from '@/lib/models/LedgerEntry'
 import Expense from '@/lib/models/Expense'
 import Payment from '@/lib/models/Payment'
-import { LEDGER_ACTIVE_VOID_FILTER } from '@/lib/services/ledgerService'
+
+const ACTIVE = { isVoided: { $ne: true } } as const
 
 /** SUPER_ADMIN only: quick DB sanity check. Remove or lock down in production if undesired. */
 export async function GET() {
@@ -34,10 +35,10 @@ export async function GET() {
       samplePayment,
     ] = await Promise.all([
       LedgerEntry.countDocuments({}),
-      LedgerEntry.countDocuments({ ...LEDGER_ACTIVE_VOID_FILTER }),
+      LedgerEntry.countDocuments({ ...ACTIVE }),
       Expense.countDocuments({ isDeleted: false }),
       Payment.countDocuments({}),
-      LedgerEntry.findOne({ ...LEDGER_ACTIVE_VOID_FILTER }).sort({ date: -1 }).lean(),
+      LedgerEntry.findOne({ ...ACTIVE }).sort({ date: -1 }).lean(),
       Expense.findOne({ isDeleted: false }).lean(),
       Payment.findOne({}).sort({ createdAt: -1 }).lean(),
     ])

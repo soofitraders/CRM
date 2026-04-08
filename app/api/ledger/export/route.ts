@@ -1,143 +1,115 @@
 export const dynamic = 'force-dynamic'
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/authOptions'
 import connectDB from '@/lib/db'
-import { getCurrentUser, hasRole } from '@/lib/auth'
 import LedgerEntry from '@/lib/models/LedgerEntry'
-import { buildLedgerMatch } from '@/lib/services/ledgerService'
-import { exportToExcel } from '@/lib/services/exportService'
-import { logger } from '@/lib/utils/performance'
-import { format as formatDate } from 'date-fns'
+import { getCurrentUser, hasRole } from '@/lib/auth'
+import ExcelJS from 'exceljs'
 
-export async function GET(request: NextRequest) {
+const LEDGER_ROLES = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'FINANCE'] as const
+
+export async function GET() {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return new NextResponse('Unauthorized', { status: 401 })
     }
-
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 401 })
+      return new NextResponse('Unauthorized', { status: 401 })
     }
-
-    if (!hasRole(user, ['SUPER_ADMIN', 'ADMIN', 'FINANCE'])) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    if (!hasRole(user, [...LEDGER_ROLES])) {
+      return new NextResponse('Forbidden', { status: 403 })
     }
 
     await connectDB()
-
-    const searchParams = request.nextUrl.searchParams
-    const startDateStr = searchParams.get('startDate')
-    const endDateStr = searchParams.get('endDate')
-    const direction = searchParams.get('direction') || 'ALL'
-    const entryTypeParam = searchParams.get('entryType')
-    const entryTypes = entryTypeParam
-      ? entryTypeParam.split(',').map((s) => s.trim()).filter(Boolean)
-      : undefined
-
-    const match = buildLedgerMatch({
-      startDate: startDateStr ? new Date(startDateStr) : undefined,
-      endDate: endDateStr ? new Date(endDateStr) : undefined,
-      direction: direction === 'ALL' ? undefined : (direction as any),
-      entryTypes,
-      bookingId: searchParams.get('bookingId') || undefined,
-      customerId: searchParams.get('customerId') || undefined,
-      vehicleId: searchParams.get('vehicleId') || undefined,
-      accountLabel: searchParams.get('accountLabel') || undefined,
-      accountType: searchParams.get('accountType') || undefined,
-      isVoided: searchParams.get('isVoided') === 'true' ? true : false,
-      search: searchParams.get('search') || undefined,
-    })
-
-    const entries = await LedgerEntry.find(match)
-      .sort({ date: 1, _id: 1 })
-      .limit(50000)
+    const entries = await LedgerEntry.find({ isVoided: { $ne: true } })
+      .sort({ date: 1, createdAt: 1 })
       .lean()
 
-    const rows: any[] = entries.map((e) => ({
-      date: formatDate(new Date(e.date), 'yyyy-MM-dd'),
-      valueDate: e.valueDate ? formatDate(new Date(e.valueDate), 'yyyy-MM-dd') : '',
-      type: e.entryType,
-      direction: e.direction,
-      description: e.description,
-      account: e.accountLabel || '',
-      amountCr: e.direction === 'CREDIT' ? e.amount : '',
-      amountDr: e.direction === 'DEBIT' ? e.amount : '',
-      runningBalance: e.runningBalance ?? '',
-      reference: `${e.referenceModel ?? ''}:${e.referenceId != null ? String(e.referenceId) : ''}`,
-      category: e.category || '',
-      bookingId: e.bookingId ? String(e.bookingId) : '',
-      customerId: e.customerId ? String(e.customerId) : '',
-      vehicleId: e.vehicleId ? String(e.vehicleId) : '',
-      reconciled: e.isReconciled ? 'Yes' : 'No',
-      note: e.note || '',
-    }))
-
-    const columns = [
-      { key: 'date' as const, label: 'Date' },
-      { key: 'valueDate' as const, label: 'Value Date' },
-      { key: 'type' as const, label: 'Type' },
-      { key: 'direction' as const, label: 'Direction' },
-      { key: 'description' as const, label: 'Description' },
-      { key: 'account' as const, label: 'Account' },
-      { key: 'amountCr' as const, label: 'Amount (CR)' },
-      { key: 'amountDr' as const, label: 'Amount (DR)' },
-      { key: 'runningBalance' as const, label: 'Running Balance' },
-      { key: 'reference' as const, label: 'Reference' },
-      { key: 'category' as const, label: 'Category' },
-      { key: 'bookingId' as const, label: 'Booking ID' },
-      { key: 'customerId' as const, label: 'Customer ID' },
-      { key: 'vehicleId' as const, label: 'Vehicle ID' },
-      { key: 'reconciled' as const, label: 'Reconciled' },
-      { key: 'note' as const, label: 'Note' },
+    const wb = new ExcelJS.Workbook()
+    const ws = wb.addWorksheet('General Ledger')
+    ws.columns = [
+      { header: '#', key: 'num', width: 6 },
+      { header: 'Date', key: 'date', width: 14 },
+      { header: 'Type', key: 'type', width: 24 },
+      { header: 'Description', key: 'desc', width: 36 },
+      { header: 'Category', key: 'cat', width: 20 },
+      { header: 'Account', key: 'account', width: 16 },
+      { header: 'Debit (AED)', key: 'debit', width: 14 },
+      { header: 'Credit (AED)', key: 'credit', width: 14 },
+      { header: 'Balance (AED)', key: 'balance', width: 15 },
+      { header: 'Reconciled', key: 'reconciled', width: 12 },
+      { header: 'Note', key: 'note', width: 28 },
     ]
+    const hRow = ws.getRow(1)
+    hRow.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+    hRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } }
+    hRow.alignment = { vertical: 'middle' }
 
-    const totalCr = rows.reduce((s, r) => s + (typeof r.amountCr === 'number' ? r.amountCr : 0), 0)
-    const totalDr = rows.reduce((s, r) => s + (typeof r.amountDr === 'number' ? r.amountDr : 0), 0)
-    rows.push({
-      date: '',
-      valueDate: '',
+    entries.forEach((e, i) => {
+      const row = ws.addRow({
+        num: i + 1,
+        date: e.date ? new Date(e.date as Date).toLocaleDateString('en-AE') : '',
+        type: String(e.entryType ?? '').replace(/_/g, ' '),
+        desc: e.description ?? '',
+        cat: e.category ?? '',
+        account: e.accountLabel ?? 'Cash',
+        debit: e.direction === 'DEBIT' ? Number(e.amount) : '',
+        credit: e.direction === 'CREDIT' ? Number(e.amount) : '',
+        balance: Number(e.runningBalance ?? 0),
+        reconciled: e.isReconciled ? 'Yes' : 'No',
+        note: e.note ?? '',
+      })
+      if (e.direction === 'DEBIT') {
+        row.getCell('debit').font = { color: { argb: 'FFDC2626' }, bold: true }
+      }
+      if (e.direction === 'CREDIT') {
+        row.getCell('credit').font = { color: { argb: 'FF16A34A' }, bold: true }
+      }
+      const bal = Number(e.runningBalance ?? 0)
+      row.getCell('balance').font = {
+        bold: true,
+        color: { argb: bal >= 0 ? 'FF166534' : 'FF991B1B' },
+      }
+    })
+
+    const totalDebit = entries
+      .filter((e) => e.direction === 'DEBIT')
+      .reduce((a, e) => a + Number(e.amount ?? 0), 0)
+    const totalCredit = entries
+      .filter((e) => e.direction === 'CREDIT')
+      .reduce((a, e) => a + Number(e.amount ?? 0), 0)
+    const lastBal =
+      entries.length > 0 ? Number(entries[entries.length - 1].runningBalance ?? 0) : 0
+
+    const totalRow = ws.addRow({
+      num: '',
+      date: 'TOTALS',
       type: '',
-      direction: '',
-      description: 'TOTAL',
+      desc: '',
+      cat: '',
       account: '',
-      amountCr: totalCr,
-      amountDr: totalDr,
-      runningBalance: '',
-      reference: '',
-      category: '',
-      bookingId: '',
-      customerId: '',
-      vehicleId: '',
+      debit: totalDebit,
+      credit: totalCredit,
+      balance: lastBal,
       reconciled: '',
       note: '',
     })
+    totalRow.font = { bold: true }
+    totalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } }
 
-    const fileBuffer = await exportToExcel(rows as any, columns as any)
-    const filename = `ledger-export-${startDateStr || 'all'}-to-${endDateStr || 'all'}.xlsx`
-
-    const buffer = Buffer.isBuffer(fileBuffer) ? fileBuffer : Buffer.from(fileBuffer as ArrayBuffer)
-    const body = new Uint8Array(buffer)
-
-    return new Response(body, {
-      status: 200,
+    const buffer = await wb.xlsx.writeBuffer()
+    const today = new Date().toISOString().split('T')[0]
+    return new NextResponse(buffer, {
       headers: {
-        'Content-Type':
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': `attachment; filename="${filename}"`,
-        'Content-Length': String(buffer.length),
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename="ledger-${today}.xlsx"`,
       },
     })
-  } catch (error: unknown) {
-    console.error('[LEDGER_EXPORT] Error:', error)
-    logger.error('Ledger export error:', error)
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    return NextResponse.json(
-      { error: 'Internal server error', details: message },
-      { status: 500 }
-    )
+  } catch (error) {
+    return new NextResponse(String(error), { status: 500 })
   }
 }

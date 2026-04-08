@@ -1,148 +1,136 @@
 'use client'
 
-import Table, { TableRow, TableCell } from '@/components/ui/Table'
-import { formatLedgerAmount, formatLedgerDateOnly } from '@/lib/ledgerDisplayFormat'
-import { ArrowDownLeft, ArrowUpRight } from 'lucide-react'
-
-export interface LedgerRow {
-  _id: string
-  date: string
-  entryType: string
-  direction: 'CREDIT' | 'DEBIT' | 'INTERNAL'
-  description: string
-  amount: number
-  accountLabel?: string
-  isReconciled?: boolean
-  isVoided?: boolean
-  runningBalance?: number
-  referenceModel?: string
-  referenceId?: string
-  bookingId?: string
-}
-
-function typeBadgeClass(t: string) {
-  const base = 'text-xs font-semibold px-2 py-0.5 rounded-full'
-  switch (t) {
-    case 'PAYMENT':
-      return `${base} bg-emerald-100 text-emerald-800`
-    case 'INVOICE':
-      return `${base} bg-blue-100 text-blue-800`
-    case 'EXPENSE':
-    case 'RECURRING_EXPENSE':
-      return `${base} bg-orange-100 text-orange-800`
-    case 'SALARY':
-      return `${base} bg-purple-100 text-purple-800`
-    case 'INVESTOR_PAYOUT':
-      return `${base} bg-indigo-100 text-indigo-800`
-    case 'FINE':
-      return `${base} bg-amber-100 text-amber-900`
-    case 'DEPOSIT':
-      return `${base} bg-teal-100 text-teal-800`
-    case 'DEPOSIT_REFUND':
-      return `${base} bg-rose-100 text-rose-800`
-    default:
-      return `${base} bg-gray-100 text-gray-800`
-  }
-}
+import type { ILedgerEntry } from '@/types/ledger'
+import { fmtAED, fmtDate } from '../formatters'
 
 interface Props {
-  entries: LedgerRow[] | null | undefined
-  page: number
-  pageSize: number
-  onRowClick: (entry: LedgerRow) => void
-  onReconcile?: (entry: LedgerRow) => void
-  onVoid?: (entry: LedgerRow) => void
-  canVoid?: boolean
+  entries: ILedgerEntry[]
+  onRowClick: (e: ILedgerEntry) => void
 }
 
-export default function LedgerTable({ entries, page, pageSize, onRowClick, onReconcile, onVoid, canVoid }: Props) {
-  const list = entries ?? []
+const TYPE_LABEL: Record<string, string> = {
+  BOOKING_PAYMENT: 'Booking Payment',
+  ADVANCE_PAYMENT: 'Advance Payment',
+  PARTIAL_PAYMENT: 'Partial Payment',
+  SECURITY_DEPOSIT: 'Security Deposit',
+  SECURITY_DEPOSIT_REFUND: 'Deposit Refund',
+  LATE_FEE: 'Late Fee',
+  DAMAGE_CHARGE: 'Damage Charge',
+  EXPENSE_PAID: 'Expense',
+  RECURRING_EXPENSE: 'Recurring Exp.',
+  SALARY_PAID: 'Salary',
+  INVESTOR_PAYOUT: 'Investor Payout',
+  INVESTOR_CAPITAL_IN: 'Investor Capital',
+  VEHICLE_MAINTENANCE: 'Maintenance',
+  FUEL_EXPENSE: 'Fuel',
+  FINE_COLLECTED: 'Fine Collected',
+  FINE_PAID: 'Fine Paid',
+  INSURANCE_PREMIUM: 'Insurance',
+  REGISTRATION_FEE: 'Registration',
+  BANK_DEPOSIT: 'Bank Deposit',
+  BANK_WITHDRAWAL: 'Bank Withdrawal',
+  BANK_TRANSFER: 'Bank Transfer',
+  LOAN_RECEIVED: 'Loan Received',
+  LOAN_REPAYMENT: 'Loan Repayment',
+  VENDOR_PAYMENT: 'Vendor Payment',
+  MISCELLANEOUS_IN: 'Misc. Income',
+  MISCELLANEOUS_OUT: 'Misc. Expense',
+}
+
+const TYPE_COLOR: Record<string, string> = {
+  BOOKING_PAYMENT: 'bg-emerald-100 text-emerald-700',
+  ADVANCE_PAYMENT: 'bg-emerald-100 text-emerald-700',
+  PARTIAL_PAYMENT: 'bg-teal-100 text-teal-700',
+  SECURITY_DEPOSIT: 'bg-blue-100 text-blue-700',
+  SECURITY_DEPOSIT_REFUND: 'bg-orange-100 text-orange-700',
+  EXPENSE_PAID: 'bg-red-100 text-red-700',
+  RECURRING_EXPENSE: 'bg-rose-100 text-rose-700',
+  SALARY_PAID: 'bg-purple-100 text-purple-700',
+  INVESTOR_PAYOUT: 'bg-pink-100 text-pink-700',
+  INVESTOR_CAPITAL_IN: 'bg-violet-100 text-violet-700',
+  VEHICLE_MAINTENANCE: 'bg-yellow-100 text-yellow-700',
+  FUEL_EXPENSE: 'bg-amber-100 text-amber-700',
+  FINE_COLLECTED: 'bg-green-100 text-green-700',
+  FINE_PAID: 'bg-red-100 text-red-700',
+  BANK_DEPOSIT: 'bg-cyan-100 text-cyan-700',
+  BANK_WITHDRAWAL: 'bg-slate-100 text-slate-700',
+  LOAN_RECEIVED: 'bg-indigo-100 text-indigo-700',
+  LOAN_REPAYMENT: 'bg-slate-100 text-slate-700',
+  VENDOR_PAYMENT: 'bg-red-100 text-red-700',
+}
+
+export default function LedgerTable({ entries, onRowClick }: Props) {
   return (
-    <Table
-      headers={[
-        '#',
-        'Date',
-        'Type',
-        'Direction',
-        'Description',
-        'Account',
-        'Amount',
-        'Running balance',
-        'Reference',
-        'Actions',
-      ]}
-    >
-      {list.map((e, i) => {
-        const idx = (page - 1) * pageSize + i + 1
-        const isCredit = e.direction === 'CREDIT'
-        const isInternal = e.direction === 'INTERNAL'
-        const refSuffix = (e.referenceId ?? '').length >= 8 ? (e.referenceId ?? '').slice(-8) : e.referenceId ?? '—'
-        const rowKey = typeof e._id === 'string' ? e._id : String(e._id)
-        return (
-          <TableRow key={rowKey} onClick={() => onRowClick(e)}>
-            <TableCell className="text-sidebarMuted">{idx}</TableCell>
-            <TableCell className="whitespace-nowrap">
-              {formatLedgerDateOnly(typeof e.date === 'string' ? e.date : String(e.date))}
-            </TableCell>
-            <TableCell>
-              <span className={typeBadgeClass(e.entryType)}>{e.entryType.replace(/_/g, ' ')}</span>
-            </TableCell>
-            <TableCell>
-              <span
-                className={`inline-flex items-center gap-1 font-medium ${
-                  isInternal ? 'text-gray-600 italic' : isCredit ? 'text-emerald-600' : 'text-red-600'
-                }`}
-              >
-                {isInternal ? null : isCredit ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownLeft className="w-4 h-4" />}
-                {e.direction}
-              </span>
-            </TableCell>
-            <TableCell className="max-w-xs">
-              <span className={`block truncate ${e.isVoided ? 'line-through text-sidebarMuted' : ''}`} title={e.description}>
-                {e.description}
-              </span>
-            </TableCell>
-            <TableCell>{e.accountLabel || '—'}</TableCell>
-            <TableCell
-              className={`font-semibold ${isInternal ? 'text-gray-600 italic' : isCredit ? 'text-emerald-600' : 'text-red-600'}`}
-            >
-              {isInternal ? '' : isCredit ? '+' : '−'} Rs {formatLedgerAmount(e.amount)}
-            </TableCell>
-            <TableCell className="text-right">
-              {e.runningBalance !== undefined && e.runningBalance !== null ? `Rs ${formatLedgerAmount(e.runningBalance)}` : '—'}
-            </TableCell>
-            <TableCell className="text-xs text-sidebarMuted font-mono">
-              {e.referenceModel ?? '—'}:{refSuffix}
-            </TableCell>
-            <TableCell>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={(ev) => {
-                    ev.stopPropagation()
-                    onReconcile?.(e)
-                  }}
-                  className={`text-xs px-2 py-1 rounded border ${e.isReconciled ? 'border-emerald-500 text-emerald-600' : 'border-borderSoft text-sidebarMuted'}`}
+    <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-slate-800 text-white">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider w-10">#</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Date</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Type</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Description</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Category</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Account</th>
+              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-red-300">
+                Debit (AED)
+              </th>
+              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-emerald-300">
+                Credit (AED)
+              </th>
+              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider">Balance (AED)</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {entries.map((entry, idx) => {
+              const isCredit = entry.direction === 'CREDIT'
+              const bal = Number(entry.runningBalance ?? 0)
+              const et = String(entry.entryType ?? '')
+              return (
+                <tr
+                  key={entry._id}
+                  onClick={() => onRowClick(entry)}
+                  className={`cursor-pointer transition-colors hover:bg-gray-50 ${
+                    isCredit ? 'border-l-[3px] border-l-emerald-400' : 'border-l-[3px] border-l-red-400'
+                  }`}
                 >
-                  {e.isReconciled ? 'Reconciled' : 'Mark'}
-                </button>
-                {canVoid && !e.isVoided && (
-                  <button
-                    type="button"
-                    onClick={(ev) => {
-                      ev.stopPropagation()
-                      onVoid?.(e)
-                    }}
-                    className="text-xs px-2 py-1 rounded border border-red-400 text-red-600"
+                  <td className="px-4 py-3 text-gray-400 text-xs">{idx + 1}</td>
+                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap text-xs">{fmtDate(entry.date)}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${
+                        TYPE_COLOR[et] ?? 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      {TYPE_LABEL[et] ?? et.replace(/_/g, ' ') ?? '—'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-gray-700 max-w-[200px] truncate" title={entry.description}>
+                    {entry.description || '—'}
+                  </td>
+                  <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{entry.category || '—'}</td>
+                  <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
+                    {entry.accountLabel || 'Cash'}
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold text-red-600 whitespace-nowrap">
+                    {!isCredit ? fmtAED(entry.amount) : ''}
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold text-emerald-600 whitespace-nowrap">
+                    {isCredit ? fmtAED(entry.amount) : ''}
+                  </td>
+                  <td
+                    className={`px-4 py-3 text-right font-bold whitespace-nowrap ${
+                      bal >= 0 ? 'text-gray-800' : 'text-red-700'
+                    }`}
                   >
-                    Void
-                  </button>
-                )}
-              </div>
-            </TableCell>
-          </TableRow>
-        )
-      })}
-    </Table>
+                    {fmtAED(bal)}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   )
 }

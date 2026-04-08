@@ -39,5 +39,5 @@ export type { ISalaryRecord, SalaryStatus } from './SalaryRecord'
 export type { IInvestorPayout, InvestorPayoutStatus } from './InvestorPayout'
 export type { IDashboardWidget, WidgetType, TimeRange } from './DashboardWidget'
 export type { ILedgerEntry as ILedgerEntryModel } from './LedgerEntry'
-export type { LedgerDirection, LedgerEntryType } from '@/types/ledger'
+export type { LedgerDirection, LedgerEntryType, AccountType } from '@/types/ledger'
 
