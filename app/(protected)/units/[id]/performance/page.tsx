@@ -71,6 +71,28 @@ export default function VehiclePerformancePage() {
   }
 
   const { vehicle, period: periodInfo, purchaseCost, metrics, weeklyBreakdown, monthlyBreakdown, yearlyBreakdown, bookings } = reportData
+  const toNumber = (value: unknown): number => {
+    const n = Number(value ?? 0)
+    return Number.isFinite(n) ? n : 0
+  }
+  const safeMetrics = {
+    totalRevenue: toNumber(metrics?.totalRevenue),
+    totalBookings: toNumber(metrics?.totalBookings),
+    utilizationRate: Math.min(100, Math.max(0, toNumber(metrics?.utilizationRate))),
+    daysRented: toNumber(metrics?.daysRented),
+    totalPaid: toNumber(metrics?.totalPaid),
+    totalExpenses: toNumber(metrics?.totalExpenses),
+    maintenanceCost: toNumber(metrics?.maintenanceCost),
+    operationalProfit: toNumber(metrics?.operationalProfit),
+    averageDailyRevenue: toNumber(metrics?.averageDailyRevenue),
+    averageRevenuePerBooking: toNumber(metrics?.averageRevenuePerBooking),
+    daysAvailable: toNumber(metrics?.daysAvailable),
+    breakEvenStatus: metrics?.breakEvenStatus ?? 'NO_PURCHASE_COST',
+    breakEvenPercentage: toNumber(metrics?.breakEvenPercentage),
+    remainingToBreakEven: toNumber(metrics?.remainingToBreakEven),
+    profitAfterBreakEven: toNumber(metrics?.profitAfterBreakEven),
+    netProfit: toNumber(metrics?.netProfit),
+  }
 
   return (
     <div className="space-y-6">
@@ -151,7 +173,7 @@ export default function VehiclePerformancePage() {
             <div>
               <p className="text-sm text-sidebarMuted">Total Revenue</p>
               <p className="text-2xl font-bold text-headingText">
-                {formatCurrency(metrics.totalRevenue)}
+                {formatCurrency(safeMetrics.totalRevenue)}
               </p>
             </div>
           </div>
@@ -164,7 +186,7 @@ export default function VehiclePerformancePage() {
             </div>
             <div>
               <p className="text-sm text-sidebarMuted">Total Bookings</p>
-              <p className="text-2xl font-bold text-headingText">{metrics.totalBookings}</p>
+              <p className="text-2xl font-bold text-headingText">{safeMetrics.totalBookings}</p>
             </div>
           </div>
         </SectionCard>
@@ -176,7 +198,7 @@ export default function VehiclePerformancePage() {
             </div>
             <div>
               <p className="text-sm text-sidebarMuted">Utilization Rate</p>
-              <p className="text-2xl font-bold text-headingText">{metrics.utilizationRate.toFixed(1)}%</p>
+              <p className="text-2xl font-bold text-headingText">{safeMetrics.utilizationRate.toFixed(1)}%</p>
             </div>
           </div>
         </SectionCard>
@@ -189,7 +211,7 @@ export default function VehiclePerformancePage() {
             <div>
               <p className="text-sm text-sidebarMuted">Days Rented</p>
               <p className="text-2xl font-bold text-headingText">
-                {metrics.daysRented} / {periodInfo.days}
+                {safeMetrics.daysRented} / {toNumber(periodInfo?.days)}
               </p>
             </div>
           </div>
@@ -217,60 +239,60 @@ export default function VehiclePerformancePage() {
             </div>
 
             <div className={`p-4 rounded-lg ${
-              metrics.breakEvenStatus === 'BREAK_EVEN' 
+              safeMetrics.breakEvenStatus === 'BREAK_EVEN' 
                 ? 'bg-green-50' 
-                : metrics.breakEvenStatus === 'NOT_BREAK_EVEN'
+                : safeMetrics.breakEvenStatus === 'NOT_BREAK_EVEN'
                 ? 'bg-yellow-50'
                 : 'bg-gray-50'
             }`}>
               <div className="flex items-center gap-2 mb-2">
                 <Target className={`w-5 h-5 ${
-                  metrics.breakEvenStatus === 'BREAK_EVEN' 
+                  safeMetrics.breakEvenStatus === 'BREAK_EVEN' 
                     ? 'text-green-600' 
-                    : metrics.breakEvenStatus === 'NOT_BREAK_EVEN'
+                    : safeMetrics.breakEvenStatus === 'NOT_BREAK_EVEN'
                     ? 'text-yellow-600'
                     : 'text-gray-600'
                 }`} />
                 <p className="text-sm text-sidebarMuted">Break-Even Status</p>
               </div>
               <p className={`text-xl font-bold ${
-                metrics.breakEvenStatus === 'BREAK_EVEN' 
+                safeMetrics.breakEvenStatus === 'BREAK_EVEN' 
                   ? 'text-green-600' 
-                  : metrics.breakEvenStatus === 'NOT_BREAK_EVEN'
+                  : safeMetrics.breakEvenStatus === 'NOT_BREAK_EVEN'
                   ? 'text-yellow-600'
                   : 'text-headingText'
               }`}>
-                {metrics.breakEvenStatus === 'BREAK_EVEN' 
+                {safeMetrics.breakEvenStatus === 'BREAK_EVEN' 
                   ? '✓ Break-Even Reached' 
-                  : metrics.breakEvenStatus === 'NOT_BREAK_EVEN'
+                  : safeMetrics.breakEvenStatus === 'NOT_BREAK_EVEN'
                   ? 'Not Yet Break-Even'
                   : 'No Purchase Cost'}
               </p>
               <p className="text-sm text-sidebarMuted mt-1">
-                {metrics.breakEvenPercentage.toFixed(1)}% of purchase cost recovered
+                {safeMetrics.breakEvenPercentage.toFixed(1)}% of purchase cost recovered
               </p>
             </div>
 
-            {metrics.breakEvenStatus === 'NOT_BREAK_EVEN' && (
+            {safeMetrics.breakEvenStatus === 'NOT_BREAK_EVEN' && (
               <div className="p-4 bg-yellow-50 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <TrendingDown className="w-5 h-5 text-yellow-600" />
                   <p className="text-sm text-sidebarMuted">Remaining to Break-Even</p>
                 </div>
                 <p className="text-2xl font-bold text-yellow-600">
-                  {formatCurrency(metrics.remainingToBreakEven)}
+                  {formatCurrency(safeMetrics.remainingToBreakEven)}
                 </p>
               </div>
             )}
 
-            {metrics.breakEvenStatus === 'BREAK_EVEN' && (
+            {safeMetrics.breakEvenStatus === 'BREAK_EVEN' && (
               <div className="p-4 bg-green-50 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <TrendingUp className="w-5 h-5 text-green-600" />
                   <p className="text-sm text-sidebarMuted">Profit After Break-Even</p>
                 </div>
                 <p className="text-2xl font-bold text-green-600">
-                  {formatCurrency(metrics.profitAfterBreakEven)}
+                  {formatCurrency(safeMetrics.profitAfterBreakEven)}
                 </p>
               </div>
             )}
@@ -281,12 +303,12 @@ export default function VehiclePerformancePage() {
                 <p className="text-sm text-sidebarMuted">Net Profit/Loss</p>
               </div>
               <p className={`text-2xl font-bold ${
-                metrics.netProfit >= 0 ? 'text-green-600' : 'text-red-600'
+                safeMetrics.operationalProfit >= 0 ? 'text-green-600' : 'text-red-600'
               }`}>
-                {formatCurrency(metrics.netProfit)}
+                {formatCurrency(safeMetrics.operationalProfit)}
               </p>
               <p className="text-xs text-sidebarMuted mt-1">
-                Revenue - Purchase Cost
+                Revenue - Expenses - Maintenance
               </p>
             </div>
           </div>
@@ -295,16 +317,16 @@ export default function VehiclePerformancePage() {
           <div className="mt-6">
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm font-medium text-headingText">Break-Even Progress</p>
-              <p className="text-sm text-sidebarMuted">{metrics.breakEvenPercentage.toFixed(1)}%</p>
+              <p className="text-sm text-sidebarMuted">{safeMetrics.breakEvenPercentage.toFixed(1)}%</p>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-3">
               <div
                 className={`h-3 rounded-full transition-all ${
-                  metrics.breakEvenStatus === 'BREAK_EVEN'
+                  safeMetrics.breakEvenStatus === 'BREAK_EVEN'
                     ? 'bg-green-500'
                     : 'bg-yellow-500'
                 }`}
-                style={{ width: `${Math.min(100, metrics.breakEvenPercentage)}%` }}
+                style={{ width: `${Math.min(100, safeMetrics.breakEvenPercentage)}%` }}
               />
             </div>
           </div>
@@ -318,18 +340,18 @@ export default function VehiclePerformancePage() {
           <div>
             <p className="text-sm text-sidebarMuted">Average Daily Revenue</p>
             <p className="text-xl font-bold text-headingText">
-              {formatCurrency(metrics.averageDailyRevenue)}
+              {formatCurrency(safeMetrics.averageDailyRevenue)}
             </p>
           </div>
           <div>
             <p className="text-sm text-sidebarMuted">Average Revenue per Booking</p>
             <p className="text-xl font-bold text-headingText">
-              {formatCurrency(metrics.averageRevenuePerBooking)}
+              {formatCurrency(safeMetrics.averageRevenuePerBooking)}
             </p>
           </div>
           <div>
             <p className="text-sm text-sidebarMuted">Days Available</p>
-            <p className="text-xl font-bold text-headingText">{metrics.daysAvailable}</p>
+            <p className="text-xl font-bold text-headingText">{safeMetrics.daysAvailable}</p>
           </div>
         </div>
       </SectionCard>

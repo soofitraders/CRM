@@ -7,8 +7,10 @@ import connectDB from '@/lib/db'
 import { hasRole, getCurrentUser } from '@/lib/auth'
 import Booking from '@/lib/models/Booking'
 import Invoice from '@/lib/models/Invoice'
+import Payment from '@/lib/models/Payment'
 import Vehicle from '@/lib/models/Vehicle'
 import Expense from '@/lib/models/Expense'
+import MaintenanceRecord from '@/lib/models/MaintenanceRecord'
 import ExpenseCategory from '@/lib/models/ExpenseCategory'
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, format, differenceInDays } from 'date-fns'
 import { logger } from '@/lib/utils/performance'
@@ -176,6 +178,7 @@ export async function GET(request: NextRequest) {
       },
       $or: [
         { endDateTime: { $gte: actualDateFrom } },
+        { endDateTime: null },
         { endDateTime: { $exists: false } },
       ],
       status: { $in: ['CONFIRMED', 'CHECKED_OUT', 'CHECKED_IN'] },
@@ -216,7 +219,7 @@ export async function GET(request: NextRequest) {
       return (invoice.total || 0) - finesAmount
     }
 
-    // Calculate metrics
+    // Calculate booking-level metrics
     let totalRevenue = 0
     let totalBookings = 0
     const bookingDetails: any[] = []
@@ -246,6 +249,58 @@ export async function GET(request: NextRequest) {
         status: booking.status,
       })
     })
+
+    // Get successful payments for these bookings
+    const payments = bookingIds.length > 0
+      ? await Payment.find({
+          booking: { $in: bookingIds },
+          status: 'SUCCESS',
+        }).lean()
+      : []
+    const totalPaid = payments.reduce((sum: number, payment: any) => {
+      return sum + Number(payment.amount ?? 0)
+    }, 0)
+
+    // Get expenses linked directly to this vehicle in selected period
+    const expenses = await Expense.find({
+      vehicle: vehicleId,
+      isDeleted: false,
+      dateIncurred: {
+        $gte: actualDateFrom,
+        $lte: actualDateTo,
+      },
+    }).lean()
+    const totalExpenses = expenses.reduce((sum: number, exp: any) => {
+      return sum + Number(exp.amount ?? 0)
+    }, 0)
+
+    // Get maintenance costs in selected period
+    const maintenanceRecords = await MaintenanceRecord.find({
+      vehicle: vehicleId,
+      $or: [
+        {
+          completedDate: {
+            $gte: actualDateFrom,
+            $lte: actualDateTo,
+          },
+        },
+        {
+          scheduledDate: {
+            $gte: actualDateFrom,
+            $lte: actualDateTo,
+          },
+        },
+        {
+          createdAt: {
+            $gte: actualDateFrom,
+            $lte: actualDateTo,
+          },
+        },
+      ],
+    }).lean()
+    const maintenanceCost = maintenanceRecords.reduce((sum: number, record: any) => {
+      return sum + Number(record.cost ?? 0)
+    }, 0)
 
     // Calculate period days
     const periodDays = Math.max(1, differenceInDays(actualDateTo, actualDateFrom) + 1)
@@ -328,7 +383,10 @@ export async function GET(request: NextRequest) {
     const monthlyBreakdown = calculatePeriodBreakdown('MONTH')
     const yearlyBreakdown = calculatePeriodBreakdown('YEAR')
 
-    // Calculate break-even metrics
+    // Financial totals
+    const operationalProfit = totalRevenue - totalExpenses - maintenanceCost
+
+    // Calculate break-even metrics against purchase cost
     const netProfit = totalRevenue - vehiclePurchaseCost
     const breakEvenStatus = vehiclePurchaseCost > 0 
       ? (netProfit >= 0 ? 'BREAK_EVEN' : 'NOT_BREAK_EVEN')
@@ -361,8 +419,13 @@ export async function GET(request: NextRequest) {
         hasPurchaseCost: vehiclePurchaseCost > 0,
       },
       metrics: {
-        totalRevenue,
-        totalBookings,
+        totalRevenue: Math.round(totalRevenue * 100) / 100,
+        totalBookings: Number(totalBookings || 0),
+        completedBookings: Number(totalBookings || 0),
+        totalPaid: Math.round(totalPaid * 100) / 100,
+        totalExpenses: Math.round(totalExpenses * 100) / 100,
+        maintenanceCost: Math.round(maintenanceCost * 100) / 100,
+        operationalProfit: Math.round(operationalProfit * 100) / 100,
         daysRented,
         daysAvailable: periodDays - daysRented,
         utilizationRate: Math.round(utilizationRate * 100) / 100,
