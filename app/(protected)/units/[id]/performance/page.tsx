@@ -1,607 +1,366 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
-import { format } from 'date-fns'
-import SectionCard from '@/components/ui/SectionCard'
-import { Loader2, ArrowLeft, Calendar, TrendingUp, Car, Coins, DollarSign, Target, TrendingDown } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { formatCurrency } from '@/lib/utils/format'
+import { useEffect, useState } from 'react'
+import { useParams } from 'next/navigation'
+
+const fmtAED = (val: number | undefined | null) => {
+  const n = Number(val ?? 0)
+  if (Number.isNaN(n)) return 'AED 0.00'
+  return `AED ${n.toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+const fmtDate = (val: string | null | undefined) => {
+  if (!val) return '—'
+  const d = new Date(val)
+  return Number.isNaN(d.getTime())
+    ? '—'
+    : d.toLocaleDateString('en-AE', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+const StatusBadge = ({ status }: { status: string }) => {
+  const s = (status ?? '').toLowerCase()
+  const cls =
+    ['paid', 'completed', 'settled', 'done', 'received', 'success'].includes(s) ? 'bg-green-100 text-green-700' :
+    ['overdue', 'late', 'past_due', 'expired'].includes(s) ? 'bg-red-100 text-red-700' :
+    ['pending', 'unpaid', 'open', 'outstanding', 'issued'].includes(s) ? 'bg-orange-100 text-orange-700' :
+    ['draft', 'new', 'created'].includes(s) ? 'bg-gray-100 text-gray-600' :
+    ['active', 'ongoing', 'rented', 'confirmed', 'checked_out'].includes(s) ? 'bg-blue-100 text-blue-700' :
+    'bg-gray-100 text-gray-500'
+  return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${cls}`}>{status || 'unknown'}</span>
+}
 
 export default function VehiclePerformancePage() {
   const params = useParams()
-  const router = useRouter()
   const vehicleId = params.id as string
 
+  const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [reportData, setReportData] = useState<any>(null)
-  const [period, setPeriod] = useState<'WEEK' | 'MONTH' | 'YEAR'>('MONTH')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
+  const [error, setError] = useState('')
+  const [period, setPeriod] = useState('30')
+  const [activeSection, setActiveSection] = useState<'overview' | 'invoices' | 'bookings' | 'expenses'>('overview')
 
-  useEffect(() => {
-    fetchReportData()
-  }, [vehicleId, period, dateFrom, dateTo])
-
-  const fetchReportData = async () => {
-    setLoading(true)
-    setError(null)
+  const fetchData = async (p = period) => {
+    if (!vehicleId) return
     try {
-      const params = new URLSearchParams({
-        vehicleId,
-        period,
-        ...(dateFrom && { dateFrom }),
-        ...(dateTo && { dateTo }),
-      })
-
-      const response = await fetch(`/api/reports/vehicle-performance?${params.toString()}`)
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to fetch vehicle performance')
+      setLoading(true)
+      setError('')
+      const res = await fetch(`/api/reports/vehicle-performance?vehicleId=${vehicleId}&period=${p}`)
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || `HTTP ${res.status}`)
       }
-
-      const data = await response.json()
-      setReportData(data)
-    } catch (err: any) {
-      setError(err.message || 'Failed to load vehicle performance')
+      const json = await res.json()
+      setData(json.vehicle ?? json.vehicles?.[0] ?? null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load')
     } finally {
       setLoading(false)
     }
   }
 
+  useEffect(() => {
+    fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vehicleId])
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-sidebarActiveBg" />
+      <div className="space-y-4 p-4">
+        {[...Array(4)].map((_, i) => <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse" />)}
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-600">
-        {error}
+      <div className="p-6 text-center">
+        <p className="text-red-500 font-medium">{error}</p>
+        <button onClick={() => fetchData()} className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg text-sm">
+          Retry
+        </button>
       </div>
     )
   }
 
-  if (!reportData) {
-    return <div className="text-center py-12 text-bodyText">No data available</div>
-  }
+  if (!data) return <div className="p-6 text-center text-gray-400">No performance data available</div>
 
-  const { vehicle, period: periodInfo, purchaseCost, metrics, weeklyBreakdown, monthlyBreakdown, yearlyBreakdown, bookings } = reportData
-  const toNumber = (value: unknown): number => {
-    const n = Number(value ?? 0)
-    return Number.isFinite(n) ? n : 0
-  }
-  const safeMetrics = {
-    totalRevenue: toNumber(metrics?.totalRevenue),
-    totalBookings: toNumber(metrics?.totalBookings),
-    utilizationRate: Math.min(100, Math.max(0, toNumber(metrics?.utilizationRate))),
-    daysRented: toNumber(metrics?.daysRented),
-    totalPaid: toNumber(metrics?.totalPaid),
-    totalExpenses: toNumber(metrics?.totalExpenses),
-    maintenanceCost: toNumber(metrics?.maintenanceCost),
-    operationalProfit: toNumber(metrics?.operationalProfit),
-    averageDailyRevenue: toNumber(metrics?.averageDailyRevenue),
-    averageRevenuePerBooking: toNumber(metrics?.averageRevenuePerBooking),
-    daysAvailable: toNumber(metrics?.daysAvailable),
-    breakEvenStatus: metrics?.breakEvenStatus ?? 'NO_PURCHASE_COST',
-    breakEvenPercentage: toNumber(metrics?.breakEvenPercentage),
-    remainingToBreakEven: toNumber(metrics?.remainingToBreakEven),
-    profitAfterBreakEven: toNumber(metrics?.profitAfterBreakEven),
-    netProfit: toNumber(metrics?.netProfit),
-  }
+  const at = data.allTime ?? {}
+  const pr = data.period ?? {}
+  const inv = at.invoices ?? {}
+  const invList: any[] = inv.list ?? []
+  const bkList: any[] = at.bookingDetails ?? []
+  const expList: any[] = at.expenses?.list ?? []
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2 items-center">
+        <span className="text-xs font-semibold text-gray-400 uppercase">Period:</span>
+        {[
+          { v: '7', l: '7 Days' },
+          { v: '30', l: '30 Days' },
+          { v: '90', l: '3 Months' },
+          { v: '180', l: '6 Months' },
+          { v: '365', l: 'This Year' },
+        ].map((p) => (
           <button
-            onClick={() => router.back()}
-            className="p-2 hover:bg-pageBg rounded-lg transition-colors"
+            key={p.v}
+            onClick={() => {
+              setPeriod(p.v)
+              fetchData(p.v)
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              period === p.v ? 'bg-blue-600 text-white shadow-sm' : 'border border-gray-300 text-gray-600 hover:bg-gray-50'
+            }`}
           >
-            <ArrowLeft className="w-5 h-5 text-bodyText" />
+            {p.l}
           </button>
-          <div>
-            <h1 className="text-3xl font-bold text-headingText">Vehicle Performance Report</h1>
-            <p className="text-bodyText mt-1">
-              {vehicle.plateNumber} - {vehicle.brand} {vehicle.model}
-              {vehicle.color && ` (${vehicle.color})`}
-            </p>
-          </div>
-        </div>
+        ))}
       </div>
 
-      {/* Filters */}
-      <SectionCard>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-headingText mb-2">Period</label>
-            <select
-              value={period}
-              onChange={(e) => setPeriod(e.target.value as 'WEEK' | 'MONTH' | 'YEAR')}
-              className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20"
-            >
-              <option value="WEEK">This Week</option>
-              <option value="MONTH">This Month</option>
-              <option value="YEAR">This Year</option>
-            </select>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          { label: 'Total Invoiced', value: fmtAED(inv.totalInvoiced), sub: `${inv.count ?? 0} invoices`, color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-100' },
+          { label: 'Amount Received', value: fmtAED(inv.totalPaid), sub: `${inv.paidCount ?? 0} paid`, color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-100' },
+          { label: 'Outstanding Due', value: fmtAED(inv.totalDue), sub: `${(inv.pendingCount ?? 0) + (inv.overdueCount ?? 0)} unpaid`, color: (inv.totalDue ?? 0) > 0 ? 'text-orange-700' : 'text-gray-500', bg: (inv.totalDue ?? 0) > 0 ? 'bg-orange-50' : 'bg-gray-50', border: (inv.totalDue ?? 0) > 0 ? 'border-orange-100' : 'border-gray-100' },
+          { label: 'Net Profit', value: fmtAED(at.netProfit), sub: `After AED ${Number(at.totalCosts ?? 0).toLocaleString('en-AE')} costs`, color: (at.netProfit ?? 0) >= 0 ? 'text-green-700' : 'text-red-700', bg: (at.netProfit ?? 0) >= 0 ? 'bg-green-50' : 'bg-red-50', border: (at.netProfit ?? 0) >= 0 ? 'border-green-100' : 'border-red-100' },
+        ].map((card) => (
+          <div key={card.label} className={`${card.bg} border ${card.border} rounded-xl p-4`}>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{card.label}</p>
+            <p className={`text-lg font-bold mt-1 break-all ${card.color}`}>{card.value}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{card.sub}</p>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-headingText mb-2">Date From</label>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-headingText mb-2">Date To</label>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20"
-            />
-          </div>
-          <div className="flex items-end">
-            <button
-              onClick={() => {
-                setDateFrom('')
-                setDateTo('')
-                setPeriod('MONTH')
-              }}
-              className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText hover:bg-borderSoft transition-colors"
-            >
-              Reset
-            </button>
-          </div>
-        </div>
-      </SectionCard>
-
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <SectionCard>
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-green-100 rounded-lg">
-              <Coins className="w-6 h-6 text-green-600" />
-            </div>
-            <div>
-              <p className="text-sm text-sidebarMuted">Total Revenue</p>
-              <p className="text-2xl font-bold text-headingText">
-                {formatCurrency(safeMetrics.totalRevenue)}
-              </p>
-            </div>
-          </div>
-        </SectionCard>
-
-        <SectionCard>
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-blue-100 rounded-lg">
-              <Car className="w-6 h-6 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-sm text-sidebarMuted">Total Bookings</p>
-              <p className="text-2xl font-bold text-headingText">{safeMetrics.totalBookings}</p>
-            </div>
-          </div>
-        </SectionCard>
-
-        <SectionCard>
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-purple-100 rounded-lg">
-              <TrendingUp className="w-6 h-6 text-purple-600" />
-            </div>
-            <div>
-              <p className="text-sm text-sidebarMuted">Utilization Rate</p>
-              <p className="text-2xl font-bold text-headingText">{safeMetrics.utilizationRate.toFixed(1)}%</p>
-            </div>
-          </div>
-        </SectionCard>
-
-        <SectionCard>
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-orange-100 rounded-lg">
-              <Calendar className="w-6 h-6 text-orange-600" />
-            </div>
-            <div>
-              <p className="text-sm text-sidebarMuted">Days Rented</p>
-              <p className="text-2xl font-bold text-headingText">
-                {safeMetrics.daysRented} / {toNumber(periodInfo?.days)}
-              </p>
-            </div>
-          </div>
-        </SectionCard>
+        ))}
       </div>
 
-      {/* Purchase Cost & Break-Even Metrics */}
-      {purchaseCost !== undefined && (
-        <SectionCard>
-          <h3 className="text-lg font-semibold text-headingText mb-4">Purchase Cost & Break-Even Analysis</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <DollarSign className="w-5 h-5 text-gray-600" />
-                <p className="text-sm text-sidebarMuted">Purchase Cost</p>
-              </div>
-              <p className="text-2xl font-bold text-headingText">
-                {purchaseCost.hasPurchaseCost ? formatCurrency(purchaseCost.amount) : 'Not Recorded'}
-              </p>
-              {!purchaseCost.hasPurchaseCost && (
-                <p className="text-xs text-sidebarMuted mt-1">
-                  {`Add expense with "PURCHASE PRICE FROM AUCTION" category`}
-                </p>
-              )}
-            </div>
+      <div className="grid grid-cols-3 lg:grid-cols-6 gap-2">
+        {[
+          { label: 'Total Bookings', value: at.totalBookings ?? 0, suffix: '' },
+          { label: 'Days Rented', value: at.totalRentalDays ?? 0, suffix: 'd' },
+          { label: 'Avg Rental', value: at.avgBookingDays ?? 0, suffix: 'd' },
+          { label: 'Rev / Day', value: `AED ${(at.revenuePerDay ?? 0).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`, suffix: '' },
+          { label: 'Utilization', value: pr.utilizationPercent ?? 0, suffix: '%' },
+          { label: 'Fines', value: fmtAED(at.fines?.total ?? 0), suffix: '' },
+        ].map((stat) => (
+          <div key={stat.label} className="bg-white border border-gray-200 rounded-xl p-3 text-center">
+            <p className="text-xs text-gray-400 font-medium">{stat.label}</p>
+            <p className="text-base font-bold text-gray-800 mt-0.5">{stat.value}{stat.suffix}</p>
+          </div>
+        ))}
+      </div>
 
-            <div className={`p-4 rounded-lg ${
-              safeMetrics.breakEvenStatus === 'BREAK_EVEN' 
-                ? 'bg-green-50' 
-                : safeMetrics.breakEvenStatus === 'NOT_BREAK_EVEN'
-                ? 'bg-yellow-50'
-                : 'bg-gray-50'
-            }`}>
-              <div className="flex items-center gap-2 mb-2">
-                <Target className={`w-5 h-5 ${
-                  safeMetrics.breakEvenStatus === 'BREAK_EVEN' 
-                    ? 'text-green-600' 
-                    : safeMetrics.breakEvenStatus === 'NOT_BREAK_EVEN'
-                    ? 'text-yellow-600'
-                    : 'text-gray-600'
-                }`} />
-                <p className="text-sm text-sidebarMuted">Break-Even Status</p>
-              </div>
-              <p className={`text-xl font-bold ${
-                safeMetrics.breakEvenStatus === 'BREAK_EVEN' 
-                  ? 'text-green-600' 
-                  : safeMetrics.breakEvenStatus === 'NOT_BREAK_EVEN'
-                  ? 'text-yellow-600'
-                  : 'text-headingText'
-              }`}>
-                {safeMetrics.breakEvenStatus === 'BREAK_EVEN' 
-                  ? '✓ Break-Even Reached' 
-                  : safeMetrics.breakEvenStatus === 'NOT_BREAK_EVEN'
-                  ? 'Not Yet Break-Even'
-                  : 'No Purchase Cost'}
-              </p>
-              <p className="text-sm text-sidebarMuted mt-1">
-                {safeMetrics.breakEvenPercentage.toFixed(1)}% of purchase cost recovered
-              </p>
-            </div>
+      <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+        {[
+          { k: 'overview', l: 'Overview' },
+          { k: 'invoices', l: `Invoices (${invList.length})` },
+          { k: 'bookings', l: `Bookings (${bkList.length})` },
+          { k: 'expenses', l: `Expenses (${expList.length})` },
+        ].map((tab) => (
+          <button
+            key={tab.k}
+            onClick={() => setActiveSection(tab.k as any)}
+            className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
+              activeSection === tab.k ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {tab.l}
+          </button>
+        ))}
+      </div>
 
-            {safeMetrics.breakEvenStatus === 'NOT_BREAK_EVEN' && (
-              <div className="p-4 bg-yellow-50 rounded-lg">
-                <div className="flex items-center gap-2 mb-2">
-                  <TrendingDown className="w-5 h-5 text-yellow-600" />
-                  <p className="text-sm text-sidebarMuted">Remaining to Break-Even</p>
+      {activeSection === 'overview' && (
+        <div className="space-y-3">
+          <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <h3 className="text-sm font-bold text-gray-800 mb-3">Invoice Status Breakdown</h3>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: 'Paid', count: inv.paidCount ?? 0, amount: invList.filter((i) => i.isPaid).reduce((s: number, i: any) => s + i.totalAmount, 0), color: 'text-green-600', dot: 'bg-green-500' },
+                { label: 'Pending', count: inv.pendingCount ?? 0, amount: invList.filter((i) => i.isPending).reduce((s: number, i: any) => s + i.totalAmount, 0), color: 'text-orange-600', dot: 'bg-orange-500' },
+                { label: 'Overdue', count: inv.overdueCount ?? 0, amount: invList.filter((i) => i.isOverdue).reduce((s: number, i: any) => s + i.totalAmount, 0), color: 'text-red-600', dot: 'bg-red-500' },
+                { label: 'Draft', count: inv.draftCount ?? 0, amount: invList.filter((i) => i.isDraft).reduce((s: number, i: any) => s + i.totalAmount, 0), color: 'text-gray-500', dot: 'bg-gray-400' },
+              ].map((item) => (
+                <div key={item.label} className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg">
+                  <span className={`w-2 h-2 rounded-full mt-1 flex-shrink-0 ${item.dot}`} />
+                  <div>
+                    <p className="text-xs text-gray-500">{item.label}</p>
+                    <p className={`text-sm font-bold ${item.color}`}>{item.count} invoices</p>
+                    <p className="text-xs text-gray-400">{fmtAED(item.amount)}</p>
+                  </div>
                 </div>
-                <p className="text-2xl font-bold text-yellow-600">
-                  {formatCurrency(safeMetrics.remainingToBreakEven)}
-                </p>
-              </div>
-            )}
-
-            {safeMetrics.breakEvenStatus === 'BREAK_EVEN' && (
-              <div className="p-4 bg-green-50 rounded-lg">
-                <div className="flex items-center gap-2 mb-2">
-                  <TrendingUp className="w-5 h-5 text-green-600" />
-                  <p className="text-sm text-sidebarMuted">Profit After Break-Even</p>
-                </div>
-                <p className="text-2xl font-bold text-green-600">
-                  {formatCurrency(safeMetrics.profitAfterBreakEven)}
-                </p>
-              </div>
-            )}
-
-            <div className="p-4 bg-blue-50 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <Coins className="w-5 h-5 text-blue-600" />
-                <p className="text-sm text-sidebarMuted">Net Profit/Loss</p>
-              </div>
-              <p className={`text-2xl font-bold ${
-                safeMetrics.operationalProfit >= 0 ? 'text-green-600' : 'text-red-600'
-              }`}>
-                {formatCurrency(safeMetrics.operationalProfit)}
-              </p>
-              <p className="text-xs text-sidebarMuted mt-1">
-                Revenue - Expenses - Maintenance
-              </p>
+              ))}
             </div>
           </div>
 
-          {/* Break-Even Progress Bar */}
-          <div className="mt-6">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-medium text-headingText">Break-Even Progress</p>
-              <p className="text-sm text-sidebarMuted">{safeMetrics.breakEvenPercentage.toFixed(1)}%</p>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-3">
-              <div
-                className={`h-3 rounded-full transition-all ${
-                  safeMetrics.breakEvenStatus === 'BREAK_EVEN'
-                    ? 'bg-green-500'
-                    : 'bg-yellow-500'
-                }`}
-                style={{ width: `${Math.min(100, safeMetrics.breakEvenPercentage)}%` }}
-              />
+          <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <h3 className="text-sm font-bold text-gray-800 mb-3">Revenue vs Costs (All Time)</h3>
+            <div className="space-y-2">
+              {[
+                { label: 'Total Revenue', value: at.totalRevenue, color: 'text-emerald-700' },
+                { label: 'Amount Received', value: at.totalReceived, color: 'text-blue-600' },
+                { label: 'Outstanding', value: at.totalOutstanding, color: 'text-orange-600' },
+                { label: 'Total Expenses', value: at.expenses?.total, color: 'text-red-600' },
+                { label: 'Maintenance', value: at.maintenance?.total, color: 'text-yellow-600' },
+                { label: 'Fines', value: at.fines?.total, color: 'text-red-500' },
+              ].map((row) => (
+                <div key={row.label} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
+                  <span className="text-sm text-gray-600">{row.label}</span>
+                  <span className={`text-sm font-bold ${row.color}`}>{fmtAED(row.value ?? 0)}</span>
+                </div>
+              ))}
+              <div className="flex justify-between items-center py-2 mt-1 bg-gray-50 rounded-lg px-3">
+                <span className="text-sm font-bold text-gray-700">Net Profit</span>
+                <span className={`text-sm font-bold ${(at.netProfit ?? 0) >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmtAED(at.netProfit ?? 0)}</span>
+              </div>
             </div>
           </div>
-        </SectionCard>
+        </div>
       )}
 
-      {/* Additional Metrics */}
-      <SectionCard>
-        <h3 className="text-lg font-semibold text-headingText mb-4">Performance Metrics</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div>
-            <p className="text-sm text-sidebarMuted">Average Daily Revenue</p>
-            <p className="text-xl font-bold text-headingText">
-              {formatCurrency(safeMetrics.averageDailyRevenue)}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-sidebarMuted">Average Revenue per Booking</p>
-            <p className="text-xl font-bold text-headingText">
-              {formatCurrency(safeMetrics.averageRevenuePerBooking)}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-sidebarMuted">Days Available</p>
-            <p className="text-xl font-bold text-headingText">{safeMetrics.daysAvailable}</p>
-          </div>
-        </div>
-      </SectionCard>
-
-      {/* Revenue Breakdown Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Weekly Breakdown */}
-        {weeklyBreakdown && weeklyBreakdown.length > 0 && (
-          <SectionCard>
-            <h3 className="text-lg font-semibold text-headingText mb-4">Weekly Revenue Breakdown</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={weeklyBreakdown}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="period" 
-                  tickFormatter={(value) => format(new Date(value), 'MMM dd')}
-                />
-                <YAxis />
-                <Tooltip 
-                  formatter={(value: number) => formatCurrency(value)}
-                  labelFormatter={(value) => `Week of ${format(new Date(value), 'MMM dd, yyyy')}`}
-                />
-                <Legend />
-                <Bar dataKey="revenue" fill="#3B82F6" name="Revenue (AED)" />
-              </BarChart>
-            </ResponsiveContainer>
-            <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
-              <div>
-                <p className="text-sidebarMuted">Total Weeks</p>
-                <p className="font-semibold text-headingText">{weeklyBreakdown.length}</p>
-              </div>
-              <div>
-                <p className="text-sidebarMuted">Avg Weekly Revenue</p>
-                <p className="font-semibold text-headingText">
-                  {formatCurrency(
-                    weeklyBreakdown.length > 0
-                      ? weeklyBreakdown.reduce((sum: number, w: any) => sum + w.revenue, 0) / weeklyBreakdown.length
-                      : 0
-                  )}
-                </p>
-              </div>
-              <div>
-                <p className="text-sidebarMuted">Best Week</p>
-                <p className="font-semibold text-headingText">
-                  {formatCurrency(
-                    weeklyBreakdown.length > 0
-                      ? Math.max(...weeklyBreakdown.map((w: any) => w.revenue))
-                      : 0
-                  )}
-                </p>
-              </div>
+      {activeSection === 'invoices' && (
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          {invList.length === 0 ? (
+            <div className="p-8 text-center text-gray-400">
+              <p className="text-lg">No invoices found for this vehicle</p>
+              <p className="text-sm mt-1">Invoices will appear here once created</p>
             </div>
-          </SectionCard>
-        )}
-
-        {/* Monthly Breakdown */}
-        {monthlyBreakdown && monthlyBreakdown.length > 0 && (
-          <SectionCard>
-            <h3 className="text-lg font-semibold text-headingText mb-4">Monthly Revenue Breakdown</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={monthlyBreakdown}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="period" 
-                  tickFormatter={(value) => format(new Date(value + '-01'), 'MMM yyyy')}
-                />
-                <YAxis />
-                <Tooltip 
-                  formatter={(value: number) => formatCurrency(value)}
-                  labelFormatter={(value) => format(new Date(value + '-01'), 'MMMM yyyy')}
-                />
-                <Legend />
-                <Bar dataKey="revenue" fill="#F97316" name="Revenue (AED)" />
-              </BarChart>
-            </ResponsiveContainer>
-            <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
-              <div>
-                <p className="text-sidebarMuted">Total Months</p>
-                <p className="font-semibold text-headingText">{monthlyBreakdown.length}</p>
-              </div>
-              <div>
-                <p className="text-sidebarMuted">Avg Monthly Revenue</p>
-                <p className="font-semibold text-headingText">
-                  {formatCurrency(
-                    monthlyBreakdown.length > 0
-                      ? monthlyBreakdown.reduce((sum: number, m: any) => sum + m.revenue, 0) / monthlyBreakdown.length
-                      : 0
-                  )}
-                </p>
-              </div>
-              <div>
-                <p className="text-sidebarMuted">Best Month</p>
-                <p className="font-semibold text-headingText">
-                  {formatCurrency(
-                    monthlyBreakdown.length > 0
-                      ? Math.max(...monthlyBreakdown.map((m: any) => m.revenue))
-                      : 0
-                  )}
-                </p>
-              </div>
-            </div>
-          </SectionCard>
-        )}
-      </div>
-
-      {/* Yearly Breakdown */}
-      {yearlyBreakdown && yearlyBreakdown.length > 0 && (
-        <SectionCard>
-          <h3 className="text-lg font-semibold text-headingText mb-4">Yearly Revenue Breakdown</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={yearlyBreakdown}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="period" />
-              <YAxis />
-              <Tooltip formatter={(value: number) => formatCurrency(value)} />
-              <Legend />
-              <Bar dataKey="revenue" fill="#10B981" name="Revenue (AED)" />
-            </BarChart>
-          </ResponsiveContainer>
-          <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
-            <div>
-              <p className="text-sidebarMuted">Total Years</p>
-              <p className="font-semibold text-headingText">{yearlyBreakdown.length}</p>
-            </div>
-            <div>
-              <p className="text-sidebarMuted">Avg Yearly Revenue</p>
-              <p className="font-semibold text-headingText">
-                {formatCurrency(
-                  yearlyBreakdown.length > 0
-                    ? yearlyBreakdown.reduce((sum: number, y: any) => sum + y.revenue, 0) / yearlyBreakdown.length
-                    : 0
-                )}
-              </p>
-            </div>
-            <div>
-              <p className="text-sidebarMuted">Best Year</p>
-              <p className="font-semibold text-headingText">
-                {formatCurrency(
-                  yearlyBreakdown.length > 0
-                    ? Math.max(...yearlyBreakdown.map((y: any) => y.revenue))
-                    : 0
-                )}
-              </p>
-            </div>
-          </div>
-        </SectionCard>
-      )}
-
-      {/* Revenue Summary Table */}
-      <SectionCard>
-        <h3 className="text-lg font-semibold text-headingText mb-4">Revenue Summary by Period</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-borderSoft">
-                <th className="text-left py-3 px-4 text-sm font-semibold text-headingText">Period</th>
-                <th className="text-right py-3 px-4 text-sm font-semibold text-headingText">Revenue</th>
-                <th className="text-right py-3 px-4 text-sm font-semibold text-headingText">Bookings</th>
-                <th className="text-right py-3 px-4 text-sm font-semibold text-headingText">Days Rented</th>
-                <th className="text-right py-3 px-4 text-sm font-semibold text-headingText">Avg Daily Revenue</th>
-              </tr>
-            </thead>
-            <tbody>
-              {period === 'WEEK' && weeklyBreakdown && weeklyBreakdown.map((week: any) => (
-                <tr key={week.period} className="border-b border-borderSoft hover:bg-pageBg">
-                  <td className="py-3 px-4 text-bodyText">
-                    Week of {format(new Date(week.period), 'MMM dd, yyyy')}
-                  </td>
-                  <td className="py-3 px-4 text-right font-semibold text-headingText">
-                    {formatCurrency(week.revenue)}
-                  </td>
-                  <td className="py-3 px-4 text-right text-bodyText">{week.bookings}</td>
-                  <td className="py-3 px-4 text-right text-bodyText">{week.days}</td>
-                  <td className="py-3 px-4 text-right text-bodyText">
-                    {formatCurrency(week.days > 0 ? week.revenue / week.days : 0)}
-                  </td>
-                </tr>
-              ))}
-              {period === 'MONTH' && monthlyBreakdown && monthlyBreakdown.map((month: any) => (
-                <tr key={month.period} className="border-b border-borderSoft hover:bg-pageBg">
-                  <td className="py-3 px-4 text-bodyText">
-                    {format(new Date(month.period + '-01'), 'MMMM yyyy')}
-                  </td>
-                  <td className="py-3 px-4 text-right font-semibold text-headingText">
-                    {formatCurrency(month.revenue)}
-                  </td>
-                  <td className="py-3 px-4 text-right text-bodyText">{month.bookings}</td>
-                  <td className="py-3 px-4 text-right text-bodyText">{month.days}</td>
-                  <td className="py-3 px-4 text-right text-bodyText">
-                    {formatCurrency(month.days > 0 ? month.revenue / month.days : 0)}
-                  </td>
-                </tr>
-              ))}
-              {period === 'YEAR' && yearlyBreakdown && yearlyBreakdown.map((year: any) => (
-                <tr key={year.period} className="border-b border-borderSoft hover:bg-pageBg">
-                  <td className="py-3 px-4 text-bodyText font-medium">{year.period}</td>
-                  <td className="py-3 px-4 text-right font-semibold text-headingText">
-                    {formatCurrency(year.revenue)}
-                  </td>
-                  <td className="py-3 px-4 text-right text-bodyText">{year.bookings}</td>
-                  <td className="py-3 px-4 text-right text-bodyText">{year.days}</td>
-                  <td className="py-3 px-4 text-right text-bodyText">
-                    {formatCurrency(year.days > 0 ? year.revenue / year.days : 0)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </SectionCard>
-
-      {/* Bookings List */}
-      {bookings.length > 0 && (
-        <SectionCard>
-          <h3 className="text-lg font-semibold text-headingText mb-4">Booking Details</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-borderSoft">
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-headingText">Start Date</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-headingText">End Date</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-headingText">Days</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-headingText">Revenue</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-headingText">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {bookings.map((booking: any) => (
-                  <tr key={booking.bookingId} className="border-b border-borderSoft hover:bg-pageBg">
-                    <td className="py-3 px-4 text-bodyText">
-                      {format(new Date(booking.startDate), 'MMM dd, yyyy')}
-                    </td>
-                    <td className="py-3 px-4 text-bodyText">
-                      {booking.endDate ? format(new Date(booking.endDate), 'MMM dd, yyyy') : 'Open'}
-                    </td>
-                    <td className="py-3 px-4 text-bodyText">{booking.days}</td>
-                    <td className="py-3 px-4 font-semibold text-headingText">
-                      {formatCurrency(booking.revenue)}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="px-2 py-1 rounded text-xs bg-green-100 text-green-800">
-                        {booking.status}
-                      </span>
-                    </td>
-                  </tr>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-0 border-b border-gray-200">
+                {[
+                  { label: 'Total Invoiced', value: fmtAED(inv.totalInvoiced), color: 'text-blue-700' },
+                  { label: 'Received', value: fmtAED(inv.totalPaid), color: 'text-green-700' },
+                  { label: 'Outstanding', value: fmtAED(inv.totalDue), color: 'text-orange-700' },
+                ].map((s, i) => (
+                  <div key={i} className={`p-3 text-center ${i < 2 ? 'border-r border-gray-200' : ''}`}>
+                    <p className="text-xs text-gray-400">{s.label}</p>
+                    <p className={`text-sm font-bold mt-0.5 ${s.color}`}>{s.value}</p>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </SectionCard>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="px-4 py-3 text-left text-gray-500 font-semibold">Invoice #</th>
+                      <th className="px-4 py-3 text-left text-gray-500 font-semibold">Issue Date</th>
+                      <th className="px-4 py-3 text-left text-gray-500 font-semibold">Rental Period</th>
+                      <th className="px-4 py-3 text-center text-gray-500 font-semibold">Days</th>
+                      <th className="px-4 py-3 text-right text-gray-500 font-semibold">Total (AED)</th>
+                      <th className="px-4 py-3 text-right text-gray-500 font-semibold">Paid (AED)</th>
+                      <th className="px-4 py-3 text-right text-gray-500 font-semibold">Due (AED)</th>
+                      <th className="px-4 py-3 text-center text-gray-500 font-semibold">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {invList.map((invoice: any) => (
+                      <tr key={invoice.invoiceId} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3 font-semibold text-gray-800">#{invoice.invoiceNumber || invoice.invoiceId.slice(-6)}</td>
+                        <td className="px-4 py-3 text-gray-500">{fmtDate(invoice.issueDate)}</td>
+                        <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{fmtDate(invoice.startDate)} → {fmtDate(invoice.endDate)}</td>
+                        <td className="px-4 py-3 text-center font-bold text-blue-700">{invoice.rentalDays > 0 ? `${invoice.rentalDays}d` : '—'}</td>
+                        <td className="px-4 py-3 text-right font-bold text-gray-800">{fmtAED(invoice.totalAmount)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-emerald-600">{fmtAED(invoice.paidAmount)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-orange-600">{invoice.dueAmount > 0 ? fmtAED(invoice.dueAmount) : '—'}</td>
+                        <td className="px-4 py-3 text-center"><StatusBadge status={invoice.status} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-gray-50 border-t-2 border-gray-300 font-bold">
+                      <td colSpan={4} className="px-4 py-3 text-gray-700">TOTAL ({invList.length} invoices)</td>
+                      <td className="px-4 py-3 text-right text-blue-700">{fmtAED(invList.reduce((s: number, i: any) => s + i.totalAmount, 0))}</td>
+                      <td className="px-4 py-3 text-right text-emerald-700">{fmtAED(invList.reduce((s: number, i: any) => s + i.paidAmount, 0))}</td>
+                      <td className="px-4 py-3 text-right text-orange-700">{fmtAED(invList.reduce((s: number, i: any) => s + i.dueAmount, 0))}</td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {activeSection === 'bookings' && (
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          {bkList.length === 0 ? (
+            <div className="p-8 text-center text-gray-400">No bookings found for this vehicle</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200">
+                    <th className="px-4 py-3 text-left text-gray-500 font-semibold">Booking #</th>
+                    <th className="px-4 py-3 text-left text-gray-500 font-semibold">Customer</th>
+                    <th className="px-4 py-3 text-left text-gray-500 font-semibold">Start</th>
+                    <th className="px-4 py-3 text-left text-gray-500 font-semibold">End</th>
+                    <th className="px-4 py-3 text-center text-gray-500 font-semibold">Days</th>
+                    <th className="px-4 py-3 text-right text-gray-500 font-semibold">Amount (AED)</th>
+                    <th className="px-4 py-3 text-center text-gray-500 font-semibold">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {bkList.map((bk: any) => (
+                    <tr key={bk.bookingId} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-semibold text-gray-800">#{bk.bookingNumber || bk.bookingId.slice(-6)}</td>
+                      <td className="px-4 py-3 text-gray-600">{bk.customerName || '—'}</td>
+                      <td className="px-4 py-3 text-gray-500">{fmtDate(bk.startDate)}</td>
+                      <td className="px-4 py-3 text-gray-500">{fmtDate(bk.endDate)}</td>
+                      <td className="px-4 py-3 text-center font-bold text-blue-700">{bk.rentalDays > 0 ? `${bk.rentalDays}d` : '—'}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-emerald-600">{bk.amount > 0 ? fmtAED(bk.amount) : '—'}</td>
+                      <td className="px-4 py-3 text-center"><StatusBadge status={bk.status} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-gray-50 border-t-2 border-gray-300 font-bold">
+                    <td colSpan={4} className="px-4 py-3 text-gray-700">TOTAL ({bkList.length} bookings)</td>
+                    <td className="px-4 py-3 text-center text-blue-700">{bkList.reduce((s: number, b: any) => s + b.rentalDays, 0)}d</td>
+                    <td className="px-4 py-3 text-right text-emerald-700">{fmtAED(bkList.reduce((s: number, b: any) => s + b.amount, 0))}</td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeSection === 'expenses' && (
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          {expList.length === 0 ? (
+            <div className="p-8 text-center text-gray-400">No expenses found for this vehicle</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200">
+                    <th className="px-4 py-3 text-left text-gray-500 font-semibold">Date</th>
+                    <th className="px-4 py-3 text-left text-gray-500 font-semibold">Description</th>
+                    <th className="px-4 py-3 text-left text-gray-500 font-semibold">Category</th>
+                    <th className="px-4 py-3 text-right text-gray-500 font-semibold">Amount (AED)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {expList.map((exp: any) => (
+                    <tr key={exp.expenseId} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-gray-500">{fmtDate(exp.date)}</td>
+                      <td className="px-4 py-3 text-gray-700">{exp.description}</td>
+                      <td className="px-4 py-3"><span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs">{exp.category}</span></td>
+                      <td className="px-4 py-3 text-right font-semibold text-red-600">{fmtAED(exp.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-gray-50 border-t-2 border-gray-300 font-bold">
+                    <td colSpan={3} className="px-4 py-3 text-gray-700">TOTAL ({expList.length} expenses)</td>
+                    <td className="px-4 py-3 text-right text-red-700">{fmtAED(expList.reduce((s: number, e: any) => s + e.amount, 0))}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
       )}
     </div>
   )
