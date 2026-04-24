@@ -1,304 +1,370 @@
 export const dynamic = 'force-dynamic'
 
-import mongoose from 'mongoose'
-import { getServerSession } from 'next-auth'
-import { NextRequest, NextResponse } from 'next/server'
-import { authOptions } from '@/lib/authOptions'
-import connectDB from '@/lib/db'
-import { getCurrentUser, hasRole } from '@/lib/auth'
-import Booking from '@/lib/models/Booking'
-import Expense from '@/lib/models/Expense'
-import FineOrPenalty from '@/lib/models/FineOrPenalty'
-import Invoice from '@/lib/models/Invoice'
-import MaintenanceRecord from '@/lib/models/MaintenanceRecord'
-import Payment from '@/lib/models/Payment'
-import Vehicle from '@/lib/models/Vehicle'
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/authOptions';
+import connectDB from '@/lib/db';
+import { NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 
-const safeNum = (v: unknown): number => {
-  const n = Number(v)
-  return Number.isFinite(n) ? n : 0
-}
+const safeNum = (v: any) => { const n = Number(v); return isNaN(n) ? 0 : n; };
+const safeDate = (v: any): Date | null => {
+  if (!v) return null;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+};
+const safeStr = (v: any, fb = '') => {
+  if (!v) return fb;
+  if (typeof v === 'object' && !Array.isArray(v)) return String(v.name ?? v.title ?? fb);
+  return String(v);
+};
+const f = (obj: any, ...keys: string[]) => {
+  for (const k of keys) if (obj[k] !== undefined && obj[k] !== null) return obj[k];
+  return null;
+};
+const calcDays = (start: any, end: any) => {
+  const s = safeDate(start); const e = safeDate(end);
+  if (!s || !e) return 0;
+  return Math.max(1, Math.ceil((e.getTime() - s.getTime()) / 86400000));
+};
 
-const safeDate = (v: unknown): Date | null => {
-  if (!v) return null
-  const d = new Date(v as any)
-  return Number.isNaN(d.getTime()) ? null : d
-}
-
-const safeStr = (v: unknown, fb = ''): string => {
-  if (v == null) return fb
-  return String(v)
-}
-
-const calcDays = (start: unknown, end: unknown): number => {
-  const s = safeDate(start)
-  const e = safeDate(end)
-  if (!s || !e) return 0
-  return Math.max(1, Math.ceil((e.getTime() - s.getTime()) / 86400000))
-}
-
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const session = await getServerSession(authOptions);
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const user = await getCurrentUser()
-    if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    if (!hasRole(user, ['SUPER_ADMIN', 'ADMIN', 'FINANCE', 'MANAGER'])) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    await connectDB();
+
+    const { searchParams } = new URL(request.url);
+    const vehicleId = searchParams.get('id') || searchParams.get('vehicleId') || searchParams.get('unitId');
+    const period = searchParams.get('period') || 'all';
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
+
+    // Load models
+    let Vehicle: any = null;
+    for (const name of ['Vehicle', 'Unit', 'Car']) {
+      try { Vehicle = (await import(`@/lib/models/${name}`)).default; break; } catch { continue; }
+    }
+    if (!Vehicle) return NextResponse.json({ error: 'Vehicle model not found' }, { status: 500 });
+
+    const Booking = (await import('@/lib/models/Booking')).default;
+
+    let Invoice: any = null;
+    for (const name of ['Invoice', 'Invoices', 'RentalInvoice']) {
+      try { Invoice = (await import(`@/lib/models/${name}`)).default; break; } catch { continue; }
     }
 
-    await connectDB()
+    let Payment: any = null;
+    try { Payment = (await import('@/lib/models/Payment')).default; } catch { /* ok */ }
 
-    const { searchParams } = new URL(request.url)
-    const vehicleId = searchParams.get('id') || searchParams.get('vehicleId') || searchParams.get('unitId')
-    const startDate = searchParams.get('startDate') || searchParams.get('dateFrom')
-    const endDate = searchParams.get('endDate') || searchParams.get('dateTo')
-    const period = searchParams.get('period') || '30'
-    const isDetail = Boolean(vehicleId)
+    let Expense: any = null;
+    try { Expense = (await import('@/lib/models/Expense')).default; } catch { /* ok */ }
 
-    const now = new Date()
-    const rangeEnd = endDate ? new Date(endDate) : now
-    const rangeStart = startDate
-      ? new Date(startDate)
-      : new Date(now.getTime() - safeNum(period) * 86400000)
-    rangeEnd.setHours(23, 59, 59, 999)
-    rangeStart.setHours(0, 0, 0, 0)
-
-    const periodDays = Math.max(1, Math.ceil((rangeEnd.getTime() - rangeStart.getTime()) / 86400000) + 1)
-    const vehicleQuery = vehicleId ? { _id: new mongoose.Types.ObjectId(vehicleId) } : {}
-    const vehicles = await Vehicle.find(vehicleQuery).lean()
-
-    if (!vehicles.length) {
-      return NextResponse.json(isDetail ? { vehicle: null, message: 'Vehicle not found' } : { vehicles: [], periodDays })
+    let Maintenance: any = null;
+    for (const name of ['MaintenanceRecord', 'Maintenance', 'VehicleMaintenance']) {
+      try { Maintenance = (await import(`@/lib/models/${name}`)).default; break; } catch { continue; }
     }
 
-    const results = await Promise.all(
-      vehicles.map(async (vehicle: any) => {
-        const vId = vehicle._id
+    // Date range
+    const now = new Date();
+    const rangeEnd = endDate ? new Date(endDate) : now;
+    rangeEnd.setHours(23, 59, 59, 999);
+    let rangeStart: Date;
+    if (startDate) {
+      rangeStart = new Date(startDate);
+    } else if (period === 'all') {
+      rangeStart = new Date('2000-01-01');
+    } else {
+      rangeStart = new Date(now.getTime() - Number(period) * 86400000);
+    }
 
-        const allTimeBookings = await Booking.find({ vehicle: vId }).sort({ startDateTime: -1 }).lean()
-        const periodBookings = allTimeBookings.filter((b: any) => {
-          const start = safeDate(b.startDateTime)
-          if (!start) return false
-          return start >= rangeStart && start <= rangeEnd
-        })
+    // Get vehicles
+    const vQuery = vehicleId ? { _id: new mongoose.Types.ObjectId(vehicleId) } : {};
+    const vehicles = await Vehicle.find(vQuery).lean();
 
-        const allTimeBookingIds = allTimeBookings.map((b: any) => b._id)
-        const periodBookingIdSet = new Set(periodBookings.map((b: any) => String(b._id)))
+    const results = await Promise.all(vehicles.map(async (vehicle: any) => {
+      const vId = vehicle._id;
 
-        const allInvoices = allTimeBookingIds.length
-          ? await Invoice.find({ booking: { $in: allTimeBookingIds } }).sort({ issueDate: -1 }).lean()
-          : []
-        const periodInvoices = allInvoices.filter((inv: any) => periodBookingIdSet.has(String(inv.booking)))
+      const vehicleName = [
+        vehicle.make ?? vehicle.brand ?? '',
+        vehicle.model ?? '',
+        vehicle.year ?? vehicle.modelYear ?? '',
+      ].filter(Boolean).join(' ') || vehicle.name || vehicle.plateNumber || 'Unknown';
 
-        const processInvoice = (inv: any) => {
-          const total = safeNum(inv.total)
-          const statusRaw = safeStr(inv.status, 'DRAFT')
-          const status = statusRaw.toLowerCase()
-          const isPaid = statusRaw === 'PAID'
-          const isDraft = statusRaw === 'DRAFT'
-          const dueDate = safeDate(inv.dueDate)
-          const isOverdue = statusRaw === 'ISSUED' && !!dueDate && dueDate.getTime() < Date.now()
-          const isPending = statusRaw === 'ISSUED'
-          const startDateTime = safeDate(inv.rentalStartDate) ?? null
-          const endDateTime = safeDate(inv.rentalEndDate) ?? null
+      const vLink = {
+        $or: [
+          { vehicleId: vId }, { vehicle: vId },
+          { unitId: vId }, { carId: vId },
+        ],
+      };
 
-          return {
-            invoiceId: String(inv._id),
-            invoiceNumber: safeStr(inv.invoiceNumber, String(inv._id).slice(-6).toUpperCase()),
-            bookingId: inv.booking ? String(inv.booking) : '',
-            status,
-            isPaid,
-            isOverdue,
-            isDraft,
-            isPending,
-            totalAmount: total,
-            paidAmount: isPaid ? total : 0,
-            dueAmount: isPaid ? 0 : total,
-            rentalDays: calcDays(startDateTime, endDateTime),
-            startDate: startDateTime?.toISOString() ?? null,
-            endDate: endDateTime?.toISOString() ?? null,
-            issueDate: safeDate(inv.issueDate)?.toISOString() ?? null,
-            dueDate: dueDate?.toISOString() ?? null,
-          }
-        }
+      // ── ALL TIME BOOKINGS ─────────────────────────────────────────────
+      const allBookings = await Booking.find(vLink).lean();
+      const allBookingIds = allBookings.map((b: any) => b._id);
 
-        const processedAllInvoices = allInvoices.map(processInvoice)
-        const processedPeriodInvoices = periodInvoices.map(processInvoice)
+      // ── PERIOD BOOKINGS ───────────────────────────────────────────────
+      const periodBookings = await Booking.find({
+        ...vLink,
+        $or: [
+          { startDate: { $gte: rangeStart, $lte: rangeEnd } },
+          { from: { $gte: rangeStart, $lte: rangeEnd } },
+          { pickupDate: { $gte: rangeStart, $lte: rangeEnd } },
+          { createdAt: { $gte: rangeStart, $lte: rangeEnd } },
+        ],
+      }).lean();
 
-        const summarizeInvoices = (items: ReturnType<typeof processInvoice>[]) => ({
-          count: items.length,
-          totalInvoiced: items.reduce((sum, item) => sum + item.totalAmount, 0),
-          totalPaid: items.reduce((sum, item) => sum + item.paidAmount, 0),
-          totalDue: items.reduce((sum, item) => sum + item.dueAmount, 0),
-          paidCount: items.filter((item) => item.isPaid).length,
-          pendingCount: items.filter((item) => item.isPending).length,
-          overdueCount: items.filter((item) => item.isOverdue).length,
-          draftCount: items.filter((item) => item.isDraft).length,
-          totalRentalDays: items.reduce((sum, item) => sum + item.rentalDays, 0),
-        })
-
-        const allInvoiceSummary = summarizeInvoices(processedAllInvoices)
-        const periodInvoiceSummary = summarizeInvoices(processedPeriodInvoices)
-
-        const allPayments = allTimeBookingIds.length
-          ? await Payment.find({ booking: { $in: allTimeBookingIds } }).sort({ paidAt: -1 }).lean()
-          : []
-        const periodPayments = allPayments.filter((pay: any) => periodBookingIdSet.has(String(pay.booking)))
-
-        const processPayment = (pay: any) => ({
-          paymentId: String(pay._id),
-          amount: safeNum(pay.amount),
-          date: safeDate(pay.paidAt ?? pay.createdAt)?.toISOString() ?? null,
-          method: safeStr(pay.method, 'CASH'),
-          bookingId: pay.booking ? String(pay.booking) : '',
-          status: safeStr(pay.status, 'SUCCESS').toLowerCase(),
-        })
-
-        const processedAllPayments = allPayments.map(processPayment)
-        const processedPeriodPayments = periodPayments.map(processPayment)
-
-        const allExpenses = await Expense.find({ vehicle: vId, isDeleted: false }).sort({ dateIncurred: -1 }).lean()
-        const periodExpenses = allExpenses.filter((exp: any) => {
-          const d = safeDate(exp.dateIncurred)
-          return !!d && d >= rangeStart && d <= rangeEnd
-        })
-
-        const processExpense = (exp: any) => ({
-          expenseId: String(exp._id),
-          amount: safeNum(exp.amount),
-          description: safeStr(exp.description, 'Expense'),
-          category: safeStr(exp.category, 'General'),
-          date: safeDate(exp.dateIncurred)?.toISOString() ?? null,
-        })
-
-        const processedAllExpenses = allExpenses.map(processExpense)
-        const processedPeriodExpenses = periodExpenses.map(processExpense)
-
-        const allMaintenance = await MaintenanceRecord.find({ vehicle: vId }).lean()
-        const maintenanceTotal = allMaintenance.reduce((sum: number, item: any) => sum + safeNum(item.cost), 0)
-
-        const allFines = await FineOrPenalty.find({ vehicle: vId }).lean()
-        const finesTotal = allFines.reduce((sum: number, item: any) => sum + safeNum(item.amount), 0)
-
-        const processBooking = (booking: any) => {
-          const start = safeDate(booking.startDateTime)
-          const end = safeDate(booking.endDateTime)
-          return {
-            bookingId: String(booking._id),
-            bookingNumber: safeStr(booking.bookingNumber ?? booking.reference, String(booking._id).slice(-6).toUpperCase()),
-            customerName: safeStr((booking.customer as any)?.name ?? ''),
-            customerId: booking.customer ? String(booking.customer) : '',
-            startDate: start?.toISOString() ?? null,
-            endDate: end?.toISOString() ?? null,
-            rentalDays: calcDays(start, end),
-            amount: safeNum(booking.totalAmount),
-            status: safeStr(booking.status, 'PENDING').toLowerCase(),
-            paymentStatus: safeStr(booking.paymentStatus, 'UNPAID').toLowerCase(),
-          }
-        }
-
-        const allBookingDetails = allTimeBookings.map(processBooking)
-        const periodBookingDetails = periodBookings.map(processBooking)
-        const allTimeRentalDays = allBookingDetails.reduce((sum, booking) => sum + booking.rentalDays, 0)
-        const periodRentalDays = periodBookingDetails.reduce((sum, booking) => sum + booking.rentalDays, 0)
-
-        const allPaymentRevenue = processedAllPayments
-          .filter((payment) => payment.status === 'success')
-          .reduce((sum, payment) => sum + payment.amount, 0)
-        const periodPaymentRevenue = processedPeriodPayments
-          .filter((payment) => payment.status === 'success')
-          .reduce((sum, payment) => sum + payment.amount, 0)
-
-        const revenueAllTime = allInvoiceSummary.totalInvoiced > 0
-          ? allInvoiceSummary.totalInvoiced
-          : allPaymentRevenue > 0
-            ? allPaymentRevenue
-            : allBookingDetails.reduce((sum, booking) => sum + booking.amount, 0)
-        const revenuePeriod = periodInvoiceSummary.totalInvoiced > 0
-          ? periodInvoiceSummary.totalInvoiced
-          : periodPaymentRevenue > 0
-            ? periodPaymentRevenue
-            : periodBookingDetails.reduce((sum, booking) => sum + booking.amount, 0)
-
-        const expensesAllTime = processedAllExpenses.reduce((sum, expense) => sum + expense.amount, 0)
-        const expensesPeriod = processedPeriodExpenses.reduce((sum, expense) => sum + expense.amount, 0)
-        const totalCostsAllTime = expensesAllTime + maintenanceTotal + finesTotal
-        const netProfitAllTime = revenueAllTime - totalCostsAllTime
-        const utilizationPercent = Math.min(100, Math.round((periodRentalDays / periodDays) * 100))
-        const revenuePerDay = allTimeRentalDays > 0 ? revenueAllTime / allTimeRentalDays : 0
-        const avgBookingDays = allTimeBookings.length > 0 ? allTimeRentalDays / allTimeBookings.length : 0
-
+      // ── PROCESS BOOKINGS ──────────────────────────────────────────────
+      const processBooking = (b: any) => {
+        const startField = f(b, 'startDate','from','pickupDate','checkIn','rentalStartDate');
+        const endField = f(b, 'endDate','to','returnDate','checkOut','rentalEndDate');
+        const storedDays = safeNum(f(b, 'days','rentalDays','duration','numberOfDays','noOfDays'));
+        const rentalDays = storedDays > 0 ? storedDays : calcDays(startField, endField);
+        const amount = safeNum(f(b, 'totalAmount','amount','rentAmount','price','totalRent','totalCost'));
+        const paidAmt = safeNum(f(b, 'paidAmount','amountPaid','paid','paymentReceived'));
+        const dueAmt = Math.max(0, amount - paidAmt);
+        const status = safeStr(f(b, 'status','bookingStatus','state'), 'unknown');
+        const payStatus = safeStr(f(b, 'paymentStatus','invoiceStatus'), '');
+        const isPaid = ['paid','completed','settled','done'].includes(payStatus.toLowerCase()) ||
+                           ['paid','completed','settled','done'].includes(status.toLowerCase());
+        const isPending = ['pending','partial','unpaid'].includes(payStatus.toLowerCase());
         return {
-          vehicleId: String(vId),
-          vehicleName: `${safeStr(vehicle.brand)} ${safeStr(vehicle.model)} ${safeStr(vehicle.year)}`.trim(),
-          plateNumber: safeStr(vehicle.plateNumber),
-          make: safeStr(vehicle.brand),
-          model: safeStr(vehicle.model),
-          year: safeStr(vehicle.year),
-          color: safeStr(vehicle.color),
-          status: safeStr(vehicle.status, 'UNKNOWN').toLowerCase(),
-          type: safeStr(vehicle.category),
-          fuelType: safeStr(vehicle.fuelType),
-          transmission: safeStr(vehicle.transmission),
-          image: '',
-          allTime: {
-            totalBookings: allTimeBookings.length,
-            totalRentalDays: allTimeRentalDays,
-            avgBookingDays: Math.round(avgBookingDays * 10) / 10,
-            bookingDetails: allBookingDetails,
-            invoices: { ...allInvoiceSummary, list: processedAllInvoices },
-            payments: {
-              count: processedAllPayments.length,
-              total: Math.round(allPaymentRevenue * 100) / 100,
-              list: processedAllPayments,
-            },
-            expenses: {
-              count: processedAllExpenses.length,
-              total: Math.round(expensesAllTime * 100) / 100,
-              list: processedAllExpenses,
-            },
-            maintenance: {
-              count: allMaintenance.length,
-              total: Math.round(maintenanceTotal * 100) / 100,
-            },
-            fines: {
-              count: allFines.length,
-              total: Math.round(finesTotal * 100) / 100,
-            },
-            totalRevenue: Math.round(revenueAllTime * 100) / 100,
-            totalReceived: Math.round(allInvoiceSummary.totalPaid * 100) / 100,
-            totalOutstanding: Math.round(allInvoiceSummary.totalDue * 100) / 100,
-            totalCosts: Math.round(totalCostsAllTime * 100) / 100,
-            netProfit: Math.round(netProfitAllTime * 100) / 100,
-            revenuePerDay: Math.round(revenuePerDay * 100) / 100,
-          },
-          period: {
-            start: rangeStart.toISOString(),
-            end: rangeEnd.toISOString(),
-            days: periodDays,
-            totalBookings: periodBookings.length,
-            totalRentalDays: periodRentalDays,
-            utilizationPercent,
-            bookingDetails: periodBookingDetails,
-            invoices: { ...periodInvoiceSummary, list: processedPeriodInvoices },
-            totalRevenue: Math.round(revenuePeriod * 100) / 100,
-            totalExpenses: Math.round(expensesPeriod * 100) / 100,
-            netProfit: Math.round((revenuePeriod - expensesPeriod) * 100) / 100,
-          },
-          currency: 'AED',
-        }
-      })
-    )
+          bookingId: b._id.toString(),
+          bookingNumber: safeStr(f(b, 'bookingNumber','bookingId','reference')),
+          customerName: safeStr(f(b, 'customerName','clientName','guestName')),
+          customerId: (f(b, 'customerId','customer','clientId') ?? '').toString(),
+          startDate: startField ? new Date(startField).toISOString() : null,
+          endDate: endField ? new Date(endField).toISOString() : null,
+          rentalDays,
+          totalAmount: amount,
+          paidAmount: isPaid ? amount : paidAmt,
+          dueAmount: isPaid ? 0 : dueAmt,
+          status,
+          paymentStatus: payStatus,
+          isPaid,
+          isPending,
+          isUnpaid: !isPaid && !isPending && dueAmt > 0,
+        };
+      };
 
-    return NextResponse.json(isDetail && results.length === 1 ? { vehicle: results[0] } : { vehicles: results, periodDays })
-  } catch (error) {
-    console.error('[Vehicle Performance API]', error)
+      const allBookingDetails = allBookings.map(processBooking);
+      const periodBookingDetails = periodBookings.map(processBooking);
+
+      // ── BOOKING FINANCIALS ────────────────────────────────────────────
+      const totalBookings = allBookingDetails.length;
+      const totalRentalDays = allBookingDetails.reduce((s, b) => s + b.rentalDays, 0);
+      const totalEarnings = allBookingDetails.reduce((s, b) => s + b.totalAmount, 0);
+      const totalPaidBookings = allBookingDetails.reduce((s, b) => s + b.paidAmount, 0);
+      const totalDueBookings = allBookingDetails.reduce((s, b) => s + b.dueAmount, 0);
+      const paidBookings = allBookingDetails.filter(b => b.isPaid).length;
+      const pendingBookings = allBookingDetails.filter(b => b.isPending || b.isUnpaid).length;
+      const avgRentalDays = totalBookings > 0 ? Math.round((totalRentalDays / totalBookings) * 10) / 10 : 0;
+
+      // ── INVOICES ──────────────────────────────────────────────────────
+      let allInvoices: any[] = [];
+      if (Invoice && allBookingIds.length > 0) {
+        allInvoices = await Invoice.find({
+          $or: [
+            { vehicleId: vId }, { vehicle: vId },
+            { bookingId: { $in: allBookingIds } },
+            { booking: { $in: allBookingIds } },
+          ],
+        }).lean();
+      } else if (Invoice) {
+        allInvoices = await Invoice.find(vLink).lean();
+      }
+
+      const processInvoice = (inv: any) => {
+        const total = safeNum(f(inv, 'totalAmount','amount','grandTotal','total','invoiceAmount','netAmount','rentAmount'));
+        const paid = safeNum(f(inv, 'paidAmount','amountPaid','paid','paymentReceived','amountReceived'));
+        const due = safeNum(f(inv, 'dueAmount','amountDue','outstanding','balance','pendingAmount')) || Math.max(0, total - paid);
+        const status = safeStr(f(inv, 'status','paymentStatus','invoiceStatus'), 'pending').toLowerCase();
+        const isPaid = ['paid','completed','settled','closed','done','received'].includes(status);
+        const isOverdue = ['overdue','late','past_due','pastdue','expired'].includes(status);
+        const isPending = ['pending','unpaid','open','outstanding'].includes(status) || (!isPaid && !isOverdue);
+        const startF = f(inv, 'startDate','from','rentalStart','checkIn','pickupDate');
+        const endF = f(inv, 'endDate','to','rentalEnd','checkOut','returnDate');
+        const days = safeNum(f(inv, 'days','rentalDays','duration','numberOfDays')) || calcDays(startF, endF);
+        return {
+          invoiceId: inv._id.toString(),
+          invoiceNumber: safeStr(f(inv, 'invoiceNumber','invoiceNo','number','reference','code')),
+          bookingId: (f(inv, 'bookingId','booking') ?? '').toString(),
+          customerName: safeStr(f(inv, 'customerName','clientName','guestName')),
+          status,
+          isPaid, isOverdue, isPending,
+          totalAmount: total,
+          paidAmount: isPaid ? total : paid,
+          dueAmount: isPaid ? 0 : due,
+          rentalDays: days,
+          startDate: startF ? new Date(startF).toISOString() : null,
+          endDate: endF ? new Date(endF).toISOString() : null,
+          issueDate: safeDate(f(inv, 'date','issueDate','invoiceDate','createdAt'))?.toISOString(),
+          dueDate: safeDate(f(inv, 'dueDate','paymentDue','expiryDate'))?.toISOString(),
+        };
+      };
+
+      const processedInvoices = allInvoices.map(processInvoice);
+
+      // Invoice aggregates
+      const totalInvoiced = processedInvoices.reduce((s, i) => s + i.totalAmount, 0);
+      const totalInvPaid = processedInvoices.reduce((s, i) => s + i.paidAmount, 0);
+      const totalInvDue = processedInvoices.reduce((s, i) => s + i.dueAmount, 0);
+      const paidInvCount = processedInvoices.filter(i => i.isPaid).length;
+      const pendingInvCount = processedInvoices.filter(i => i.isPending).length;
+      const overdueInvCount = processedInvoices.filter(i => i.isOverdue).length;
+
+      // ── PAYMENTS ──────────────────────────────────────────────────────
+      let allPayments: any[] = [];
+      if (Payment) {
+        allPayments = await Payment.find({
+          $or: [
+            { vehicleId: vId }, { vehicle: vId },
+            ...(allBookingIds.length > 0 ? [
+              { bookingId: { $in: allBookingIds } },
+              { booking: { $in: allBookingIds } },
+            ] : []),
+          ],
+        }).lean();
+      }
+
+      const processPayment = (p: any) => ({
+        paymentId: p._id.toString(),
+        amount: safeNum(f(p, 'amount','totalAmount','paidAmount','receivedAmount')),
+        date: safeDate(f(p, 'date','paymentDate','paidAt','createdAt'))?.toISOString(),
+        method: safeStr(f(p, 'paymentMethod','method','type','mode'), 'Cash'),
+        bookingId: (f(p, 'bookingId','booking') ?? '').toString(),
+        status: safeStr(f(p, 'status','paymentStatus'), 'completed'),
+        type: safeStr(f(p, 'type','paymentType'), 'payment'),
+      });
+
+      const processedPayments = allPayments.map(processPayment);
+      const totalPayments = processedPayments.reduce((s, p) => s + p.amount, 0);
+
+      // Classify payments
+      const paidPayments = processedPayments.filter(p => ['paid','completed','received','settled'].includes(p.status.toLowerCase()));
+      const pendingPayments = processedPayments.filter(p => ['pending','unpaid','partial'].includes(p.status.toLowerCase()));
+      const paidPayAmt = paidPayments.reduce((s, p) => s + p.amount, 0);
+      const pendingPayAmt = pendingPayments.reduce((s, p) => s + p.amount, 0);
+
+      // ── EXPENSES ──────────────────────────────────────────────────────
+      let allExpenses: any[] = [];
+      if (Expense) {
+        allExpenses = await Expense.find(vLink).lean();
+      }
+      const totalExpenses = allExpenses.reduce(
+        (s, e: any) => s + safeNum(f(e, 'amount','totalAmount','cost','price')), 0
+      );
+
+      // ── MAINTENANCE ───────────────────────────────────────────────────
+      let allMaintenance: any[] = [];
+      if (Maintenance) {
+        allMaintenance = await Maintenance.find(vLink).lean();
+      }
+      const totalMaintenance = allMaintenance.reduce(
+        (s, m: any) => s + safeNum(f(m, 'cost','amount','totalCost','price','laborCost')), 0
+      );
+
+      // ── FINAL CALCULATIONS ────────────────────────────────────────────
+      // Revenue = prefer invoice total, fallback to payments, fallback to booking amounts
+      const totalRevenue = totalInvoiced > 0 ? totalInvoiced
+                         : totalPayments > 0 ? totalPayments
+                         : totalEarnings;
+
+      const totalReceived = totalInvPaid > 0 ? totalInvPaid : paidPayAmt;
+      const totalOutstanding = totalInvDue > 0 ? totalInvDue : pendingPayAmt;
+      const totalCosts = totalExpenses + totalMaintenance;
+      const netProfit = totalRevenue - totalCosts;
+      const revenuePerDay = totalRentalDays > 0 ? Math.round((totalRevenue / totalRentalDays) * 100) / 100 : 0;
+
+      const periodDays = Math.max(1, Math.ceil((rangeEnd.getTime() - rangeStart.getTime()) / 86400000));
+      const periodRentalDays = periodBookingDetails.reduce((s, b) => s + b.rentalDays, 0);
+      const utilizationPct = Math.min(100, Math.round((periodRentalDays / periodDays) * 100));
+
+      return {
+        // ── Vehicle Info ──────────────────────────────────────────────
+        vehicleId: vId.toString(),
+        vehicleName,
+        plateNumber: vehicle.plateNumber ?? vehicle.plate ?? vehicle.registrationNumber ?? '',
+        make: vehicle.make ?? vehicle.brand ?? '',
+        model: vehicle.model ?? '',
+        year: vehicle.year ?? vehicle.modelYear ?? '',
+        color: vehicle.color ?? vehicle.colour ?? '',
+        status: vehicle.status ?? vehicle.vehicleStatus ?? 'unknown',
+        image: vehicle.image ?? vehicle.imageUrl ?? vehicle.photo ?? '',
+
+        // ── Booking Summary ───────────────────────────────────────────
+        bookings: {
+          total: totalBookings,
+          paid: paidBookings,
+          pending: pendingBookings,
+          totalRentalDays,
+          avgRentalDays,
+          totalEarnings: Math.round(totalEarnings * 100) / 100,
+          totalPaid: Math.round(totalPaidBookings * 100) / 100,
+          totalDue: Math.round(totalDueBookings * 100) / 100,
+          list: allBookingDetails,
+        },
+
+        // ── Invoice Summary ───────────────────────────────────────────
+        invoices: {
+          total: processedInvoices.length,
+          paidCount: paidInvCount,
+          pendingCount: pendingInvCount,
+          overdueCount: overdueInvCount,
+          totalInvoiced: Math.round(totalInvoiced * 100) / 100,
+          totalPaid: Math.round(totalInvPaid * 100) / 100,
+          totalDue: Math.round(totalInvDue * 100) / 100,
+          list: processedInvoices,
+        },
+
+        // ── Payment Summary ───────────────────────────────────────────
+        payments: {
+          total: processedPayments.length,
+          paid: paidPayments.length,
+          pending: pendingPayments.length,
+          totalAmount: Math.round(totalPayments * 100) / 100,
+          paidAmount: Math.round(paidPayAmt * 100) / 100,
+          pendingAmount: Math.round(pendingPayAmt * 100) / 100,
+          list: processedPayments,
+        },
+
+        // ── Financial Summary ─────────────────────────────────────────
+        financial: {
+          totalRevenue: Math.round(totalRevenue * 100) / 100,
+          totalReceived: Math.round(totalReceived * 100) / 100,
+          totalOutstanding: Math.round(totalOutstanding * 100) / 100,
+          totalExpenses: Math.round(totalExpenses * 100) / 100,
+          totalMaintenance: Math.round(totalMaintenance * 100) / 100,
+          totalCosts: Math.round(totalCosts * 100) / 100,
+          netProfit: Math.round(netProfit * 100) / 100,
+          revenuePerDay: Math.round(revenuePerDay * 100) / 100,
+        },
+
+        // ── Period Stats ──────────────────────────────────────────────
+        period: {
+          start: rangeStart.toISOString(),
+          end: rangeEnd.toISOString(),
+          days: periodDays,
+          totalBookings: periodBookings.length,
+          totalRentalDays: periodRentalDays,
+          utilizationPercent: utilizationPct,
+          totalRevenue: Math.round(periodBookingDetails.reduce((s,b)=>s+b.totalAmount,0)*100)/100,
+          totalPaid: Math.round(periodBookingDetails.reduce((s,b)=>s+b.paidAmount, 0)*100)/100,
+          totalDue: Math.round(periodBookingDetails.reduce((s,b)=>s+b.dueAmount, 0)*100)/100,
+        },
+
+        currency: 'AED',
+      };
+    }));
+
     return NextResponse.json(
-      { error: 'Failed to load performance data', details: String(error) },
-      { status: 500 }
-    )
+      vehicleId && results.length === 1
+        ? { vehicle: results[0] }
+        : { vehicles: results }
+    );
+
+  } catch (error) {
+    console.error('[Vehicle Performance API]', error);
+    return NextResponse.json({ error: String(error) }, { status: 500 });
   }
 }
 

@@ -1,513 +1,511 @@
-export const dynamic = 'force-dynamic'
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/authOptions';
+import connectDB from '@/lib/db';
+import { NextResponse } from 'next/server';
+import mongoose from 'mongoose';
+import LedgerEntry from '@/lib/models/LedgerEntry';
 
-import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth/next'
-import mongoose from 'mongoose'
-import { authOptions } from '@/lib/authOptions'
-import connectDB from '@/lib/db'
-import { getCurrentUser, hasRole } from '@/lib/auth'
-import LedgerEntry from '@/lib/models/LedgerEntry'
-import { recomputeLedgerRunningBalances } from '@/lib/ledger/recomputeBalances'
+// ─── SAFE HELPERS ─────────────────────────────────────────────────────────
+const n = (v: any) => { const x = Number(v); return isNaN(x) ? 0 : x; };
+const d = (v: any) => { if (!v) return new Date(); const x = new Date(v); return isNaN(x.getTime()) ? new Date() : x; };
+const s = (v: any, fb = '') => {
+  if (!v) return fb;
+  if (typeof v === 'object' && !Array.isArray(v)) return String(v.name ?? v.title ?? v.label ?? fb);
+  return String(v);
+};
+const f = (obj: any, ...keys: string[]) => {
+  for (const k of keys) if (obj[k] !== undefined && obj[k] !== null) return obj[k];
+  return null;
+};
 
-const num = (v: unknown) => {
-  const x = Number(v)
-  return Number.isFinite(x) ? x : 0
-}
-const asDate = (v: unknown) => {
-  if (!v) return new Date()
-  const x = new Date(v as string | number | Date)
-  return Number.isNaN(x.getTime()) ? new Date() : x
-}
-const asStr = (v: unknown, fb = '') => {
-  if (v == null) return fb
-  if (typeof v === 'object' && v !== null && 'name' in (v as object)) {
-    const o = v as { name?: string; title?: string; label?: string }
-    return String(o.name ?? o.title ?? o.label ?? fb)
-  }
-  return String(v)
-}
-
-async function normalizeLedgerIndexes() {
+// ─── DROP BAD INDEXES ─────────────────────────────────────────────────────
+async function fixIndexes() {
   try {
-    const collection = LedgerEntry.collection
-    const indexes = await collection.indexes()
-
+    const col = mongoose.connection.collection('ledgerentries');
+    const indexes = await col.indexes();
     for (const idx of indexes) {
-      const k = idx.key as Record<string, number> | undefined
-      if (!k || !idx.name) continue
-
-      if (idx.name === 'sourceKey_1') {
-        try {
-          await collection.dropIndex(idx.name)
-          console.log(`[SYNC] Dropped legacy index: ${idx.name}`)
-        } catch {
-          /* ignore */
-        }
-        continue
-      }
-
-      const triple =
-        k.referenceModel === 1 && k.referenceId === 1 && k.entryType === 1
-      const legacyPair =
-        k.referenceModel === 1 && k.referenceId === 1 && k.entryType === undefined
-
-      if (idx.unique && (triple || legacyPair)) {
-        try {
-          await collection.dropIndex(idx.name)
-          console.log(`[SYNC] Dropped unique index: ${idx.name}`)
-        } catch (e) {
-          console.log(`[SYNC] Could not drop ${idx.name}:`, e)
-        }
+      if (idx.unique && (idx as any).key?.referenceModel && (idx as any).key?.referenceId && (idx as any).key?.entryType) {
+        await col.dropIndex(idx.name as string).catch(() => {});
+        console.log('[SYNC] Dropped bad unique index:', idx.name);
       }
     }
-
-    await collection.createIndex(
+    await col.createIndex(
       { referenceModel: 1, referenceId: 1, entryType: 1 },
       { unique: false, background: true }
-    )
-    console.log('[SYNC] Non-unique compound index ensured')
-  } catch (e) {
-    console.log('[SYNC] Index normalization warning (non-fatal):', e)
-  }
+    ).catch(() => {});
+  } catch (e) { console.log('[SYNC] Index fix warning:', e); }
 }
 
-async function removeDuplicates(): Promise<number> {
+// ─── REMOVE DUPLICATE ENTRIES ─────────────────────────────────────────────
+async function removeDuplicates() {
   try {
-    const collection = LedgerEntry.collection
-    const all = await collection
-      .find({ referenceModel: { $exists: true, $ne: '' } })
-      .sort({ createdAt: 1 })
-      .toArray()
-
-    const seen = new Set<string>()
-    const toDelete: mongoose.Types.ObjectId[] = []
-
+    const col = mongoose.connection.collection('ledgerentries');
+    const all = await col.find({}).sort({ createdAt: 1 }).toArray();
+    const seen = new Map<string, any>();
+    const toDelete: any[] = [];
     for (const doc of all) {
-      const d = doc.date ? new Date(doc.date as Date) : new Date()
-      const day = d.toISOString().split('T')[0]
       const key = [
-        doc.referenceModel,
-        doc.referenceId?.toString(),
-        doc.entryType,
-        doc.amount,
-        day,
-      ].join('|')
-
-      if (seen.has(key)) {
-        toDelete.push(doc._id as mongoose.Types.ObjectId)
-      } else {
-        seen.add(key)
-      }
+        doc.referenceModel, doc.referenceId?.toString(),
+        doc.entryType, doc.amount,
+        new Date(doc.date as any).toISOString().split('T')[0],
+      ].join('|');
+      if (seen.has(key)) toDelete.push(doc._id);
+      else seen.set(key, doc._id);
     }
-
     if (toDelete.length > 0) {
-      await collection.deleteMany({ _id: { $in: toDelete } })
-      console.log(`[SYNC] Removed ${toDelete.length} exact duplicates`)
-    } else {
-      console.log('[SYNC] No duplicates found')
+      await col.deleteMany({ _id: { $in: toDelete } });
+      console.log(`[SYNC] Removed ${toDelete.length} duplicates`);
     }
-
-    return toDelete.length
-  } catch (e) {
-    console.log('[SYNC] Duplicate removal warning:', e)
-    return 0
-  }
+    return toDelete.length;
+  } catch (e) { console.log('[SYNC] Duplicate removal warning:', e); return 0; }
 }
 
-function paymentMethodLabel(method: string) {
-  const map: Record<string, string> = {
-    CASH: 'Cash',
-    CARD: 'Card',
-    BANK_TRANSFER: 'Bank Transfer',
-    ONLINE: 'Online',
-  }
-  return map[method] || method
-}
-
-export async function POST() {
+// ─── UPSERT HELPER ────────────────────────────────────────────────────────
+async function upsert(refModel: string, refId: any, type: string, data: Record<string, any>) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const dateObj = d(data.date);
+    const dayStart = new Date(dateObj); dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dateObj); dayEnd.setHours(23, 59, 59, 999);
+    const existing = await LedgerEntry.findOne({
+      referenceModel: refModel,
+      referenceId: refId,
+      entryType: type,
+      amount: data.amount,
+      date: { $gte: dayStart, $lte: dayEnd },
+    });
+    if (existing) {
+      await LedgerEntry.findByIdAndUpdate(existing._id, {
+        $set: { ...data, referenceModel: refModel, referenceId: refId, entryType: type, currency: 'AED', isVoided: false },
+      });
+    } else {
+      await LedgerEntry.create({
+        ...data, referenceModel: refModel, referenceId: refId, entryType: type, currency: 'AED', isVoided: false,
+      });
     }
+    return true;
+  } catch (e: any) {
+    if (e?.code !== 11000) console.error(`[SYNC] Upsert error ${refModel}:`, e?.message);
+    return false;
+  }
+}
 
-    const user = await getCurrentUser()
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 401 })
-    }
-    if (!hasRole(user, ['SUPER_ADMIN', 'ADMIN'])) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+export async function POST(request: Request) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    await connectDB()
-    await normalizeLedgerIndexes()
-    const removedDuplicates = await removeDuplicates()
+    await connectDB();
 
-    await LedgerEntry.updateMany({ currency: 'PKR' }, { $set: { currency: 'AED' } })
+    // Fix indexes and duplicates first
+    await fixIndexes();
+    const removedDups = await removeDuplicates();
+
+    // ── FIX EXISTING WRONG DIRECTION ENTRIES ──────────────────────────────
+    // DEBIT: ONLY fines and expenses
     await LedgerEntry.updateMany(
-      { direction: { $nin: ['CREDIT', 'DEBIT'] } },
+      { entryType: { $in: [
+        'FINE_COLLECTED', 'FINE_PAID', 'FINE',
+        'EXPENSE_PAID', 'RECURRING_EXPENSE', 'VEHICLE_MAINTENANCE',
+        'FUEL_EXPENSE', 'INSURANCE_PREMIUM', 'REGISTRATION_FEE',
+        'VENDOR_PAYMENT', 'MISCELLANEOUS_OUT', 'BANK_WITHDRAWAL',
+        'LOAN_REPAYMENT',
+      ]}},
       { $set: { direction: 'DEBIT' } }
-    )
+    );
 
-    let synced = 0
-    let skipped = 0
-    const errors: string[] = []
+    // CREDIT: Everything else
+    await LedgerEntry.updateMany(
+      { entryType: { $in: [
+        'BOOKING_PAYMENT', 'PARTIAL_PAYMENT', 'ADVANCE_PAYMENT',
+        'SECURITY_DEPOSIT', 'SECURITY_DEPOSIT_REFUND', 'LATE_FEE',
+        'DAMAGE_CHARGE', 'SALARY_PAID', 'INVESTOR_PAYOUT',
+        'INVESTOR_CAPITAL_IN', 'BANK_DEPOSIT', 'BANK_TRANSFER_IN',
+        'LOAN_RECEIVED', 'MISCELLANEOUS_IN', 'INSURANCE_CLAIM',
+        'INVOICE_PAYMENT', 'INVOICE_PARTIAL', 'INVOICE_RECEIVABLE',
+      ]}},
+      { $set: { direction: 'CREDIT' } }
+    );
 
-    const upsert = async (
-      refModel: string,
-      refId: mongoose.Types.ObjectId,
-      entryType: string,
-      data: Record<string, unknown>
-    ) => {
-      try {
-        const dateVal = asDate(data.date)
-        const startOfDay = new Date(dateVal)
-        startOfDay.setHours(0, 0, 0, 0)
-        const endOfDay = new Date(dateVal)
-        endOfDay.setHours(23, 59, 59, 999)
-        const amount = num(data.amount)
+    // Fix PKR → AED
+    await LedgerEntry.updateMany({ currency: 'PKR' }, { $set: { currency: 'AED' } });
+    console.log('[SYNC] Direction and currency corrections applied');
 
-        const existing = await LedgerEntry.findOne({
-          referenceModel: refModel,
-          referenceId: refId,
-          entryType,
-          amount,
-          date: { $gte: startOfDay, $lte: endOfDay },
-        })
+    let synced = 0, skipped = 0;
+    const errors: string[] = [];
 
-        const payload = {
-          ...data,
-          referenceModel: refModel,
-          referenceId: refId,
-          entryType,
-          currency: 'AED',
-          isVoided: false,
-          runningBalance: 0,
-        }
+    const track = async (refModel: string, refId: any, type: string, data: Record<string, any>) => {
+      const ok = await upsert(refModel, refId, type, data);
+      if (ok) synced++; else skipped++;
+    };
 
-        if (existing) {
-          await LedgerEntry.findByIdAndUpdate(existing._id, { $set: payload })
-        } else {
-          await LedgerEntry.create(payload)
-        }
-        synced++
-      } catch (e: unknown) {
-        skipped++
-        const err = e as { message?: string }
-        errors.push(`${refModel}/${entryType}: ${err?.message ?? String(e)}`)
-      }
-    }
-
-    // 1. Expenses
+    // ══════════════════════════════════════════════════════════════════════
+    // 1. EXPENSES → DEBIT
+    // Rule: All expenses are DEBIT
+    // ══════════════════════════════════════════════════════════════════════
     try {
-      const Expense = (await import('@/lib/models/Expense')).default
-      const docs = await Expense.find({ isDeleted: false }).populate('category', 'name code').lean()
+      const Expense = (await import('@/lib/models/Expense')).default;
+      const docs = await Expense.find({}).lean();
+      console.log(`[SYNC] Expenses: ${docs.length}`);
       for (const doc of docs) {
-        const d = doc as Record<string, unknown>
-        if (d.salaryRecord || d.investorPayout || d.maintenanceRecord) continue
-        const amount = num(d.amount)
-        const date = asDate(d.dateIncurred ?? d.createdAt)
-        const desc = asStr(d.description, 'Expense')
-        const catDoc = d.category as { name?: string; code?: string } | undefined
-        const catName = catDoc?.name || asStr(d.category, 'General Expense')
-        const vehicle = d.vehicle as mongoose.Types.ObjectId | undefined
-        const mappedType =
-          d.maintenanceRecord ? 'VEHICLE_MAINTENANCE' : catDoc?.code === 'FUEL' ? 'FUEL_EXPENSE' : 'EXPENSE_PAID'
-        await upsert('Expense', doc._id as mongoose.Types.ObjectId, mappedType, {
+        const amount = n(f(doc, 'amount', 'totalAmount', 'cost', 'price'));
+        const date = d(f(doc, 'date', 'expenseDate', 'paidDate', 'createdAt'));
+        const desc = s(f(doc, 'description', 'title', 'name'), 'Expense');
+        const rawCat = f(doc, 'category', 'expenseCategory', 'categoryName', 'type');
+        const cat = s(rawCat, 'General Expense');
+        const vehicle = f(doc, 'vehicleId', 'vehicle', 'unitId');
+        const method = s(f(doc, 'paymentMethod', 'paidVia', 'method'), 'Cash');
+        await track('Expense', (doc as any)._id, 'EXPENSE_PAID', {
           date,
-          valueDate: date,
-          direction: 'DEBIT',
+          direction: 'DEBIT', // ← ALWAYS DEBIT
           amount,
           description: desc,
-          category: catName,
-          accountLabel: 'Cash',
-          accountType: 'CASH',
-          vehicleId: vehicle,
-          note: asStr(d.notes, ''),
+          category: cat,
+          accountLabel: method,
+          accountType: method.toLowerCase().includes('bank') ? 'BANK' : 'CASH',
+          vehicleId: vehicle ?? undefined,
+          note: s(f(doc, 'notes', 'note', 'remarks')),
           isReconciled: false,
-        })
+        });
       }
-    } catch (e) {
-      errors.push(`Expense: ${e}`)
-      console.error('[SYNC] Expense', e)
-    }
+    } catch (e) { errors.push(`Expense: ${e}`); }
 
-    // 2. Payments (SUCCESS — booking payments; skip investor-linked payments)
+    // ══════════════════════════════════════════════════════════════════════
+    // 2. FINES → DEBIT
+    // Rule: ALL fines (whether paid by customer or business) are DEBIT
+    // ══════════════════════════════════════════════════════════════════════
     try {
-      const Payment = (await import('@/lib/models/Payment')).default
-      const InvestorPayout = (await import('@/lib/models/InvestorPayout')).default
-      const docs = await Payment.find({ status: 'SUCCESS' }).lean()
-      for (const doc of docs) {
-        const d = doc as Record<string, unknown>
-        const payout = await InvestorPayout.findOne({ payment: doc._id }).select('_id').lean()
-        if (payout) continue
-        const amount = num(d.amount)
-        const date = asDate(d.paidAt ?? d.updatedAt ?? d.createdAt)
-        const method = String(d.method ?? 'CASH')
-        const bookingId = d.booking as mongoose.Types.ObjectId | undefined
-        let customerId: mongoose.Types.ObjectId | undefined
-        let vehicleId: mongoose.Types.ObjectId | undefined
-        if (bookingId) {
-          const Booking = (await import('@/lib/models/Booking')).default
-          const b = await Booking.findById(bookingId).select('customer vehicle').lean()
-          customerId = b?.customer as mongoose.Types.ObjectId | undefined
-          vehicleId = b?.vehicle as mongoose.Types.ObjectId | undefined
+      let FineModel: any = null;
+      for (const name of ['FineOrPenalty', 'Fine', 'Penalty', 'Fines']) {
+        try { FineModel = (await import(`@/lib/models/${name}`)).default; break; } catch { continue; }
+      }
+      if (FineModel) {
+        const docs = await FineModel.find({}).lean();
+        console.log(`[SYNC] Fines: ${docs.length}`);
+        for (const doc of docs) {
+          const amount = n(f(doc, 'amount', 'fineAmount', 'penaltyAmount', 'cost'));
+          if (amount <= 0) continue;
+          const date = d(f(doc, 'date', 'issuedDate', 'fineDate', 'createdAt'));
+          const desc = s(f(doc, 'description', 'reason', 'type', 'title'), 'Fine');
+          const vehicle = f(doc, 'vehicleId', 'vehicle', 'unitId');
+          const customer = f(doc, 'customerId', 'customer', 'clientId');
+          await track('FineOrPenalty', (doc as any)._id, 'FINE_PAID', {
+            date,
+            direction: 'DEBIT', // ← ALL FINES ARE DEBIT
+            amount,
+            description: `Fine: ${desc}`,
+            category: 'Fine',
+            accountLabel: 'Cash',
+            accountType: 'CASH',
+            vehicleId: vehicle ?? undefined,
+            customerId: customer ?? undefined,
+            note: s(f(doc, 'notes', 'note')),
+            isReconciled: false,
+          });
         }
-        await upsert('Payment', doc._id as mongoose.Types.ObjectId, 'BOOKING_PAYMENT', {
-          date,
-          valueDate: d.paidAt ? asDate(d.paidAt) : date,
-          direction: 'CREDIT',
-          amount,
-          description: `Booking payment received${d.transactionId ? ` (${String(d.transactionId)})` : ''}`,
-          category: 'Booking Payment',
-          accountLabel: paymentMethodLabel(method),
-          accountType: method === 'BANK_TRANSFER' ? 'BANK' : 'CASH',
-          bookingId,
-          customerId,
-          vehicleId,
-          note: '',
-          isReconciled: false,
-        })
       }
-    } catch (e) {
-      errors.push(`Payment: ${e}`)
-      console.error('[SYNC] Payment', e)
-    }
+    } catch (e) { errors.push(`Fines: ${e}`); }
 
-    // 3. Salaries (PAID)
+    // ══════════════════════════════════════════════════════════════════════
+    // 3. RECURRING EXPENSES → DEBIT
+    // ══════════════════════════════════════════════════════════════════════
     try {
-      const SalaryRecord = (await import('@/lib/models/SalaryRecord')).default
-      const User = (await import('@/lib/models/User')).default
-      const docs = await SalaryRecord.find({ isDeleted: false, status: 'PAID' }).lean()
-      for (const doc of docs) {
-        const d = doc as Record<string, unknown>
-        const amount = num(d.netSalary)
-        const date = asDate(d.paidAt ?? d.updatedAt ?? d.createdAt)
-        const staff = await User.findById(d.staffUser).select('name').lean()
-        const name = staff?.name ? String(staff.name) : ''
-        await upsert('SalaryRecord', doc._id as mongoose.Types.ObjectId, 'SALARY_PAID', {
-          date,
-          valueDate: d.paidAt ? asDate(d.paidAt) : date,
-          direction: 'DEBIT',
-          amount,
-          description: name ? `Salary paid — ${name}` : 'Salary paid',
-          category: 'Salary',
-          accountLabel: 'Cash',
-          accountType: 'CASH',
-          userId: d.staffUser as mongoose.Types.ObjectId,
-          note: asStr(d.notes, ''),
-          isReconciled: false,
-        })
+      let RecModel: any = null;
+      for (const name of ['RecurringExpense', 'Recurring', 'RecurringCost']) {
+        try { RecModel = (await import(`@/lib/models/${name}`)).default; break; } catch { continue; }
       }
-    } catch (e) {
-      errors.push(`Salary: ${e}`)
-      console.error('[SYNC] Salary', e)
-    }
-
-    // 4. Investor payouts (PAID)
-    try {
-      const InvestorPayout = (await import('@/lib/models/InvestorPayout')).default
-      const InvestorProfile = (await import('@/lib/models/InvestorProfile')).default
-      const docs = await InvestorPayout.find({ status: 'PAID' }).lean()
-      for (const doc of docs) {
-        const d = doc as Record<string, unknown>
-        const totals = d.totals as { netPayout?: number } | undefined
-        const amount = num(totals?.netPayout)
-        if (amount <= 0) continue
-        const date = asDate(d.updatedAt ?? d.createdAt)
-        let iname = ''
-        const inv = await InvestorProfile.findById(d.investor).populate('user', 'name').lean()
-        if (inv) {
-          const u = inv.user as { name?: string } | undefined
-          iname = (inv.companyName && String(inv.companyName)) || (u?.name && String(u.name)) || ''
+      if (RecModel) {
+        const docs = await RecModel.find({}).lean();
+        console.log(`[SYNC] Recurring expenses: ${docs.length}`);
+        for (const doc of docs) {
+          const amount = n(f(doc, 'amount', 'cost', 'totalAmount'));
+          if (amount <= 0) continue;
+          const date = d(f(doc, 'lastProcessed', 'lastPaidDate', 'processedAt', 'createdAt'));
+          const desc = s(f(doc, 'description', 'title', 'name'), 'Recurring Expense');
+          const cat = s(f(doc, 'category', 'expenseCategory', 'type'), 'Recurring Expense');
+          await track('RecurringExpense', (doc as any)._id, 'RECURRING_EXPENSE', {
+            date,
+            direction: 'DEBIT', // ← DEBIT
+            amount,
+            description: desc,
+            category: cat,
+            accountLabel: 'Cash',
+            accountType: 'CASH',
+            isReconciled: false,
+          });
         }
-        await upsert('InvestorPayout', doc._id as mongoose.Types.ObjectId, 'INVESTOR_PAYOUT', {
-          date,
-          valueDate: date,
-          direction: 'DEBIT',
-          amount,
-          description: iname ? `Investor payout — ${iname}` : 'Investor payout',
-          category: 'Investor Payout',
-          accountLabel: 'Bank',
-          accountType: 'BANK',
-          note: asStr(d.notes, ''),
-          isReconciled: false,
-        })
       }
-    } catch (e) {
-      errors.push(`InvestorPayout: ${e}`)
-      console.error('[SYNC] InvestorPayout', e)
-    }
+    } catch (e) { errors.push(`RecurringExpense: ${e}`); }
 
-    // 5. Maintenance
+    // ══════════════════════════════════════════════════════════════════════
+    // 4. MAINTENANCE → DEBIT
+    // ══════════════════════════════════════════════════════════════════════
     try {
-      const MaintenanceRecord = (await import('@/lib/models/MaintenanceRecord')).default
-      const docs = await MaintenanceRecord.find({ cost: { $gt: 0 } }).lean()
-      for (const doc of docs) {
-        const d = doc as Record<string, unknown>
-        const amount = num(d.cost)
-        if (amount <= 0) continue
-        const date = asDate(d.scheduledDate ?? d.completedDate ?? d.createdAt)
-        const desc = asStr(d.description, 'Maintenance')
-        await upsert('MaintenanceRecord', doc._id as mongoose.Types.ObjectId, 'VEHICLE_MAINTENANCE', {
-          date,
-          valueDate: d.completedDate ? asDate(d.completedDate) : date,
-          direction: 'DEBIT',
-          amount,
-          description: `Maintenance: ${desc}`,
-          category: 'Vehicle Maintenance',
-          accountLabel: 'Cash',
-          accountType: 'CASH',
-          vehicleId: d.vehicle as mongoose.Types.ObjectId,
-          note: '',
-          isReconciled: false,
-        })
+      let MaintModel: any = null;
+      for (const name of ['MaintenanceRecord', 'Maintenance', 'VehicleMaintenance']) {
+        try { MaintModel = (await import(`@/lib/models/${name}`)).default; break; } catch { continue; }
       }
-    } catch (e) {
-      errors.push(`Maintenance: ${e}`)
-      console.error('[SYNC] Maintenance', e)
-    }
-
-    // 6. Fines
-    try {
-      const FineOrPenalty = (await import('@/lib/models/FineOrPenalty')).default
-      const docs = await FineOrPenalty.find({}).lean()
-      for (const doc of docs) {
-        const d = doc as Record<string, unknown>
-        const amount = num(d.amount)
-        if (amount <= 0) continue
-        const date = asDate(d.issueDate)
-        const isPaid = d.status === 'PAID'
-        const entryType = isPaid ? 'FINE_PAID' : 'FINE_COLLECTED'
-        const direction = isPaid ? 'DEBIT' : 'CREDIT'
-        await upsert('FineOrPenalty', doc._id as mongoose.Types.ObjectId, entryType, {
-          date,
-          valueDate: d.dueDate ? asDate(d.dueDate) : date,
-          direction,
-          amount,
-          description: `Fine ${String(d.referenceNumber)} — ${String(d.authorityName)}`,
-          category: isPaid ? 'Fine Paid' : 'Fine Collected',
-          accountLabel: 'Cash',
-          accountType: 'CASH',
-          bookingId: d.booking as mongoose.Types.ObjectId | undefined,
-          customerId: d.customer as mongoose.Types.ObjectId | undefined,
-          vehicleId: d.vehicle as mongoose.Types.ObjectId,
-          note: '',
-          isReconciled: false,
-        })
-      }
-    } catch (e) {
-      errors.push(`Fines: ${e}`)
-      console.error('[SYNC] Fines', e)
-    }
-
-    // 7. Recurring expenses
-    try {
-      const RecurringExpense = (await import('@/lib/models/RecurringExpense')).default
-      const ExpenseCategory = (await import('@/lib/models/ExpenseCategory')).default
-      const docs = await RecurringExpense.find({ isActive: true }).lean()
-      for (const doc of docs) {
-        const d = doc as Record<string, unknown>
-        const amount = num(d.amount)
-        if (amount <= 0) continue
-        const date = asDate(d.lastProcessedDate ?? d.nextDueDate ?? d.createdAt)
-        const desc = asStr(d.description, 'Recurring expense')
-        let catName = 'Recurring Expense'
-        if (d.category) {
-          const c = await ExpenseCategory.findById(d.category).select('name').lean()
-          if (c?.name) catName = String(c.name)
+      if (MaintModel) {
+        const docs = await MaintModel.find({}).lean();
+        console.log(`[SYNC] Maintenance: ${docs.length}`);
+        for (const doc of docs) {
+          const amount = n(f(doc, 'cost', 'amount', 'totalCost', 'price', 'laborCost'));
+          if (amount <= 0) continue;
+          const date = d(f(doc, 'date', 'completedDate', 'scheduledDate', 'serviceDate', 'createdAt'));
+          const desc = s(f(doc, 'description', 'type', 'serviceType', 'maintenanceType', 'title'), 'Maintenance');
+          const vehicle = f(doc, 'vehicleId', 'vehicle', 'unitId', 'carId');
+          await track('MaintenanceRecord', (doc as any)._id, 'VEHICLE_MAINTENANCE', {
+            date,
+            direction: 'DEBIT', // ← DEBIT
+            amount,
+            description: `Maintenance: ${desc}`,
+            category: 'Vehicle Maintenance',
+            accountLabel: 'Cash',
+            accountType: 'CASH',
+            vehicleId: vehicle ?? undefined,
+            isReconciled: false,
+          });
         }
-        await upsert('RecurringExpense', doc._id as mongoose.Types.ObjectId, 'RECURRING_EXPENSE', {
-          date,
-          valueDate: date,
-          direction: 'DEBIT',
-          amount,
-          description: desc,
-          category: catName,
-          accountLabel: 'Cash',
-          accountType: 'CASH',
-          note: asStr(d.notes, ''),
-          isReconciled: false,
-        })
       }
-    } catch (e) {
-      errors.push(`RecurringExpense: ${e}`)
-      console.error('[SYNC] Recurring', e)
-    }
+    } catch (e) { errors.push(`Maintenance: ${e}`); }
 
-    // 8. Booking deposits + refunds
+    // ══════════════════════════════════════════════════════════════════════
+    // 5. PAYMENTS → CREDIT
+    // ══════════════════════════════════════════════════════════════════════
     try {
-      const Booking = (await import('@/lib/models/Booking')).default
-      const docs = await Booking.find({ depositAmount: { $gt: 0 } }).lean()
+      const Payment = (await import('@/lib/models/Payment')).default;
+      const docs = await Payment.find({}).lean();
+      console.log(`[SYNC] Payments: ${docs.length}`);
       for (const doc of docs) {
-        const d = doc as Record<string, unknown>
-        const deposit = num(d.depositAmount)
-        if (deposit <= 0) continue
-        const date = asDate(d.startDateTime ?? d.createdAt)
-        const bid = doc._id as mongoose.Types.ObjectId
-        await upsert('Booking', bid, 'SECURITY_DEPOSIT', {
+        const amount = n(f(doc, 'amount', 'totalAmount', 'paidAmount'));
+        const date = d(f(doc, 'date', 'paymentDate', 'paidAt', 'createdAt'));
+        const method = s(f(doc, 'paymentMethod', 'method', 'type'), 'Cash');
+        const bookingId = f(doc, 'bookingId', 'booking');
+        const customerId = f(doc, 'customerId', 'customer', 'clientId');
+        const typeStr = s(f(doc, 'type', 'paymentType')).toLowerCase();
+        const isDeposit = typeStr.includes('deposit');
+        const entryType = isDeposit ? 'SECURITY_DEPOSIT' : 'BOOKING_PAYMENT';
+        await track('Payment', (doc as any)._id, entryType, {
           date,
-          valueDate: date,
-          direction: 'CREDIT',
+          direction: 'CREDIT', // ← ALWAYS CREDIT
+          amount,
+          description: isDeposit ? 'Security deposit received' : 'Booking payment received',
+          category: isDeposit ? 'Security Deposit' : 'Booking Payment',
+          accountLabel: method,
+          accountType: method.toLowerCase().includes('bank') ? 'BANK' : 'CASH',
+          bookingId: bookingId ?? undefined,
+          customerId: customerId ?? undefined,
+          note: s(f(doc, 'notes', 'note', 'remarks')),
+          isReconciled: false,
+        });
+      }
+    } catch (e) { errors.push(`Payment: ${e}`); }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // 6. INVOICES → CREDIT (including partial payments and receivables)
+    // Rule: ALL invoice-related entries are CREDIT
+    // ══════════════════════════════════════════════════════════════════════
+    try {
+      let InvoiceModel: any = null;
+      for (const name of ['Invoice', 'Invoices', 'RentalInvoice']) {
+        try { InvoiceModel = (await import(`@/lib/models/${name}`)).default; break; } catch { continue; }
+      }
+      if (InvoiceModel) {
+        const docs = await InvoiceModel.find({}).lean();
+        console.log(`[SYNC] Invoices: ${docs.length}`);
+        for (const doc of docs) {
+          const totalAmount = n(f(doc, 'totalAmount', 'amount', 'grandTotal', 'total',
+                                     'invoiceAmount', 'netAmount', 'subtotal', 'rentAmount'));
+          const paidAmount = n(f(doc, 'paidAmount', 'amountPaid', 'paid', 'paymentReceived', 'amountReceived'));
+          const dueAmount = Math.max(0, totalAmount - paidAmount);
+          const date = d(f(doc, 'date', 'invoiceDate', 'issueDate', 'createdAt'));
+          const invoiceNum = s(f(doc, 'invoiceNumber', 'invoiceNo', 'number', 'reference'), 'Invoice');
+          const customer = f(doc, 'customerId', 'customer', 'clientId');
+          const booking = f(doc, 'bookingId', 'booking');
+          const vehicle = f(doc, 'vehicleId', 'vehicle', 'unitId');
+          const status = s(f(doc, 'status', 'paymentStatus', 'invoiceStatus'), 'pending');
+
+          // ── Full invoice amount → CREDIT ─────────────────────────────
+          if (totalAmount > 0) {
+            await track('Invoice', (doc as any)._id, 'BOOKING_PAYMENT', {
+              date,
+              direction: 'CREDIT', // ← ALWAYS CREDIT
+              amount: totalAmount,
+              description: `Invoice #${invoiceNum} — Total`,
+              category: 'Invoice',
+              accountLabel: 'Cash',
+              accountType: 'CASH',
+              customerId: customer ?? undefined,
+              bookingId: booking ?? undefined,
+              vehicleId: vehicle ?? undefined,
+              note: `Status: ${status}`,
+              isReconciled: ['paid','completed','settled'].includes(status.toLowerCase()),
+            });
+          }
+
+          // ── Partial payment (if paid < total) → CREDIT ────────────────
+          if (paidAmount > 0 && paidAmount < totalAmount) {
+            await track('Invoice', (doc as any)._id, 'PARTIAL_PAYMENT', {
+              date,
+              direction: 'CREDIT', // ← CREDIT
+              amount: paidAmount,
+              description: `Invoice #${invoiceNum} — Partial Payment`,
+              category: 'Partial Payment',
+              accountLabel: 'Cash',
+              accountType: 'CASH',
+              customerId: customer ?? undefined,
+              bookingId: booking ?? undefined,
+              vehicleId: vehicle ?? undefined,
+              note: `Paid: AED ${paidAmount}, Due: AED ${dueAmount}`,
+              isReconciled: false,
+            });
+          }
+
+          // ── Receivable (unpaid amount) → CREDIT ───────────────────────
+          if (dueAmount > 0) {
+            await track('Invoice', (doc as any)._id, 'INVOICE_RECEIVABLE', {
+              date,
+              direction: 'CREDIT', // ← CREDIT (receivable = money owed TO business)
+              amount: dueAmount,
+              description: `Invoice #${invoiceNum} — Receivable`,
+              category: 'Receivable',
+              accountLabel: 'Receivable',
+              accountType: 'OTHER',
+              customerId: customer ?? undefined,
+              bookingId: booking ?? undefined,
+              vehicleId: vehicle ?? undefined,
+              note: `Outstanding: AED ${dueAmount} of AED ${totalAmount}`,
+              isReconciled: false,
+            });
+          }
+        }
+      }
+    } catch (e) { errors.push(`Invoice: ${e}`); console.error('[SYNC] Invoice error:', e); }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // 7. SALARIES → CREDIT
+    // ══════════════════════════════════════════════════════════════════════
+    try {
+      let SalaryModel: any = null;
+      for (const name of ['SalaryRecord', 'Salary', 'SalaryPayment']) {
+        try { SalaryModel = (await import(`@/lib/models/${name}`)).default; break; } catch { continue; }
+      }
+      if (SalaryModel) {
+        const docs = await SalaryModel.find({}).lean();
+        console.log(`[SYNC] Salaries: ${docs.length}`);
+        for (const doc of docs) {
+          const amount = n(f(doc, 'amount', 'netSalary', 'salary', 'totalAmount', 'paidAmount'));
+          const date = d(f(doc, 'date', 'paymentDate', 'paidDate', 'month', 'salaryMonth', 'createdAt'));
+          const ename = s(f(doc, 'employeeName', 'staffName', 'name', 'userName'));
+          const userId = f(doc, 'userId', 'employeeId', 'staffId', 'user');
+          await track('SalaryRecord', (doc as any)._id, 'SALARY_PAID', {
+            date,
+            direction: 'CREDIT', // ← CREDIT
+            amount,
+            description: `Salary${ename ? ' — ' + ename : ''}`,
+            category: 'Salary',
+            accountLabel: 'Cash',
+            accountType: 'CASH',
+            userId: userId ?? undefined,
+            isReconciled: false,
+          });
+        }
+      }
+    } catch (e) { errors.push(`Salary: ${e}`); }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // 8. INVESTOR PAYOUTS → CREDIT
+    // ══════════════════════════════════════════════════════════════════════
+    try {
+      let PayoutModel: any = null;
+      for (const name of ['InvestorPayout', 'Payout', 'InvestorPayment']) {
+        try { PayoutModel = (await import(`@/lib/models/${name}`)).default; break; } catch { continue; }
+      }
+      if (PayoutModel) {
+        const docs = await PayoutModel.find({}).lean();
+        console.log(`[SYNC] Investor payouts: ${docs.length}`);
+        for (const doc of docs) {
+          const amount = n(f(doc, 'amount', 'payoutAmount', 'totalAmount'));
+          const date = d(f(doc, 'date', 'payoutDate', 'paidDate', 'createdAt'));
+          const iname = s(f(doc, 'investorName', 'name'));
+          await track('InvestorPayout', (doc as any)._id, 'INVESTOR_PAYOUT', {
+            date,
+            direction: 'CREDIT', // ← CREDIT
+            amount,
+            description: `Investor payout${iname ? ' — ' + iname : ''}`,
+            category: 'Investor Payout',
+            accountLabel: 'Cash',
+            accountType: 'CASH',
+            isReconciled: false,
+          });
+        }
+      }
+    } catch (e) { errors.push(`InvestorPayout: ${e}`); }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // 9. BOOKING DEPOSITS → CREDIT
+    // ══════════════════════════════════════════════════════════════════════
+    try {
+      const Booking = (await import('@/lib/models/Booking')).default;
+      const docs = await Booking.find({
+        $or: [{ depositAmount: { $gt: 0 } }, { securityDeposit: { $gt: 0 } }, { deposit: { $gt: 0 } }],
+      }).lean();
+      console.log(`[SYNC] Booking deposits: ${docs.length}`);
+      for (const doc of docs) {
+        const deposit = n(f(doc, 'depositAmount', 'securityDeposit', 'deposit'));
+        if (deposit <= 0) continue;
+        const date = d(f(doc, 'startDate', 'bookingDate', 'createdAt'));
+        const bookingNum = s(f(doc, 'bookingNumber', 'bookingId', '_id'));
+        const customer = f(doc, 'customerId', 'customer', 'clientId');
+        const vehicle = f(doc, 'vehicleId', 'vehicle', 'unitId', 'carId');
+        await track('Booking', (doc as any)._id, 'SECURITY_DEPOSIT', {
+          date,
+          direction: 'CREDIT', // ← CREDIT
           amount: deposit,
-          description: 'Security deposit collected',
+          description: `Security deposit — Booking #${bookingNum}`,
           category: 'Security Deposit',
           accountLabel: 'Cash',
           accountType: 'CASH',
-          bookingId: bid,
-          customerId: d.customer as mongoose.Types.ObjectId | undefined,
-          vehicleId: d.vehicle as mongoose.Types.ObjectId | undefined,
-          note: '',
+          bookingId: (doc as any)._id,
+          customerId: customer ?? undefined,
+          vehicleId: vehicle ?? undefined,
           isReconciled: false,
-        })
-        if (d.depositStatus === 'RELEASED') {
-          await upsert('Booking', bid, 'SECURITY_DEPOSIT_REFUND', {
-            date: asDate(d.updatedAt),
-            valueDate: asDate(d.updatedAt),
-            direction: 'DEBIT',
-            amount: deposit,
-            description: 'Security deposit refunded',
-            category: 'Security Deposit Refund',
-            accountLabel: 'Cash',
-            accountType: 'CASH',
-            bookingId: bid,
-            customerId: d.customer as mongoose.Types.ObjectId | undefined,
-            vehicleId: d.vehicle as mongoose.Types.ObjectId | undefined,
-            note: '',
-            isReconciled: false,
-          })
-        }
+        });
       }
-    } catch (e) {
-      errors.push(`Booking deposits: ${e}`)
-      console.error('[SYNC] Booking', e)
-    }
+    } catch (e) { errors.push(`Booking deposits: ${e}`); }
 
+    // ══════════════════════════════════════════════════════════════════════
+    // RECOMPUTE RUNNING BALANCE
+    // ══════════════════════════════════════════════════════════════════════
     try {
-      await recomputeLedgerRunningBalances()
-    } catch (e) {
-      errors.push(`Balance recompute: ${e}`)
-    }
+      const all = await LedgerEntry.find({ isVoided: { $ne: true } })
+        .sort({ date: 1, createdAt: 1 }).select('_id direction amount').lean();
+      let balance = 0;
+      const ops = all.map((e: any) => {
+        balance += e.direction === 'CREDIT' ? n(e.amount) : -n(e.amount);
+        return {
+          updateOne: {
+            filter: { _id: e._id },
+            update: { $set: { runningBalance: Math.round(balance * 100) / 100 } },
+          },
+        };
+      });
+      if (ops.length > 0) await LedgerEntry.bulkWrite(ops, { ordered: false });
+      console.log(`[SYNC] Running balance updated for ${ops.length} entries`);
+    } catch (e) { errors.push(`Balance recompute: ${e}`); }
 
-    try {
-      const { cache } = await import('@/lib/cache')
-      cache.deletePrefix('ledger:')
-      console.log('[SYNC] Ledger cache cleared after sync')
-    } catch {
-      /* non-critical */
-    }
+    const totalInDB = await LedgerEntry.countDocuments();
 
-    const totalInDB = await LedgerEntry.countDocuments()
     return NextResponse.json({
       success: true,
       synced,
       skipped,
       totalInDB,
-      removedDuplicates,
+      removedDuplicates: removedDups,
       errors: errors.slice(0, 15),
-    })
+    });
+
   } catch (error) {
-    console.error('[SYNC] Fatal', error)
-    return NextResponse.json({ error: 'Sync failed', details: String(error) }, { status: 500 })
+    console.error('[SYNC] Fatal:', error);
+    return NextResponse.json({ error: 'Sync failed', details: String(error) }, { status: 500 });
   }
 }

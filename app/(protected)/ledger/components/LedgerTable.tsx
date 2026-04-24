@@ -91,7 +91,7 @@ export default function LedgerTable({ entries, onRowClick }: Props) {
                   key={entry._id}
                   onClick={() => onRowClick(entry)}
                   className={`cursor-pointer transition-colors hover:bg-gray-50 ${
-                    isCredit ? 'border-l-[3px] border-l-emerald-400' : 'border-l-[3px] border-l-red-400'
+                    isCredit ? 'border-l-[3px] border-l-emerald-500' : 'border-l-[3px] border-l-red-500'
                   }`}
                 >
                   <td className="px-4 py-3 text-gray-400 text-xs">{idx + 1}</td>
@@ -113,10 +113,10 @@ export default function LedgerTable({ entries, onRowClick }: Props) {
                     {entry.accountLabel || 'Cash'}
                   </td>
                   <td className="px-4 py-3 text-right font-semibold text-red-600 whitespace-nowrap">
-                    {!isCredit ? fmtAED(entry.amount) : ''}
+                    {!isCredit ? fmtAED(entry.amount) : '—'}
                   </td>
                   <td className="px-4 py-3 text-right font-semibold text-emerald-600 whitespace-nowrap">
-                    {isCredit ? fmtAED(entry.amount) : ''}
+                    {isCredit ? fmtAED(entry.amount) : '—'}
                   </td>
                   <td
                     className={`px-4 py-3 text-right font-bold whitespace-nowrap ${

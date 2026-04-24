@@ -130,7 +130,7 @@ export async function GET(request: NextRequest) {
       summary: {
         totalCredits: cr,
         totalDebits: dr,
-        netBalance: cr - dr,
+        netBalance: Math.round((cr - dr) * 100) / 100,
         totalEntries: Number(agg[0]?.count ?? 0),
         unreconciledCount,
       },

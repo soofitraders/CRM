@@ -1,368 +1,388 @@
-'use client'
+'use client';
 
-import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
 
-const fmtAED = (val: number | undefined | null) => {
-  const n = Number(val ?? 0)
-  if (Number.isNaN(n)) return 'AED 0.00'
-  return `AED ${n.toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-const fmtDate = (val: string | null | undefined) => {
-  if (!val) return '—'
-  const d = new Date(val)
-  return Number.isNaN(d.getTime())
-    ? '—'
-    : d.toLocaleDateString('en-AE', { day: '2-digit', month: 'short', year: 'numeric' })
-}
-
-const StatusBadge = ({ status }: { status: string }) => {
-  const s = (status ?? '').toLowerCase()
+// ─── FORMATTERS ───────────────────────────────────────────────────────────
+const fmtAED = (v: any) => {
+  const n = Number(v ?? 0);
+  return `AED ${isNaN(n) ? '0.00' : n.toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+const fmtDate = (v: any) => {
+  if (!v) return '—';
+  try { return new Date(v).toLocaleDateString('en-AE', { day:'2-digit', month:'short', year:'numeric' }); }
+  catch { return '—'; }
+};
+const Badge = ({ s }: { s: string }) => {
+  const sl = (s ?? '').toLowerCase();
   const cls =
-    ['paid', 'completed', 'settled', 'done', 'received', 'success'].includes(s) ? 'bg-green-100 text-green-700' :
-    ['overdue', 'late', 'past_due', 'expired'].includes(s) ? 'bg-red-100 text-red-700' :
-    ['pending', 'unpaid', 'open', 'outstanding', 'issued'].includes(s) ? 'bg-orange-100 text-orange-700' :
-    ['draft', 'new', 'created'].includes(s) ? 'bg-gray-100 text-gray-600' :
-    ['active', 'ongoing', 'rented', 'confirmed', 'checked_out'].includes(s) ? 'bg-blue-100 text-blue-700' :
-    'bg-gray-100 text-gray-500'
-  return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${cls}`}>{status || 'unknown'}</span>
-}
+    ['paid','completed','settled','done','received','active'].includes(sl) ? 'bg-green-100 text-green-700' :
+    ['overdue','late','past_due','expired'].includes(sl) ? 'bg-red-100 text-red-700' :
+    ['pending','unpaid','open','partial'].includes(sl) ? 'bg-orange-100 text-orange-700' :
+    ['draft','new','created'].includes(sl) ? 'bg-gray-100 text-gray-600' :
+    'bg-gray-100 text-gray-500';
+  return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${cls}`}>{s || 'unknown'}</span>;
+};
 
-export default function VehiclePerformancePage() {
-  const params = useParams()
-  const vehicleId = params.id as string
+export default function VehiclePerformanceTab() {
+  const params = useParams();
+  const vehicleId = params.id as string;
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [period, setPeriod] = useState('all');
+  const [tab, setTab] = useState<'overview'|'bookings'|'invoices'|'payments'>('overview');
 
-  const [data, setData] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [period, setPeriod] = useState('30')
-  const [activeSection, setActiveSection] = useState<'overview' | 'invoices' | 'bookings' | 'expenses'>('overview')
-
-  const fetchData = async (p = period) => {
-    if (!vehicleId) return
+  const load = async (p = period) => {
+    if (!vehicleId) return;
+    setLoading(true); setError('');
     try {
-      setLoading(true)
-      setError('')
-      const res = await fetch(`/api/reports/vehicle-performance?vehicleId=${vehicleId}&period=${p}`)
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || `HTTP ${res.status}`)
-      }
-      const json = await res.json()
-      setData(json.vehicle ?? json.vehicles?.[0] ?? null)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load')
-    } finally {
-      setLoading(false)
-    }
-  }
+      // Adjust URL to match your actual API path found in Step 0:
+      const res = await fetch(`/api/reports/vehicle-performance?id=${vehicleId}&period=${p}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      setData(json.vehicle ?? json.vehicles?.[0] ?? null);
+    } catch (e) { setError(e instanceof Error ? e.message : 'Failed'); }
+    finally { setLoading(false); }
+  };
 
-  useEffect(() => {
-    fetchData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vehicleId])
+  useEffect(() => { load(); }, [vehicleId]);
 
-  if (loading) {
-    return (
-      <div className="space-y-4 p-4">
-        {[...Array(4)].map((_, i) => <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse" />)}
-      </div>
-    )
-  }
+  if (loading) return (
+    <div className="space-y-3 p-4">
+      {[...Array(5)].map((_,i) => <div key={i} className="h-14 bg-gray-100 rounded-xl animate-pulse" />)}
+    </div>
+  );
+  if (error) return (
+    <div className="p-6 text-center">
+      <p className="text-red-500">{error}</p>
+      <button onClick={() => load()} className="mt-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm">Retry</button>
+    </div>
+  );
+  if (!data) return <div className="p-6 text-center text-gray-400">No data found</div>;
 
-  if (error) {
-    return (
-      <div className="p-6 text-center">
-        <p className="text-red-500 font-medium">{error}</p>
-        <button onClick={() => fetchData()} className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg text-sm">
-          Retry
-        </button>
-      </div>
-    )
-  }
+  const bk = data.bookings ?? {};
+  const inv = data.invoices ?? {};
+  const pay = data.payments ?? {};
+  const fin = data.financial ?? {};
+  const pr = data.period ?? {};
 
-  if (!data) return <div className="p-6 text-center text-gray-400">No performance data available</div>
-
-  const at = data.allTime ?? {}
-  const pr = data.period ?? {}
-  const inv = at.invoices ?? {}
-  const invList: any[] = inv.list ?? []
-  const bkList: any[] = at.bookingDetails ?? []
-  const expList: any[] = at.expenses?.list ?? []
+  const bkList: any[] = bk.list ?? [];
+  const invList: any[] = inv.list ?? [];
+  const payList: any[] = pay.list ?? [];
 
   return (
     <div className="space-y-4">
+
+      {/* ── PERIOD FILTER ──────────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-2 items-center">
-        <span className="text-xs font-semibold text-gray-400 uppercase">Period:</span>
+        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Period:</span>
         {[
-          { v: '7', l: '7 Days' },
+          { v: 'all', l: 'All Time' },
           { v: '30', l: '30 Days' },
           { v: '90', l: '3 Months' },
-          { v: '180', l: '6 Months' },
-          { v: '365', l: 'This Year' },
-        ].map((p) => (
-          <button
-            key={p.v}
-            onClick={() => {
-              setPeriod(p.v)
-              fetchData(p.v)
-            }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              period === p.v ? 'bg-blue-600 text-white shadow-sm' : 'border border-gray-300 text-gray-600 hover:bg-gray-50'
-            }`}
-          >
+          { v: '365', l: 'This Year'},
+        ].map(p => (
+          <button key={p.v} onClick={() => { setPeriod(p.v); load(p.v); }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+              period === p.v ? 'bg-blue-600 text-white' : 'border border-gray-300 hover:bg-gray-50'
+            }`}>
             {p.l}
           </button>
         ))}
       </div>
 
+      {/* ── TOP SUMMARY CARDS ──────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: 'Total Invoiced', value: fmtAED(inv.totalInvoiced), sub: `${inv.count ?? 0} invoices`, color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-100' },
-          { label: 'Amount Received', value: fmtAED(inv.totalPaid), sub: `${inv.paidCount ?? 0} paid`, color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-100' },
-          { label: 'Outstanding Due', value: fmtAED(inv.totalDue), sub: `${(inv.pendingCount ?? 0) + (inv.overdueCount ?? 0)} unpaid`, color: (inv.totalDue ?? 0) > 0 ? 'text-orange-700' : 'text-gray-500', bg: (inv.totalDue ?? 0) > 0 ? 'bg-orange-50' : 'bg-gray-50', border: (inv.totalDue ?? 0) > 0 ? 'border-orange-100' : 'border-gray-100' },
-          { label: 'Net Profit', value: fmtAED(at.netProfit), sub: `After AED ${Number(at.totalCosts ?? 0).toLocaleString('en-AE')} costs`, color: (at.netProfit ?? 0) >= 0 ? 'text-green-700' : 'text-red-700', bg: (at.netProfit ?? 0) >= 0 ? 'bg-green-50' : 'bg-red-50', border: (at.netProfit ?? 0) >= 0 ? 'border-green-100' : 'border-red-100' },
-        ].map((card) => (
+          { label: 'Total Revenue', value: fmtAED(fin.totalRevenue), sub: `${bk.total ?? 0} bookings`, color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-100' },
+          { label: 'Amount Received', value: fmtAED(fin.totalReceived), sub: `${bk.paid ?? 0} paid`, color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-100' },
+          { label: 'Outstanding', value: fmtAED(fin.totalOutstanding), sub: `${(inv.pendingCount ?? 0) + (inv.overdueCount ?? 0)} unpaid`, color: (fin.totalOutstanding ?? 0) > 0 ? 'text-orange-700' : 'text-gray-500', bg: (fin.totalOutstanding ?? 0) > 0 ? 'bg-orange-50' : 'bg-gray-50', border: (fin.totalOutstanding ?? 0) > 0 ? 'border-orange-100' : 'border-gray-100' },
+          { label: 'Net Profit', value: fmtAED(fin.netProfit), sub: `After AED ${Number(fin.totalCosts ?? 0).toLocaleString('en-AE', { maximumFractionDigits: 0 })} costs`, color: (fin.netProfit ?? 0) >= 0 ? 'text-green-700' : 'text-red-700', bg: (fin.netProfit ?? 0) >= 0 ? 'bg-green-50' : 'bg-red-50', border: (fin.netProfit ?? 0) >= 0 ? 'border-green-100' : 'border-red-100' },
+        ].map(card => (
           <div key={card.label} className={`${card.bg} border ${card.border} rounded-xl p-4`}>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{card.label}</p>
-            <p className={`text-lg font-bold mt-1 break-all ${card.color}`}>{card.value}</p>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{card.label}</p>
+            <p className={`text-base font-bold mt-1 break-all ${card.color}`}>{card.value}</p>
             <p className="text-xs text-gray-400 mt-0.5">{card.sub}</p>
           </div>
         ))}
       </div>
 
+      {/* ── STATS ROW ──────────────────────────────────────────────────── */}
       <div className="grid grid-cols-3 lg:grid-cols-6 gap-2">
         {[
-          { label: 'Total Bookings', value: at.totalBookings ?? 0, suffix: '' },
-          { label: 'Days Rented', value: at.totalRentalDays ?? 0, suffix: 'd' },
-          { label: 'Avg Rental', value: at.avgBookingDays ?? 0, suffix: 'd' },
-          { label: 'Rev / Day', value: `AED ${(at.revenuePerDay ?? 0).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`, suffix: '' },
-          { label: 'Utilization', value: pr.utilizationPercent ?? 0, suffix: '%' },
-          { label: 'Fines', value: fmtAED(at.fines?.total ?? 0), suffix: '' },
-        ].map((stat) => (
-          <div key={stat.label} className="bg-white border border-gray-200 rounded-xl p-3 text-center">
-            <p className="text-xs text-gray-400 font-medium">{stat.label}</p>
-            <p className="text-base font-bold text-gray-800 mt-0.5">{stat.value}{stat.suffix}</p>
+          { l: 'Total Bookings', v: bk.total ?? 0, s: '' },
+          { l: 'Paid Bookings', v: bk.paid ?? 0, s: '' },
+          { l: 'Pending', v: bk.pending ?? 0, s: '' },
+          { l: 'Days Rented', v: bk.totalRentalDays?? 0, s: 'd' },
+          { l: 'Rev / Day', v: `AED ${Number(fin.revenuePerDay ?? 0).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`, s: '' },
+          { l: 'Utilization', v: pr.utilizationPercent ?? 0, s: '%' },
+        ].map(stat => (
+          <div key={stat.l} className="bg-white border border-gray-200 rounded-xl p-3 text-center">
+            <p className="text-xs text-gray-400">{stat.l}</p>
+            <p className="text-sm font-bold text-gray-800 mt-0.5">{stat.v}{stat.s}</p>
           </div>
         ))}
       </div>
 
+      {/* ── SECTION TABS ───────────────────────────────────────────────── */}
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
         {[
           { k: 'overview', l: 'Overview' },
-          { k: 'invoices', l: `Invoices (${invList.length})` },
           { k: 'bookings', l: `Bookings (${bkList.length})` },
-          { k: 'expenses', l: `Expenses (${expList.length})` },
-        ].map((tab) => (
-          <button
-            key={tab.k}
-            onClick={() => setActiveSection(tab.k as any)}
+          { k: 'invoices', l: `Invoices (${invList.length})` },
+          { k: 'payments', l: `Payments (${payList.length})` },
+        ].map(t => (
+          <button key={t.k} onClick={() => setTab(t.k as any)}
             className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
-              activeSection === tab.k ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {tab.l}
+              tab === t.k ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            }`}>
+            {t.l}
           </button>
         ))}
       </div>
 
-      {activeSection === 'overview' && (
-        <div className="space-y-3">
+      {/* ════════════════════ OVERVIEW TAB ════════════════════════════ */}
+      {tab === 'overview' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <h3 className="text-sm font-bold text-gray-800 mb-3">Invoice Status Breakdown</h3>
-            <div className="grid grid-cols-2 gap-3">
+            <h3 className="text-sm font-bold text-gray-800 mb-3">Booking Overview</h3>
+            <div className="space-y-2">
               {[
-                { label: 'Paid', count: inv.paidCount ?? 0, amount: invList.filter((i) => i.isPaid).reduce((s: number, i: any) => s + i.totalAmount, 0), color: 'text-green-600', dot: 'bg-green-500' },
-                { label: 'Pending', count: inv.pendingCount ?? 0, amount: invList.filter((i) => i.isPending).reduce((s: number, i: any) => s + i.totalAmount, 0), color: 'text-orange-600', dot: 'bg-orange-500' },
-                { label: 'Overdue', count: inv.overdueCount ?? 0, amount: invList.filter((i) => i.isOverdue).reduce((s: number, i: any) => s + i.totalAmount, 0), color: 'text-red-600', dot: 'bg-red-500' },
-                { label: 'Draft', count: inv.draftCount ?? 0, amount: invList.filter((i) => i.isDraft).reduce((s: number, i: any) => s + i.totalAmount, 0), color: 'text-gray-500', dot: 'bg-gray-400' },
-              ].map((item) => (
-                <div key={item.label} className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg">
-                  <span className={`w-2 h-2 rounded-full mt-1 flex-shrink-0 ${item.dot}`} />
-                  <div>
-                    <p className="text-xs text-gray-500">{item.label}</p>
-                    <p className={`text-sm font-bold ${item.color}`}>{item.count} invoices</p>
-                    <p className="text-xs text-gray-400">{fmtAED(item.amount)}</p>
-                  </div>
+                { l: 'Total Bookings', v: bk.total ?? 0, fmt: 'num' },
+                { l: 'Total Earnings', v: bk.totalEarnings ?? 0,fmt: 'aed' },
+                { l: 'Amount Paid', v: bk.totalPaid ?? 0, fmt: 'aed', color: 'text-emerald-600' },
+                { l: 'Amount Pending', v: bk.totalDue ?? 0, fmt: 'aed', color: 'text-orange-600' },
+                { l: 'Total Rental Days', v: bk.totalRentalDays ?? 0, fmt: 'day' },
+                { l: 'Avg Rental', v: bk.avgRentalDays ?? 0,fmt: 'day' },
+              ].map(row => (
+                <div key={row.l} className="flex justify-between py-2 border-b border-gray-100 last:border-0">
+                  <span className="text-sm text-gray-600">{row.l}</span>
+                  <span className={`text-sm font-bold ${(row as any).color ?? 'text-gray-800'}`}>
+                    {row.fmt === 'aed' ? fmtAED(row.v) :
+                     row.fmt === 'day' ? `${row.v}d` : row.v}
+                  </span>
                 </div>
               ))}
             </div>
           </div>
 
           <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <h3 className="text-sm font-bold text-gray-800 mb-3">Revenue vs Costs (All Time)</h3>
-            <div className="space-y-2">
+            <h3 className="text-sm font-bold text-gray-800 mb-3">Invoice Overview</h3>
+            <div className="grid grid-cols-3 gap-2 mb-3">
               {[
-                { label: 'Total Revenue', value: at.totalRevenue, color: 'text-emerald-700' },
-                { label: 'Amount Received', value: at.totalReceived, color: 'text-blue-600' },
-                { label: 'Outstanding', value: at.totalOutstanding, color: 'text-orange-600' },
-                { label: 'Total Expenses', value: at.expenses?.total, color: 'text-red-600' },
-                { label: 'Maintenance', value: at.maintenance?.total, color: 'text-yellow-600' },
-                { label: 'Fines', value: at.fines?.total, color: 'text-red-500' },
-              ].map((row) => (
-                <div key={row.label} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
-                  <span className="text-sm text-gray-600">{row.label}</span>
-                  <span className={`text-sm font-bold ${row.color}`}>{fmtAED(row.value ?? 0)}</span>
+                { l: 'Paid', v: inv.paidCount ?? 0, color: 'text-green-600', dot: 'bg-green-500' },
+                { l: 'Pending', v: inv.pendingCount ?? 0, color: 'text-orange-600', dot: 'bg-orange-500' },
+                { l: 'Overdue', v: inv.overdueCount ?? 0, color: 'text-red-600', dot: 'bg-red-500' },
+              ].map(s => (
+                <div key={s.l} className="bg-gray-50 rounded-lg p-2 text-center">
+                  <span className={`inline-block w-2 h-2 rounded-full mb-1 ${s.dot}`} />
+                  <p className="text-xs text-gray-500">{s.l}</p>
+                  <p className={`text-lg font-bold ${s.color}`}>{s.v}</p>
                 </div>
               ))}
-              <div className="flex justify-between items-center py-2 mt-1 bg-gray-50 rounded-lg px-3">
-                <span className="text-sm font-bold text-gray-700">Net Profit</span>
-                <span className={`text-sm font-bold ${(at.netProfit ?? 0) >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmtAED(at.netProfit ?? 0)}</span>
-              </div>
+            </div>
+            <div className="space-y-2">
+              {[
+                { l: 'Total Invoiced', v: inv.totalInvoiced ?? 0, c: 'text-blue-700' },
+                { l: 'Received', v: inv.totalPaid ?? 0, c: 'text-emerald-700' },
+                { l: 'Outstanding', v: inv.totalDue ?? 0, c: 'text-orange-700' },
+              ].map(row => (
+                <div key={row.l} className="flex justify-between py-2 border-b border-gray-100 last:border-0">
+                  <span className="text-sm text-gray-600">{row.l}</span>
+                  <span className={`text-sm font-bold ${row.c}`}>{fmtAED(row.v)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-xl p-4 lg:col-span-2">
+            <h3 className="text-sm font-bold text-gray-800 mb-3">Profit & Loss</h3>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {[
+                { l: 'Revenue', v: fin.totalRevenue, c: 'text-blue-700', bg: 'bg-blue-50' },
+                { l: 'Expenses', v: fin.totalExpenses, c: 'text-red-600', bg: 'bg-red-50' },
+                { l: 'Maintenance', v: fin.totalMaintenance, c: 'text-orange-600', bg: 'bg-orange-50' },
+                { l: 'Net Profit', v: fin.netProfit, c: (fin.netProfit??0)>=0?'text-green-700':'text-red-700', bg: (fin.netProfit??0)>=0?'bg-green-50':'bg-red-50' },
+              ].map(card => (
+                <div key={card.l} className={`${card.bg} rounded-xl p-3`}>
+                  <p className="text-xs text-gray-500">{card.l}</p>
+                  <p className={`text-sm font-bold mt-1 ${card.c}`}>{fmtAED(card.v ?? 0)}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       )}
 
-      {activeSection === 'invoices' && (
+      {/* ════════════════════ BOOKINGS TAB ════════════════════════════ */}
+      {tab === 'bookings' && (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          {invList.length === 0 ? (
-            <div className="p-8 text-center text-gray-400">
-              <p className="text-lg">No invoices found for this vehicle</p>
-              <p className="text-sm mt-1">Invoices will appear here once created</p>
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-3 gap-0 border-b border-gray-200">
-                {[
-                  { label: 'Total Invoiced', value: fmtAED(inv.totalInvoiced), color: 'text-blue-700' },
-                  { label: 'Received', value: fmtAED(inv.totalPaid), color: 'text-green-700' },
-                  { label: 'Outstanding', value: fmtAED(inv.totalDue), color: 'text-orange-700' },
-                ].map((s, i) => (
-                  <div key={i} className={`p-3 text-center ${i < 2 ? 'border-r border-gray-200' : ''}`}>
-                    <p className="text-xs text-gray-400">{s.label}</p>
-                    <p className={`text-sm font-bold mt-0.5 ${s.color}`}>{s.value}</p>
-                  </div>
-                ))}
+          <div className="grid grid-cols-3 border-b border-gray-200">
+            {[
+              { l: 'Total Earned', v: fmtAED(bk.totalEarnings), c: 'text-blue-700' },
+              { l: 'Paid', v: fmtAED(bk.totalPaid), c: 'text-emerald-700' },
+              { l: 'Pending', v: fmtAED(bk.totalDue), c: 'text-orange-700' },
+            ].map((s, i) => (
+              <div key={i} className={`p-3 text-center ${i < 2 ? 'border-r border-gray-200' : ''}`}>
+                <p className="text-xs text-gray-400">{s.l}</p>
+                <p className={`text-sm font-bold ${s.c}`}>{s.v}</p>
               </div>
-
+            ))}
+          </div>
+          {bkList.length === 0
+            ? <div className="p-8 text-center text-gray-400">No bookings found</div>
+            : (
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200">
-                      <th className="px-4 py-3 text-left text-gray-500 font-semibold">Invoice #</th>
-                      <th className="px-4 py-3 text-left text-gray-500 font-semibold">Issue Date</th>
-                      <th className="px-4 py-3 text-left text-gray-500 font-semibold">Rental Period</th>
-                      <th className="px-4 py-3 text-center text-gray-500 font-semibold">Days</th>
-                      <th className="px-4 py-3 text-right text-gray-500 font-semibold">Total (AED)</th>
-                      <th className="px-4 py-3 text-right text-gray-500 font-semibold">Paid (AED)</th>
-                      <th className="px-4 py-3 text-right text-gray-500 font-semibold">Due (AED)</th>
-                      <th className="px-4 py-3 text-center text-gray-500 font-semibold">Status</th>
+                      {['Booking #','Customer','Start','End','Days','Total (AED)','Paid (AED)','Due (AED)','Status'].map(h => (
+                        <th key={h} className="px-4 py-3 text-left text-gray-500 font-semibold whitespace-nowrap">{h}</th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {invList.map((invoice: any) => (
-                      <tr key={invoice.invoiceId} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-4 py-3 font-semibold text-gray-800">#{invoice.invoiceNumber || invoice.invoiceId.slice(-6)}</td>
-                        <td className="px-4 py-3 text-gray-500">{fmtDate(invoice.issueDate)}</td>
-                        <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{fmtDate(invoice.startDate)} → {fmtDate(invoice.endDate)}</td>
-                        <td className="px-4 py-3 text-center font-bold text-blue-700">{invoice.rentalDays > 0 ? `${invoice.rentalDays}d` : '—'}</td>
-                        <td className="px-4 py-3 text-right font-bold text-gray-800">{fmtAED(invoice.totalAmount)}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-emerald-600">{fmtAED(invoice.paidAmount)}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-orange-600">{invoice.dueAmount > 0 ? fmtAED(invoice.dueAmount) : '—'}</td>
-                        <td className="px-4 py-3 text-center"><StatusBadge status={invoice.status} /></td>
+                    {bkList.map((b: any) => (
+                      <tr key={b.bookingId} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 font-semibold text-gray-800">#{b.bookingNumber || b.bookingId.slice(-6)}</td>
+                        <td className="px-4 py-3 text-gray-600">{b.customerName || '—'}</td>
+                        <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{fmtDate(b.startDate)}</td>
+                        <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{fmtDate(b.endDate)}</td>
+                        <td className="px-4 py-3 text-center font-bold text-blue-700">{b.rentalDays > 0 ? `${b.rentalDays}d` : '—'}</td>
+                        <td className="px-4 py-3 text-right font-bold text-gray-800">{fmtAED(b.totalAmount)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-emerald-600">{fmtAED(b.paidAmount)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-orange-600">{b.dueAmount > 0 ? fmtAED(b.dueAmount) : '—'}</td>
+                        <td className="px-4 py-3"><Badge s={b.status} /></td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
-                    <tr className="bg-gray-50 border-t-2 border-gray-300 font-bold">
-                      <td colSpan={4} className="px-4 py-3 text-gray-700">TOTAL ({invList.length} invoices)</td>
-                      <td className="px-4 py-3 text-right text-blue-700">{fmtAED(invList.reduce((s: number, i: any) => s + i.totalAmount, 0))}</td>
-                      <td className="px-4 py-3 text-right text-emerald-700">{fmtAED(invList.reduce((s: number, i: any) => s + i.paidAmount, 0))}</td>
-                      <td className="px-4 py-3 text-right text-orange-700">{fmtAED(invList.reduce((s: number, i: any) => s + i.dueAmount, 0))}</td>
+                    <tr className="bg-gray-50 border-t-2 border-gray-300 font-bold text-xs">
+                      <td colSpan={4} className="px-4 py-3 text-gray-700">TOTAL ({bkList.length})</td>
+                      <td className="px-4 py-3 text-center text-blue-700">{bkList.reduce((s:number,b:any)=>s+b.rentalDays,0)}d</td>
+                      <td className="px-4 py-3 text-right text-gray-800">{fmtAED(bkList.reduce((s:number,b:any)=>s+b.totalAmount,0))}</td>
+                      <td className="px-4 py-3 text-right text-emerald-700">{fmtAED(bkList.reduce((s:number,b:any)=>s+b.paidAmount,0))}</td>
+                      <td className="px-4 py-3 text-right text-orange-700">{fmtAED(bkList.reduce((s:number,b:any)=>s+b.dueAmount,0))}</td>
                       <td />
                     </tr>
                   </tfoot>
                 </table>
               </div>
-            </>
-          )}
+            )
+          }
         </div>
       )}
 
-      {activeSection === 'bookings' && (
+      {/* ════════════════════ INVOICES TAB ════════════════════════════ */}
+      {tab === 'invoices' && (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          {bkList.length === 0 ? (
-            <div className="p-8 text-center text-gray-400">No bookings found for this vehicle</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="px-4 py-3 text-left text-gray-500 font-semibold">Booking #</th>
-                    <th className="px-4 py-3 text-left text-gray-500 font-semibold">Customer</th>
-                    <th className="px-4 py-3 text-left text-gray-500 font-semibold">Start</th>
-                    <th className="px-4 py-3 text-left text-gray-500 font-semibold">End</th>
-                    <th className="px-4 py-3 text-center text-gray-500 font-semibold">Days</th>
-                    <th className="px-4 py-3 text-right text-gray-500 font-semibold">Amount (AED)</th>
-                    <th className="px-4 py-3 text-center text-gray-500 font-semibold">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {bkList.map((bk: any) => (
-                    <tr key={bk.bookingId} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-semibold text-gray-800">#{bk.bookingNumber || bk.bookingId.slice(-6)}</td>
-                      <td className="px-4 py-3 text-gray-600">{bk.customerName || '—'}</td>
-                      <td className="px-4 py-3 text-gray-500">{fmtDate(bk.startDate)}</td>
-                      <td className="px-4 py-3 text-gray-500">{fmtDate(bk.endDate)}</td>
-                      <td className="px-4 py-3 text-center font-bold text-blue-700">{bk.rentalDays > 0 ? `${bk.rentalDays}d` : '—'}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-emerald-600">{bk.amount > 0 ? fmtAED(bk.amount) : '—'}</td>
-                      <td className="px-4 py-3 text-center"><StatusBadge status={bk.status} /></td>
+          <div className="grid grid-cols-3 border-b border-gray-200">
+            {[
+              { l: 'Total Invoiced', v: fmtAED(inv.totalInvoiced), c: 'text-blue-700' },
+              { l: 'Received', v: fmtAED(inv.totalPaid), c: 'text-emerald-700' },
+              { l: 'Outstanding', v: fmtAED(inv.totalDue), c: 'text-orange-700' },
+            ].map((s, i) => (
+              <div key={i} className={`p-3 text-center ${i < 2 ? 'border-r border-gray-200' : ''}`}>
+                <p className="text-xs text-gray-400">{s.l}</p>
+                <p className={`text-sm font-bold ${s.c}`}>{s.v}</p>
+              </div>
+            ))}
+          </div>
+          {invList.length === 0
+            ? <div className="p-8 text-center text-gray-400">No invoices found</div>
+            : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      {['Invoice #','Issue Date','Rental Period','Days','Total (AED)','Paid (AED)','Due (AED)','Status'].map(h => (
+                        <th key={h} className="px-4 py-3 text-left text-gray-500 font-semibold whitespace-nowrap">{h}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-gray-50 border-t-2 border-gray-300 font-bold">
-                    <td colSpan={4} className="px-4 py-3 text-gray-700">TOTAL ({bkList.length} bookings)</td>
-                    <td className="px-4 py-3 text-center text-blue-700">{bkList.reduce((s: number, b: any) => s + b.rentalDays, 0)}d</td>
-                    <td className="px-4 py-3 text-right text-emerald-700">{fmtAED(bkList.reduce((s: number, b: any) => s + b.amount, 0))}</td>
-                    <td />
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          )}
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {invList.map((inv: any) => (
+                      <tr key={inv.invoiceId} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 font-semibold text-gray-800">#{inv.invoiceNumber || inv.invoiceId.slice(-6)}</td>
+                        <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{fmtDate(inv.issueDate)}</td>
+                        <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{fmtDate(inv.startDate)} → {fmtDate(inv.endDate)}</td>
+                        <td className="px-4 py-3 text-center font-bold text-blue-700">{inv.rentalDays > 0 ? `${inv.rentalDays}d` : '—'}</td>
+                        <td className="px-4 py-3 text-right font-bold text-gray-800">{fmtAED(inv.totalAmount)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-emerald-600">{fmtAED(inv.paidAmount)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-orange-600">{inv.dueAmount > 0 ? fmtAED(inv.dueAmount) : '—'}</td>
+                        <td className="px-4 py-3"><Badge s={inv.status} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-gray-50 border-t-2 border-gray-300 font-bold text-xs">
+                      <td colSpan={4} className="px-4 py-3 text-gray-700">TOTAL ({invList.length})</td>
+                      <td className="px-4 py-3 text-right text-gray-800">{fmtAED(invList.reduce((s:number,i:any)=>s+i.totalAmount,0))}</td>
+                      <td className="px-4 py-3 text-right text-emerald-700">{fmtAED(invList.reduce((s:number,i:any)=>s+i.paidAmount,0))}</td>
+                      <td className="px-4 py-3 text-right text-orange-700">{fmtAED(invList.reduce((s:number,i:any)=>s+i.dueAmount,0))}</td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )
+          }
         </div>
       )}
 
-      {activeSection === 'expenses' && (
+      {/* ════════════════════ PAYMENTS TAB ════════════════════════════ */}
+      {tab === 'payments' && (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          {expList.length === 0 ? (
-            <div className="p-8 text-center text-gray-400">No expenses found for this vehicle</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="px-4 py-3 text-left text-gray-500 font-semibold">Date</th>
-                    <th className="px-4 py-3 text-left text-gray-500 font-semibold">Description</th>
-                    <th className="px-4 py-3 text-left text-gray-500 font-semibold">Category</th>
-                    <th className="px-4 py-3 text-right text-gray-500 font-semibold">Amount (AED)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {expList.map((exp: any) => (
-                    <tr key={exp.expenseId} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-500">{fmtDate(exp.date)}</td>
-                      <td className="px-4 py-3 text-gray-700">{exp.description}</td>
-                      <td className="px-4 py-3"><span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs">{exp.category}</span></td>
-                      <td className="px-4 py-3 text-right font-semibold text-red-600">{fmtAED(exp.amount)}</td>
+          <div className="grid grid-cols-3 border-b border-gray-200">
+            {[
+              { l: 'Total Received', v: fmtAED(pay.paidAmount), c: 'text-emerald-700' },
+              { l: 'Pending', v: fmtAED(pay.pendingAmount), c: 'text-orange-700' },
+              { l: 'Total', v: fmtAED(pay.totalAmount), c: 'text-blue-700' },
+            ].map((s, i) => (
+              <div key={i} className={`p-3 text-center ${i < 2 ? 'border-r border-gray-200' : ''}`}>
+                <p className="text-xs text-gray-400">{s.l}</p>
+                <p className={`text-sm font-bold ${s.c}`}>{s.v}</p>
+              </div>
+            ))}
+          </div>
+          {payList.length === 0
+            ? <div className="p-8 text-center text-gray-400">No payments found</div>
+            : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      {['Date','Type','Method','Amount (AED)','Status'].map(h => (
+                        <th key={h} className="px-4 py-3 text-left text-gray-500 font-semibold">{h}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-gray-50 border-t-2 border-gray-300 font-bold">
-                    <td colSpan={3} className="px-4 py-3 text-gray-700">TOTAL ({expList.length} expenses)</td>
-                    <td className="px-4 py-3 text-right text-red-700">{fmtAED(expList.reduce((s: number, e: any) => s + e.amount, 0))}</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          )}
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {payList.map((p: any) => (
+                      <tr key={p.paymentId} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{fmtDate(p.date)}</td>
+                        <td className="px-4 py-3 text-gray-600 capitalize">{p.type}</td>
+                        <td className="px-4 py-3 text-gray-500">{p.method}</td>
+                        <td className="px-4 py-3 text-right font-bold text-emerald-600">{fmtAED(p.amount)}</td>
+                        <td className="px-4 py-3"><Badge s={p.status} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-gray-50 border-t-2 border-gray-300 font-bold text-xs">
+                      <td colSpan={3} className="px-4 py-3 text-gray-700">TOTAL ({payList.length})</td>
+                      <td className="px-4 py-3 text-right text-emerald-700">{fmtAED(payList.reduce((s:number,p:any)=>s+p.amount,0))}</td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )
+          }
         </div>
       )}
     </div>
-  )
+  );
 }
 

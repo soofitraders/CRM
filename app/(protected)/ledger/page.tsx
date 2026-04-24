@@ -185,18 +185,20 @@ export default function LedgerPage() {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {[
           {
-            label: 'Total Credits',
+            label: 'Total Income',
             value: fmtAED(cr),
-            sub: '↑ Money In',
+            sub: '↑ All credits',
             color: 'text-emerald-600',
             border: 'border-emerald-100',
+            bg: 'bg-emerald-50/50',
           },
           {
-            label: 'Total Debits',
+            label: 'Total Expenses',
             value: fmtAED(dr),
-            sub: '↓ Money Out',
+            sub: '↓ All debits',
             color: 'text-red-600',
             border: 'border-red-100',
+            bg: 'bg-red-50/50',
           },
           {
             label: 'Net Balance',
@@ -204,13 +206,15 @@ export default function LedgerPage() {
             sub: net >= 0 ? '▲ Surplus' : '▼ Deficit',
             color: net >= 0 ? 'text-emerald-700' : 'text-red-700',
             border: net >= 0 ? 'border-emerald-200' : 'border-red-200',
+            bg: 'bg-white',
           },
           {
-            label: 'Total Entries',
+            label: 'Transactions',
             value: (summary?.totalEntries ?? 0).toLocaleString(),
-            sub: 'Transactions',
+            sub: 'All entries',
             color: 'text-blue-600',
             border: 'border-blue-100',
+            bg: 'bg-blue-50/50',
           },
           {
             label: 'Unreconciled',
@@ -218,9 +222,10 @@ export default function LedgerPage() {
             sub: 'Need review',
             color: (summary?.unreconciledCount ?? 0) > 0 ? 'text-orange-600' : 'text-gray-500',
             border: (summary?.unreconciledCount ?? 0) > 0 ? 'border-orange-200' : 'border-gray-200',
+            bg: 'bg-white',
           },
         ].map((card) => (
-          <div key={card.label} className={`bg-white border ${card.border} rounded-xl p-4 shadow-sm`}>
+          <div key={card.label} className={`${card.bg} border ${card.border} rounded-xl p-4 shadow-sm`}>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider leading-none">{card.label}</p>
             <p className={`text-lg font-bold mt-2 break-all ${card.color}`}>{card.value}</p>
             <p className="text-xs text-gray-400 mt-1">{card.sub}</p>
@@ -377,10 +382,11 @@ export default function LedgerPage() {
       {showManual ? (
         <ManualEntryModal
           onClose={() => setShowManual(false)}
-          onSuccess={() => {
+          onSuccess={(newBalance: number) => {
             setShowManual(false)
             void fetchData(filters)
             void fetchCategories()
+            console.log(`[Ledger] New balance after entry: AED ${newBalance}`)
           }}
         />
       ) : null}
