@@ -353,7 +353,7 @@ export default function VehiclePerformanceTab() {
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200">
-                      {['Date','Type','Method','Amount (AED)','Status'].map(h => (
+                      {['Date','Type','Method','Start','End','Days','Amount (AED)','Status'].map(h => (
                         <th key={h} className="px-4 py-3 text-left text-gray-500 font-semibold">{h}</th>
                       ))}
                     </tr>
@@ -364,6 +364,9 @@ export default function VehiclePerformanceTab() {
                         <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{fmtDate(p.date)}</td>
                         <td className="px-4 py-3 text-gray-600 capitalize">{p.type}</td>
                         <td className="px-4 py-3 text-gray-500">{p.method}</td>
+                        <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{fmtDate(p.startDate)}</td>
+                        <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{fmtDate(p.endDate)}</td>
+                        <td className="px-4 py-3 text-center font-bold text-blue-700">{p.rentalDays > 0 ? `${p.rentalDays}d` : '—'}</td>
                         <td className="px-4 py-3 text-right font-bold text-emerald-600">{fmtAED(p.amount)}</td>
                         <td className="px-4 py-3"><Badge s={p.status} /></td>
                       </tr>
@@ -371,7 +374,8 @@ export default function VehiclePerformanceTab() {
                   </tbody>
                   <tfoot>
                     <tr className="bg-gray-50 border-t-2 border-gray-300 font-bold text-xs">
-                      <td colSpan={3} className="px-4 py-3 text-gray-700">TOTAL ({payList.length})</td>
+                      <td colSpan={5} className="px-4 py-3 text-gray-700">TOTAL ({payList.length})</td>
+                      <td className="px-4 py-3 text-center text-blue-700">{payList.reduce((s:number,p:any)=>s+Number(p.rentalDays ?? 0),0)}d</td>
                       <td className="px-4 py-3 text-right text-emerald-700">{fmtAED(payList.reduce((s:number,p:any)=>s+p.amount,0))}</td>
                       <td />
                     </tr>

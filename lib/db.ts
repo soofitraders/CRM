@@ -1,4 +1,5 @@
 import mongoose from 'mongoose'
+import dns from 'node:dns'
 import { logger } from '@/lib/utils/performance'
 import { logRequiredServerEnv } from '@/lib/requiredEnv'
 
@@ -39,28 +40,45 @@ async function connectDB(): Promise<typeof mongoose> {
 
   if (!cached.promise) {
     logger.log('Connecting to MongoDB…')
+    const connectOptions = {
+      bufferCommands: false,
+      maxPoolSize: 10,
+      minPoolSize: 2,
+      serverSelectionTimeoutMS: 10000,
+      connectTimeoutMS: 10000,
+      socketTimeoutMS: 45000,
+      maxIdleTimeMS: 30000,
+      retryWrites: true,
+      retryReads: true,
+    }
 
-    cached.promise = mongoose
-      .connect(uri, {
-        bufferCommands: false,
-        maxPoolSize: 10,
-        minPoolSize: 2,
-        serverSelectionTimeoutMS: 10000,
-        connectTimeoutMS: 10000,
-        socketTimeoutMS: 45000,
-        maxIdleTimeMS: 30000,
-        retryWrites: true,
-        retryReads: true,
-      })
-      .then((m) => {
-        logger.log('MongoDB connected:', m.connection.db?.databaseName, m.connection.host)
-        return m
-      })
-      .catch((error: Error) => {
-        logger.error('MongoDB connection failed:', error.message)
-        cached.promise = null
-        throw error
-      })
+    cached.promise = mongoose.connect(uri, connectOptions).catch(async (error: any) => {
+      const isSrvRefused = uri.startsWith('mongodb+srv://') &&
+        error?.code === 'ECONNREFUSED' &&
+        error?.syscall === 'querySrv'
+
+      if (!isSrvRefused) throw error
+
+      // Retry once with public DNS to bypass local resolver issues.
+      const fallbackDns = (process.env.MONGODB_DNS_SERVERS || '1.1.1.1,8.8.8.8')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+
+      if (fallbackDns.length === 0) throw error
+
+      logger.error(`MongoDB SRV lookup refused; retrying with DNS servers: ${fallbackDns.join(', ')}`)
+      dns.setServers(fallbackDns)
+
+      return mongoose.connect(uri, connectOptions)
+    }).then((m) => {
+      logger.log('MongoDB connected:', m.connection.db?.databaseName, m.connection.host)
+      return m
+    }).catch((error: Error) => {
+      logger.error('MongoDB connection failed:', error.message)
+      cached.promise = null
+      throw error
+    })
   }
 
   try {

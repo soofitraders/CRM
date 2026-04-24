@@ -106,6 +106,7 @@ export async function GET(request: Request) {
       const periodBookings = await Booking.find({
         ...vLink,
         $or: [
+          { startDateTime: { $gte: rangeStart, $lte: rangeEnd } },
           { startDate: { $gte: rangeStart, $lte: rangeEnd } },
           { from: { $gte: rangeStart, $lte: rangeEnd } },
           { pickupDate: { $gte: rangeStart, $lte: rangeEnd } },
@@ -115,12 +116,14 @@ export async function GET(request: Request) {
 
       // ── PROCESS BOOKINGS ──────────────────────────────────────────────
       const processBooking = (b: any) => {
-        const startField = f(b, 'startDate','from','pickupDate','checkIn','rentalStartDate');
-        const endField = f(b, 'endDate','to','returnDate','checkOut','rentalEndDate');
+        const startField = f(b, 'startDateTime','startDate','from','pickupDate','checkIn','rentalStartDate');
+        const endField = f(b, 'endDateTime','endDate','to','returnDate','checkOut','rentalEndDate');
         const storedDays = safeNum(f(b, 'days','rentalDays','duration','numberOfDays','noOfDays'));
         const rentalDays = storedDays > 0 ? storedDays : calcDays(startField, endField);
-        const amount = safeNum(f(b, 'totalAmount','amount','rentAmount','price','totalRent','totalCost'));
-        const paidAmt = safeNum(f(b, 'paidAmount','amountPaid','paid','paymentReceived'));
+        const dailyAmount = safeNum(f(b, 'totalAmount','amount','rentAmount','price','totalRent','totalCost'));
+        const amount = dailyAmount * rentalDays;
+        const paidDaily = safeNum(f(b, 'paidAmount','amountPaid','paid','paymentReceived'));
+        const paidAmt = paidDaily > 0 ? paidDaily * rentalDays : 0;
         const dueAmt = Math.max(0, amount - paidAmt);
         const status = safeStr(f(b, 'status','bookingStatus','state'), 'unknown');
         const payStatus = safeStr(f(b, 'paymentStatus','invoiceStatus'), '');
@@ -135,6 +138,7 @@ export async function GET(request: Request) {
           startDate: startField ? new Date(startField).toISOString() : null,
           endDate: endField ? new Date(endField).toISOString() : null,
           rentalDays,
+          dailyAmount,
           totalAmount: amount,
           paidAmount: isPaid ? amount : paidAmt,
           dueAmount: isPaid ? 0 : dueAmt,
@@ -148,6 +152,7 @@ export async function GET(request: Request) {
 
       const allBookingDetails = allBookings.map(processBooking);
       const periodBookingDetails = periodBookings.map(processBooking);
+      const bookingById = new Map(allBookingDetails.map((b: any) => [String(b.bookingId), b]));
 
       // ── BOOKING FINANCIALS ────────────────────────────────────────────
       const totalBookings = allBookingDetails.length;
@@ -226,15 +231,22 @@ export async function GET(request: Request) {
         }).lean();
       }
 
-      const processPayment = (p: any) => ({
+      const processPayment = (p: any) => {
+        const bookingId = (f(p, 'bookingId','booking') ?? '').toString();
+        const booking = bookingById.get(bookingId);
+        return {
         paymentId: p._id.toString(),
         amount: safeNum(f(p, 'amount','totalAmount','paidAmount','receivedAmount')),
         date: safeDate(f(p, 'date','paymentDate','paidAt','createdAt'))?.toISOString(),
         method: safeStr(f(p, 'paymentMethod','method','type','mode'), 'Cash'),
-        bookingId: (f(p, 'bookingId','booking') ?? '').toString(),
+        bookingId,
+        startDate: booking?.startDate ?? null,
+        endDate: booking?.endDate ?? null,
+        rentalDays: booking?.rentalDays ?? 0,
         status: safeStr(f(p, 'status','paymentStatus'), 'completed'),
         type: safeStr(f(p, 'type','paymentType'), 'payment'),
-      });
+        };
+      };
 
       const processedPayments = allPayments.map(processPayment);
       const totalPayments = processedPayments.reduce((s, p) => s + p.amount, 0);

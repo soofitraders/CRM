@@ -11,6 +11,21 @@ const LEDGER_ROLES = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'FINANCE'] as const
 
 function serializeEntry(doc: Record<string, unknown>) {
   const refId = doc.referenceId != null ? String(doc.referenceId) : undefined
+  const entryType = String(doc.entryType ?? '').toUpperCase()
+  const category = String(doc.category ?? '').toLowerCase()
+  let direction = String(doc.direction ?? '').toUpperCase()
+
+  // Enforce invoice-related flow as credit in API output.
+  if (
+    entryType === 'INVOICE_RECEIVABLE' ||
+    entryType === 'INVOICE_PAYMENT' ||
+    entryType === 'INVOICE_PARTIAL' ||
+    (entryType === 'BOOKING_PAYMENT' && category.includes('invoice')) ||
+    category === 'receivable'
+  ) {
+    direction = 'CREDIT'
+  }
+
   return {
     ...doc,
     _id: String(doc._id),
@@ -24,6 +39,7 @@ function serializeEntry(doc: Record<string, unknown>) {
     createdAt: doc.createdAt instanceof Date ? (doc.createdAt as Date).toISOString() : doc.createdAt,
     updatedAt: doc.updatedAt instanceof Date ? (doc.updatedAt as Date).toISOString() : doc.updatedAt,
     reconciledAt: doc.reconciledAt instanceof Date ? (doc.reconciledAt as Date).toISOString() : doc.reconciledAt,
+    direction,
   }
 }
 
