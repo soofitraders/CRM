@@ -26,6 +26,12 @@ const calcDays = (start: any, end: any) => {
   if (!s || !e) return 0;
   return Math.max(1, Math.ceil((e.getTime() - s.getTime()) / 86400000));
 };
+const isDateInRange = (value: any, rangeStart: Date, rangeEnd: Date) => {
+  const date = safeDate(value);
+  return !!date && date >= rangeStart && date <= rangeEnd;
+};
+const rangesOverlap = (startA: Date, endA: Date, startB: Date, endB: Date) =>
+  startA <= endB && endA >= startB;
 
 export async function GET(request: Request) {
   try {
@@ -103,16 +109,23 @@ export async function GET(request: Request) {
       const allBookingIds = allBookings.map((b: any) => b._id);
 
       // ── PERIOD BOOKINGS ───────────────────────────────────────────────
-      const periodBookings = await Booking.find({
-        ...vLink,
-        $or: [
-          { startDateTime: { $gte: rangeStart, $lte: rangeEnd } },
-          { startDate: { $gte: rangeStart, $lte: rangeEnd } },
-          { from: { $gte: rangeStart, $lte: rangeEnd } },
-          { pickupDate: { $gte: rangeStart, $lte: rangeEnd } },
-          { createdAt: { $gte: rangeStart, $lte: rangeEnd } },
-        ],
-      }).lean();
+      // Filter in memory so we can apply inclusive overlap logic across varied schemas.
+      const periodBookings = allBookings.filter((booking: any) => {
+        const startField = f(booking, 'startDateTime', 'startDate', 'from', 'pickupDate', 'checkIn', 'rentalStartDate');
+        const endField = f(booking, 'endDateTime', 'endDate', 'to', 'returnDate', 'checkOut', 'rentalEndDate');
+        const createdAt = f(booking, 'createdAt');
+
+        const start = safeDate(startField);
+        const end = safeDate(endField);
+        if (start && end) {
+          return rangesOverlap(start, end, rangeStart, rangeEnd);
+        }
+
+        // If one side is missing, treat booking as a point-in-time event.
+        if (start) return isDateInRange(start, rangeStart, rangeEnd);
+        if (end) return isDateInRange(end, rangeStart, rangeEnd);
+        return isDateInRange(createdAt, rangeStart, rangeEnd);
+      });
 
       // ── PROCESS BOOKINGS ──────────────────────────────────────────────
       const processBooking = (b: any) => {
@@ -152,16 +165,19 @@ export async function GET(request: Request) {
 
       const allBookingDetails = allBookings.map(processBooking);
       const periodBookingDetails = periodBookings.map(processBooking);
+      const useAllData = period === 'all' && !startDate && !endDate;
+      const selectedBookingDetails = useAllData ? allBookingDetails : periodBookingDetails;
+      const selectedBookingIdSet = new Set(selectedBookingDetails.map((b: any) => String(b.bookingId)));
       const bookingById = new Map(allBookingDetails.map((b: any) => [String(b.bookingId), b]));
 
       // ── BOOKING FINANCIALS ────────────────────────────────────────────
-      const totalBookings = allBookingDetails.length;
-      const totalRentalDays = allBookingDetails.reduce((s, b) => s + b.rentalDays, 0);
-      const totalEarnings = allBookingDetails.reduce((s, b) => s + b.totalAmount, 0);
-      const totalPaidBookings = allBookingDetails.reduce((s, b) => s + b.paidAmount, 0);
-      const totalDueBookings = allBookingDetails.reduce((s, b) => s + b.dueAmount, 0);
-      const paidBookings = allBookingDetails.filter(b => b.isPaid).length;
-      const pendingBookings = allBookingDetails.filter(b => b.isPending || b.isUnpaid).length;
+      const totalBookings = selectedBookingDetails.length;
+      const totalRentalDays = selectedBookingDetails.reduce((s, b) => s + b.rentalDays, 0);
+      const totalEarnings = selectedBookingDetails.reduce((s, b) => s + b.totalAmount, 0);
+      const totalPaidBookings = selectedBookingDetails.reduce((s, b) => s + b.paidAmount, 0);
+      const totalDueBookings = selectedBookingDetails.reduce((s, b) => s + b.dueAmount, 0);
+      const paidBookings = selectedBookingDetails.filter(b => b.isPaid).length;
+      const pendingBookings = selectedBookingDetails.filter(b => b.isPending || b.isUnpaid).length;
       const avgRentalDays = totalBookings > 0 ? Math.round((totalRentalDays / totalBookings) * 10) / 10 : 0;
 
       // ── INVOICES ──────────────────────────────────────────────────────
@@ -208,14 +224,22 @@ export async function GET(request: Request) {
       };
 
       const processedInvoices = allInvoices.map(processInvoice);
+      const selectedInvoices = useAllData
+        ? processedInvoices
+        : processedInvoices.filter((invoice) =>
+            selectedBookingIdSet.has(String(invoice.bookingId)) ||
+            isDateInRange(invoice.issueDate, rangeStart, rangeEnd) ||
+            isDateInRange(invoice.startDate, rangeStart, rangeEnd) ||
+            isDateInRange(invoice.endDate, rangeStart, rangeEnd)
+          );
 
       // Invoice aggregates
-      const totalInvoiced = processedInvoices.reduce((s, i) => s + i.totalAmount, 0);
-      const totalInvPaid = processedInvoices.reduce((s, i) => s + i.paidAmount, 0);
-      const totalInvDue = processedInvoices.reduce((s, i) => s + i.dueAmount, 0);
-      const paidInvCount = processedInvoices.filter(i => i.isPaid).length;
-      const pendingInvCount = processedInvoices.filter(i => i.isPending).length;
-      const overdueInvCount = processedInvoices.filter(i => i.isOverdue).length;
+      const totalInvoiced = selectedInvoices.reduce((s, i) => s + i.totalAmount, 0);
+      const totalInvPaid = selectedInvoices.reduce((s, i) => s + i.paidAmount, 0);
+      const totalInvDue = selectedInvoices.reduce((s, i) => s + i.dueAmount, 0);
+      const paidInvCount = selectedInvoices.filter(i => i.isPaid).length;
+      const pendingInvCount = selectedInvoices.filter(i => i.isPending).length;
+      const overdueInvCount = selectedInvoices.filter(i => i.isOverdue).length;
 
       // ── PAYMENTS ──────────────────────────────────────────────────────
       let allPayments: any[] = [];
@@ -249,11 +273,19 @@ export async function GET(request: Request) {
       };
 
       const processedPayments = allPayments.map(processPayment);
-      const totalPayments = processedPayments.reduce((s, p) => s + p.amount, 0);
+      const selectedPayments = useAllData
+        ? processedPayments
+        : processedPayments.filter((payment) =>
+            selectedBookingIdSet.has(String(payment.bookingId)) ||
+            isDateInRange(payment.date, rangeStart, rangeEnd) ||
+            isDateInRange(payment.startDate, rangeStart, rangeEnd) ||
+            isDateInRange(payment.endDate, rangeStart, rangeEnd)
+          );
+      const totalPayments = selectedPayments.reduce((s, p) => s + p.amount, 0);
 
       // Classify payments
-      const paidPayments = processedPayments.filter(p => ['paid','completed','received','settled'].includes(p.status.toLowerCase()));
-      const pendingPayments = processedPayments.filter(p => ['pending','unpaid','partial'].includes(p.status.toLowerCase()));
+      const paidPayments = selectedPayments.filter(p => ['paid','completed','received','settled'].includes(p.status.toLowerCase()));
+      const pendingPayments = selectedPayments.filter(p => ['pending','unpaid','partial'].includes(p.status.toLowerCase()));
       const paidPayAmt = paidPayments.reduce((s, p) => s + p.amount, 0);
       const pendingPayAmt = pendingPayments.reduce((s, p) => s + p.amount, 0);
 
@@ -262,7 +294,16 @@ export async function GET(request: Request) {
       if (Expense) {
         allExpenses = await Expense.find(vLink).lean();
       }
-      const totalExpenses = allExpenses.reduce(
+      const selectedExpenses = useAllData
+        ? allExpenses
+        : allExpenses.filter((expense: any) =>
+            isDateInRange(
+              f(expense, 'date', 'expenseDate', 'transactionDate', 'createdAt', 'invoiceDate'),
+              rangeStart,
+              rangeEnd
+            )
+          );
+      const totalExpenses = selectedExpenses.reduce(
         (s, e: any) => s + safeNum(f(e, 'amount','totalAmount','cost','price')), 0
       );
 
@@ -271,7 +312,16 @@ export async function GET(request: Request) {
       if (Maintenance) {
         allMaintenance = await Maintenance.find(vLink).lean();
       }
-      const totalMaintenance = allMaintenance.reduce(
+      const selectedMaintenance = useAllData
+        ? allMaintenance
+        : allMaintenance.filter((maintenance: any) =>
+            isDateInRange(
+              f(maintenance, 'date', 'serviceDate', 'completedAt', 'createdAt', 'maintenanceDate'),
+              rangeStart,
+              rangeEnd
+            )
+          );
+      const totalMaintenance = selectedMaintenance.reduce(
         (s, m: any) => s + safeNum(f(m, 'cost','amount','totalCost','price','laborCost')), 0
       );
 
@@ -313,30 +363,30 @@ export async function GET(request: Request) {
           totalEarnings: Math.round(totalEarnings * 100) / 100,
           totalPaid: Math.round(totalPaidBookings * 100) / 100,
           totalDue: Math.round(totalDueBookings * 100) / 100,
-          list: allBookingDetails,
+          list: selectedBookingDetails,
         },
 
         // ── Invoice Summary ───────────────────────────────────────────
         invoices: {
-          total: processedInvoices.length,
+          total: selectedInvoices.length,
           paidCount: paidInvCount,
           pendingCount: pendingInvCount,
           overdueCount: overdueInvCount,
           totalInvoiced: Math.round(totalInvoiced * 100) / 100,
           totalPaid: Math.round(totalInvPaid * 100) / 100,
           totalDue: Math.round(totalInvDue * 100) / 100,
-          list: processedInvoices,
+          list: selectedInvoices,
         },
 
         // ── Payment Summary ───────────────────────────────────────────
         payments: {
-          total: processedPayments.length,
+          total: selectedPayments.length,
           paid: paidPayments.length,
           pending: pendingPayments.length,
           totalAmount: Math.round(totalPayments * 100) / 100,
           paidAmount: Math.round(paidPayAmt * 100) / 100,
           pendingAmount: Math.round(pendingPayAmt * 100) / 100,
-          list: processedPayments,
+          list: selectedPayments,
         },
 
         // ── Financial Summary ─────────────────────────────────────────
