@@ -198,10 +198,43 @@ export async function POST(request: Request) {
         });
       }
     } catch (e) { errors.push(`Payment: ${e}`); }
-    // NOTE: We intentionally do NOT sync expenses/fines/maintenance/salaries/invoices/deposits here
+    
+    // ══════════════════════════════════════════════════════════════════════
+    // 6. PAID INVOICES → CREDIT
+    // Rule: show ONLY invoices that are PAID (no receivables, no partials).
+    // ══════════════════════════════════════════════════════════════════════
+    try {
+      const Invoice = (await import('@/lib/models/Invoice')).default;
+      const docs = await Invoice.find({ status: 'PAID' }).lean();
+      console.log(`[SYNC] Invoices (PAID only): ${docs.length}`);
+      for (const doc of docs) {
+        const amount = n(f(doc, 'total', 'totalAmount', 'grandTotal', 'invoiceAmount', 'netAmount'));
+        if (amount <= 0) continue;
+        const date = d(f(doc, 'updatedAt', 'paidAt', 'issueDate', 'createdAt'));
+        const invoiceNum = s(f(doc, 'invoiceNumber', 'invoiceNo', 'number', 'reference'), 'Invoice');
+        const bookingId = f(doc, 'booking');
+        const method = String(f(doc, 'transactionMethod') || 'CASH').toUpperCase();
+        const accountLabel = method === 'BANK_TRANSFER' ? 'Bank Transfer' : 'Cash';
+        const accountType = method === 'BANK_TRANSFER' ? 'BANK' : 'CASH';
+        await track('Invoice', (doc as any)._id, 'INVOICE_PAYMENT', {
+          date,
+          direction: 'CREDIT',
+          amount,
+          description: `Invoice ${invoiceNum} — Paid`,
+          category: 'Invoice Payment',
+          accountLabel,
+          accountType,
+          bookingId: bookingId ?? undefined,
+          isReconciled: true,
+        });
+      }
+    } catch (e) { errors.push(`Invoice(PAID): ${e}`); }
+    
+    // NOTE: We intentionally do NOT sync expenses/fines/maintenance/salaries/receivables here
     // because the ledger view should only show:
     // - manual debits (from Manual Entry form)
     // - successful paid payments (credits)
+    // - paid invoices (credits)
 
     // ══════════════════════════════════════════════════════════════════════
     // RECOMPUTE RUNNING BALANCE

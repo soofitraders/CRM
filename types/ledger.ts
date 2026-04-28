@@ -8,6 +8,7 @@ export type LedgerEntryType =
   | 'SECURITY_DEPOSIT_REFUND'
   | 'LATE_FEE'
   | 'DAMAGE_CHARGE'
+  | 'INVOICE_PAYMENT'
   | 'EXPENSE_PAID'
   | 'RECURRING_EXPENSE'
   | 'SALARY_PAID'
