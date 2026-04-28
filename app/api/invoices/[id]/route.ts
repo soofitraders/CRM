@@ -125,8 +125,8 @@ export async function PATCH(
     const body = await request.json()
     const data = updateInvoiceStatusSchema.parse(body)
 
-    // Prevent updating if already PAID or VOID
-    if (invoice.status === 'PAID' || invoice.status === 'VOID') {
+    // Prevent updating VOID invoices
+    if (invoice.status === 'VOID') {
       return NextResponse.json(
         { error: `Invoice is already ${invoice.status} and cannot be updated` },
         { status: 400 }
@@ -136,6 +136,13 @@ export async function PATCH(
     // Update status if provided
     const oldStatus = invoice.status
     if (data.status !== undefined) {
+      // Prevent status changes if already PAID
+      if (invoice.status === 'PAID') {
+        return NextResponse.json(
+          { error: 'PAID invoices cannot have their status changed' },
+          { status: 400 }
+        )
+      }
       // Only allow updating to PAID or VOID
       if (data.status !== 'PAID' && data.status !== 'VOID') {
         return NextResponse.json(
@@ -146,8 +153,28 @@ export async function PATCH(
       invoice.status = data.status
     }
 
+    // Update transaction method if provided (allowed even when PAID, blocked when VOID above)
+    if (data.transactionMethod !== undefined) {
+      await Invoice.collection.updateOne(
+        { _id: invoice._id as any },
+        {
+          $set: {
+            transactionMethod: data.transactionMethod,
+            updatedAt: new Date(),
+          },
+        }
+      )
+    }
+
     // Update items if provided
     if (data.items !== undefined) {
+      // Prevent modifying financial line items once PAID
+      if (invoice.status === 'PAID') {
+        return NextResponse.json(
+          { error: 'PAID invoices cannot have their items modified' },
+          { status: 400 }
+        )
+      }
       // Calculate subtotal from all items (including deposits as negative amounts)
       const subtotal = data.items.reduce((sum, item) => sum + item.amount, 0)
       
@@ -243,7 +270,7 @@ export async function PATCH(
             for (const fineItem of fineItems) {
               // Only create expense if this fine wasn't in the existing items
               if (!existingFineLabels.has(fineItem.label)) {
-                await Expense.create({
+                const exp = await Expense.create({
                   category: finesCategory._id,
                   description: `Fine - ${fineItem.label} - Invoice ${invoice.invoiceNumber}`,
                   amount: fineItem.amount,
@@ -276,6 +303,12 @@ export async function PATCH(
         }
       )
     } else if (data.taxAmount !== undefined) {
+      if (invoice.status === 'PAID') {
+        return NextResponse.json(
+          { error: 'PAID invoices cannot have their tax modified' },
+          { status: 400 }
+        )
+      }
       // Update only tax amount if provided without items
       const subtotal = invoice.subtotal || 0
       const taxAmount = Math.max(0, data.taxAmount)

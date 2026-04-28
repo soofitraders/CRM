@@ -14,6 +14,7 @@ import ExportButtonGroup from '@/components/export/ExportButtonGroup'
 interface Invoice {
   _id: string
   invoiceNumber: string
+  transactionMethod?: 'CASH' | 'BANK_TRANSFER'
   booking: {
     _id: string
   }
@@ -102,6 +103,7 @@ function FinancialsContent() {
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [invoiceToDelete, setInvoiceToDelete] = useState<string | null>(null)
+  const [savingInvoiceMethod, setSavingInvoiceMethod] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     if (activeTab === 'invoices') {
@@ -195,6 +197,38 @@ function FinancialsContent() {
       console.error('Error fetching payments:', error)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const updateInvoiceTransactionMethod = async (
+    invoiceId: string,
+    transactionMethod: 'CASH' | 'BANK_TRANSFER'
+  ) => {
+    setSavingInvoiceMethod((prev) => ({ ...prev, [invoiceId]: true }))
+    try {
+      const response = await fetch(`/api/invoices/${invoiceId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactionMethod }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        alert(error.error || 'Failed to update method')
+        return
+      }
+
+      const data = await response.json()
+      // Update local list without refetch
+      setInvoices((prev) =>
+        prev.map((inv) => (inv._id === invoiceId ? { ...inv, transactionMethod: data.invoice?.transactionMethod || transactionMethod } : inv))
+      )
+      router.refresh()
+    } catch (error) {
+      console.error('Error updating invoice transaction method:', error)
+      alert('Failed to update method')
+    } finally {
+      setSavingInvoiceMethod((prev) => ({ ...prev, [invoiceId]: false }))
     }
   }
 
@@ -542,6 +576,7 @@ function FinancialsContent() {
                       'Booking #',
                       'Customer',
                       'Issue Date',
+                      'Method',
                       'Total',
                       'Status',
                       'Actions',
@@ -631,6 +666,7 @@ function FinancialsContent() {
                     }
                   
                   const canDelete = invoice.status !== 'PAID' && invoice.status !== 'VOID'
+                  const canEditMethod = ['FINANCE', 'ADMIN', 'SUPER_ADMIN'].includes(userRole) && invoice.status !== 'VOID'
                   
                   return (
                     <TableRow key={invoice._id || `invoice-${index}`}>
@@ -668,6 +704,25 @@ function FinancialsContent() {
                         )}
                       </TableCell>
                       <TableCell>{invoice.issueDate ? formatDate(invoice.issueDate) : 'N/A'}</TableCell>
+                      <TableCell>
+                        {canEditMethod ? (
+                          <select
+                            value={(invoice.transactionMethod || 'CASH') as any}
+                            disabled={Boolean(savingInvoiceMethod[invoice._id])}
+                            onChange={(e) =>
+                              updateInvoiceTransactionMethod(invoice._id, e.target.value as 'CASH' | 'BANK_TRANSFER')
+                            }
+                            className="w-full min-w-[140px] px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <option value="CASH">Cash</option>
+                            <option value="BANK_TRANSFER">Bank Transfer</option>
+                          </select>
+                        ) : (
+                          <span className="text-sidebarMuted">
+                            {(invoice.transactionMethod || 'CASH') === 'BANK_TRANSFER' ? 'Bank Transfer' : 'Cash'}
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell className="font-medium">
                         {formatCurrency(invoice.total || 0)}
                       </TableCell>

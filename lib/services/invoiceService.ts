@@ -144,6 +144,7 @@ export async function createInvoiceFromBooking(bookingId: string): Promise<any> 
       invoiceNumber,
       issueDate,
       dueDate,
+      transactionMethod: 'CASH' as const,
       items,
       subtotal: Math.max(0, finalSubtotal), // Final subtotal after deposit deduction
       taxAmount,
@@ -182,6 +183,7 @@ export async function createCustomInvoice(data: {
   issueDate?: Date
   dueDate?: Date
   taxPercent?: number
+  transactionMethod?: 'CASH' | 'BANK_TRANSFER'
   createdBy?: string
 }): Promise<any> {
   try {
@@ -227,6 +229,7 @@ export async function createCustomInvoice(data: {
       invoiceNumber,
       issueDate,
       dueDate,
+      transactionMethod: data.transactionMethod || 'CASH',
       items: data.items,
       subtotal,
       taxAmount,

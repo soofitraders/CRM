@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 export const invoiceStatusSchema = z.enum(['DRAFT', 'ISSUED', 'PAID', 'VOID'])
+export const invoiceTransactionMethodSchema = z.enum(['CASH', 'BANK_TRANSFER'])
 
 export const invoiceQuerySchema = z.object({
   status: invoiceStatusSchema.optional(),
@@ -13,6 +14,7 @@ export const invoiceQuerySchema = z.object({
 
 export const updateInvoiceStatusSchema = z.object({
   status: z.enum(['PAID', 'VOID']).optional(),
+  transactionMethod: invoiceTransactionMethodSchema.optional(),
   items: z
     .array(
       z.object({
@@ -27,6 +29,7 @@ export const updateInvoiceStatusSchema = z.object({
 
 export const createInvoiceSchema = z.object({
   booking: z.string().min(1, 'Booking ID is required'),
+  transactionMethod: invoiceTransactionMethodSchema.optional(),
   items: z
     .array(
       z.object({

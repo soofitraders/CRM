@@ -92,7 +92,8 @@ export async function POST(request: Request) {
       accountLabel: accountLabel || 'Cash',
       accountType: String(accountLabel || '').toLowerCase().includes('bank') ? 'BANK' : 'CASH',
       note: note || '',
-      referenceModel: expenseId ? 'Expense' : (enforcedDirection === 'DEBIT' ? 'ManualExpense' : 'ManualIncome'),
+      // Always tag manual rows as manual so we can keep them even if we purge/sync system-generated rows.
+      referenceModel: enforcedDirection === 'DEBIT' ? 'ManualExpense' : 'ManualIncome',
       referenceId: expenseId ?? undefined,
       isVoided: false,
       isReconciled: false,

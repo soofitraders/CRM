@@ -130,6 +130,34 @@ export async function POST(request: Request) {
     await LedgerEntry.updateMany({ currency: 'PKR' }, { $set: { currency: 'AED' } });
     console.log('[SYNC] Direction and currency corrections applied');
 
+    // ── PURGE SYSTEM-GENERATED EXPENSE/INVOICE ROWS ────────────────────────
+    // Per business rule:
+    // - Debits (expenses) should ONLY appear if added via Manual Entry form.
+    // - Credits should ONLY appear for payments that are actually paid/success.
+    //
+    // So we remove:
+    // - any DEBIT rows that are not manual
+    // - invoice receivables / partials / invoice totals (unpaid/pending should not show)
+    // - any non-payment credits (salary, investor payouts, deposits, etc.)
+    await LedgerEntry.deleteMany({
+      isVoided: { $ne: true },
+      $or: [
+        // Keep only manual debits
+        { direction: 'DEBIT', referenceModel: { $nin: ['ManualExpense'] } },
+
+        // Remove invoice-related rows
+        { entryType: { $in: ['INVOICE_RECEIVABLE', 'INVOICE_PARTIAL', 'INVOICE_PAYMENT', 'PARTIAL_PAYMENT'] } },
+        { referenceModel: 'Invoice' },
+
+        // Remove other system credits so ledger credits only represent paid payments (but keep manual income)
+        {
+          direction: 'CREDIT',
+          referenceModel: { $nin: ['ManualIncome'] },
+          entryType: { $nin: ['BOOKING_PAYMENT', 'SECURITY_DEPOSIT'] },
+        },
+      ],
+    });
+
     let synced = 0, skipped = 0;
     const errors: string[] = [];
 
@@ -139,142 +167,13 @@ export async function POST(request: Request) {
     };
 
     // ══════════════════════════════════════════════════════════════════════
-    // 1. EXPENSES → DEBIT
-    // Rule: All expenses are DEBIT
-    // ══════════════════════════════════════════════════════════════════════
-    try {
-      const Expense = (await import('@/lib/models/Expense')).default;
-      const docs = await Expense.find({}).lean();
-      console.log(`[SYNC] Expenses: ${docs.length}`);
-      for (const doc of docs) {
-        const amount = n(f(doc, 'amount', 'totalAmount', 'cost', 'price'));
-        const date = d(f(doc, 'date', 'expenseDate', 'paidDate', 'createdAt'));
-        const desc = s(f(doc, 'description', 'title', 'name'), 'Expense');
-        const rawCat = f(doc, 'category', 'expenseCategory', 'categoryName', 'type');
-        const cat = s(rawCat, 'General Expense');
-        const vehicle = f(doc, 'vehicleId', 'vehicle', 'unitId');
-        const method = s(f(doc, 'paymentMethod', 'paidVia', 'method'), 'Cash');
-        await track('Expense', (doc as any)._id, 'EXPENSE_PAID', {
-          date,
-          direction: 'DEBIT', // ← ALWAYS DEBIT
-          amount,
-          description: desc,
-          category: cat,
-          accountLabel: method,
-          accountType: method.toLowerCase().includes('bank') ? 'BANK' : 'CASH',
-          vehicleId: vehicle ?? undefined,
-          note: s(f(doc, 'notes', 'note', 'remarks')),
-          isReconciled: false,
-        });
-      }
-    } catch (e) { errors.push(`Expense: ${e}`); }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // 2. FINES → DEBIT
-    // Rule: ALL fines (whether paid by customer or business) are DEBIT
-    // ══════════════════════════════════════════════════════════════════════
-    try {
-      let FineModel: any = null;
-      for (const name of ['FineOrPenalty', 'Fine', 'Penalty', 'Fines']) {
-        try { FineModel = (await import(`@/lib/models/${name}`)).default; break; } catch { continue; }
-      }
-      if (FineModel) {
-        const docs = await FineModel.find({}).lean();
-        console.log(`[SYNC] Fines: ${docs.length}`);
-        for (const doc of docs) {
-          const amount = n(f(doc, 'amount', 'fineAmount', 'penaltyAmount', 'cost'));
-          if (amount <= 0) continue;
-          const date = d(f(doc, 'date', 'issuedDate', 'fineDate', 'createdAt'));
-          const desc = s(f(doc, 'description', 'reason', 'type', 'title'), 'Fine');
-          const vehicle = f(doc, 'vehicleId', 'vehicle', 'unitId');
-          const customer = f(doc, 'customerId', 'customer', 'clientId');
-          await track('FineOrPenalty', (doc as any)._id, 'FINE_PAID', {
-            date,
-            direction: 'DEBIT', // ← ALL FINES ARE DEBIT
-            amount,
-            description: `Fine: ${desc}`,
-            category: 'Fine',
-            accountLabel: 'Cash',
-            accountType: 'CASH',
-            vehicleId: vehicle ?? undefined,
-            customerId: customer ?? undefined,
-            note: s(f(doc, 'notes', 'note')),
-            isReconciled: false,
-          });
-        }
-      }
-    } catch (e) { errors.push(`Fines: ${e}`); }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // 3. RECURRING EXPENSES → DEBIT
-    // ══════════════════════════════════════════════════════════════════════
-    try {
-      let RecModel: any = null;
-      for (const name of ['RecurringExpense', 'Recurring', 'RecurringCost']) {
-        try { RecModel = (await import(`@/lib/models/${name}`)).default; break; } catch { continue; }
-      }
-      if (RecModel) {
-        const docs = await RecModel.find({}).lean();
-        console.log(`[SYNC] Recurring expenses: ${docs.length}`);
-        for (const doc of docs) {
-          const amount = n(f(doc, 'amount', 'cost', 'totalAmount'));
-          if (amount <= 0) continue;
-          const date = d(f(doc, 'lastProcessed', 'lastPaidDate', 'processedAt', 'createdAt'));
-          const desc = s(f(doc, 'description', 'title', 'name'), 'Recurring Expense');
-          const cat = s(f(doc, 'category', 'expenseCategory', 'type'), 'Recurring Expense');
-          await track('RecurringExpense', (doc as any)._id, 'RECURRING_EXPENSE', {
-            date,
-            direction: 'DEBIT', // ← DEBIT
-            amount,
-            description: desc,
-            category: cat,
-            accountLabel: 'Cash',
-            accountType: 'CASH',
-            isReconciled: false,
-          });
-        }
-      }
-    } catch (e) { errors.push(`RecurringExpense: ${e}`); }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // 4. MAINTENANCE → DEBIT
-    // ══════════════════════════════════════════════════════════════════════
-    try {
-      let MaintModel: any = null;
-      for (const name of ['MaintenanceRecord', 'Maintenance', 'VehicleMaintenance']) {
-        try { MaintModel = (await import(`@/lib/models/${name}`)).default; break; } catch { continue; }
-      }
-      if (MaintModel) {
-        const docs = await MaintModel.find({}).lean();
-        console.log(`[SYNC] Maintenance: ${docs.length}`);
-        for (const doc of docs) {
-          const amount = n(f(doc, 'cost', 'amount', 'totalCost', 'price', 'laborCost'));
-          if (amount <= 0) continue;
-          const date = d(f(doc, 'date', 'completedDate', 'scheduledDate', 'serviceDate', 'createdAt'));
-          const desc = s(f(doc, 'description', 'type', 'serviceType', 'maintenanceType', 'title'), 'Maintenance');
-          const vehicle = f(doc, 'vehicleId', 'vehicle', 'unitId', 'carId');
-          await track('MaintenanceRecord', (doc as any)._id, 'VEHICLE_MAINTENANCE', {
-            date,
-            direction: 'DEBIT', // ← DEBIT
-            amount,
-            description: `Maintenance: ${desc}`,
-            category: 'Vehicle Maintenance',
-            accountLabel: 'Cash',
-            accountType: 'CASH',
-            vehicleId: vehicle ?? undefined,
-            isReconciled: false,
-          });
-        }
-      }
-    } catch (e) { errors.push(`Maintenance: ${e}`); }
-
-    // ══════════════════════════════════════════════════════════════════════
     // 5. PAYMENTS → CREDIT
+    // Rule: ONLY include payments that are actually PAID/SUCCESS in system.
     // ══════════════════════════════════════════════════════════════════════
     try {
       const Payment = (await import('@/lib/models/Payment')).default;
-      const docs = await Payment.find({}).lean();
-      console.log(`[SYNC] Payments: ${docs.length}`);
+      const docs = await Payment.find({ status: 'SUCCESS' }).lean();
+      console.log(`[SYNC] Payments (SUCCESS only): ${docs.length}`);
       for (const doc of docs) {
         const amount = n(f(doc, 'amount', 'totalAmount', 'paidAmount'));
         const date = d(f(doc, 'date', 'paymentDate', 'paidAt', 'createdAt'));
@@ -295,183 +194,14 @@ export async function POST(request: Request) {
           bookingId: bookingId ?? undefined,
           customerId: customerId ?? undefined,
           note: s(f(doc, 'notes', 'note', 'remarks')),
-          isReconciled: false,
+          isReconciled: true,
         });
       }
     } catch (e) { errors.push(`Payment: ${e}`); }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // 6. INVOICES → CREDIT (including partial payments and receivables)
-    // Rule: ALL invoice-related entries are CREDIT
-    // ══════════════════════════════════════════════════════════════════════
-    try {
-      let InvoiceModel: any = null;
-      for (const name of ['Invoice', 'Invoices', 'RentalInvoice']) {
-        try { InvoiceModel = (await import(`@/lib/models/${name}`)).default; break; } catch { continue; }
-      }
-      if (InvoiceModel) {
-        const docs = await InvoiceModel.find({}).lean();
-        console.log(`[SYNC] Invoices: ${docs.length}`);
-        for (const doc of docs) {
-          const totalAmount = n(f(doc, 'totalAmount', 'amount', 'grandTotal', 'total',
-                                     'invoiceAmount', 'netAmount', 'subtotal', 'rentAmount'));
-          const paidAmount = n(f(doc, 'paidAmount', 'amountPaid', 'paid', 'paymentReceived', 'amountReceived'));
-          const dueAmount = Math.max(0, totalAmount - paidAmount);
-          const date = d(f(doc, 'date', 'invoiceDate', 'issueDate', 'createdAt'));
-          const invoiceNum = s(f(doc, 'invoiceNumber', 'invoiceNo', 'number', 'reference'), 'Invoice');
-          const customer = f(doc, 'customerId', 'customer', 'clientId');
-          const booking = f(doc, 'bookingId', 'booking');
-          const vehicle = f(doc, 'vehicleId', 'vehicle', 'unitId');
-          const status = s(f(doc, 'status', 'paymentStatus', 'invoiceStatus'), 'pending');
-
-          // ── Full invoice amount → CREDIT ─────────────────────────────
-          if (totalAmount > 0) {
-            await track('Invoice', (doc as any)._id, 'BOOKING_PAYMENT', {
-              date,
-              direction: 'CREDIT', // ← ALWAYS CREDIT
-              amount: totalAmount,
-              description: `Invoice #${invoiceNum} — Total`,
-              category: 'Invoice',
-              accountLabel: 'Cash',
-              accountType: 'CASH',
-              customerId: customer ?? undefined,
-              bookingId: booking ?? undefined,
-              vehicleId: vehicle ?? undefined,
-              note: `Status: ${status}`,
-              isReconciled: ['paid','completed','settled'].includes(status.toLowerCase()),
-            });
-          }
-
-          // ── Partial payment (if paid < total) → CREDIT ────────────────
-          if (paidAmount > 0 && paidAmount < totalAmount) {
-            await track('Invoice', (doc as any)._id, 'PARTIAL_PAYMENT', {
-              date,
-              direction: 'CREDIT', // ← CREDIT
-              amount: paidAmount,
-              description: `Invoice #${invoiceNum} — Partial Payment`,
-              category: 'Partial Payment',
-              accountLabel: 'Cash',
-              accountType: 'CASH',
-              customerId: customer ?? undefined,
-              bookingId: booking ?? undefined,
-              vehicleId: vehicle ?? undefined,
-              note: `Paid: AED ${paidAmount}, Due: AED ${dueAmount}`,
-              isReconciled: false,
-            });
-          }
-
-          // ── Receivable (unpaid amount) → CREDIT ───────────────────────
-          if (dueAmount > 0) {
-            await track('Invoice', (doc as any)._id, 'INVOICE_RECEIVABLE', {
-              date,
-              direction: 'CREDIT', // ← CREDIT (receivable = money owed TO business)
-              amount: dueAmount,
-              description: `Invoice #${invoiceNum} — Receivable`,
-              category: 'Receivable',
-              accountLabel: 'Receivable',
-              accountType: 'OTHER',
-              customerId: customer ?? undefined,
-              bookingId: booking ?? undefined,
-              vehicleId: vehicle ?? undefined,
-              note: `Outstanding: AED ${dueAmount} of AED ${totalAmount}`,
-              isReconciled: false,
-            });
-          }
-        }
-      }
-    } catch (e) { errors.push(`Invoice: ${e}`); console.error('[SYNC] Invoice error:', e); }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // 7. SALARIES → CREDIT
-    // ══════════════════════════════════════════════════════════════════════
-    try {
-      let SalaryModel: any = null;
-      for (const name of ['SalaryRecord', 'Salary', 'SalaryPayment']) {
-        try { SalaryModel = (await import(`@/lib/models/${name}`)).default; break; } catch { continue; }
-      }
-      if (SalaryModel) {
-        const docs = await SalaryModel.find({}).lean();
-        console.log(`[SYNC] Salaries: ${docs.length}`);
-        for (const doc of docs) {
-          const amount = n(f(doc, 'amount', 'netSalary', 'salary', 'totalAmount', 'paidAmount'));
-          const date = d(f(doc, 'date', 'paymentDate', 'paidDate', 'month', 'salaryMonth', 'createdAt'));
-          const ename = s(f(doc, 'employeeName', 'staffName', 'name', 'userName'));
-          const userId = f(doc, 'userId', 'employeeId', 'staffId', 'user');
-          await track('SalaryRecord', (doc as any)._id, 'SALARY_PAID', {
-            date,
-            direction: 'CREDIT', // ← CREDIT
-            amount,
-            description: `Salary${ename ? ' — ' + ename : ''}`,
-            category: 'Salary',
-            accountLabel: 'Cash',
-            accountType: 'CASH',
-            userId: userId ?? undefined,
-            isReconciled: false,
-          });
-        }
-      }
-    } catch (e) { errors.push(`Salary: ${e}`); }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // 8. INVESTOR PAYOUTS → CREDIT
-    // ══════════════════════════════════════════════════════════════════════
-    try {
-      let PayoutModel: any = null;
-      for (const name of ['InvestorPayout', 'Payout', 'InvestorPayment']) {
-        try { PayoutModel = (await import(`@/lib/models/${name}`)).default; break; } catch { continue; }
-      }
-      if (PayoutModel) {
-        const docs = await PayoutModel.find({}).lean();
-        console.log(`[SYNC] Investor payouts: ${docs.length}`);
-        for (const doc of docs) {
-          const amount = n(f(doc, 'amount', 'payoutAmount', 'totalAmount'));
-          const date = d(f(doc, 'date', 'payoutDate', 'paidDate', 'createdAt'));
-          const iname = s(f(doc, 'investorName', 'name'));
-          await track('InvestorPayout', (doc as any)._id, 'INVESTOR_PAYOUT', {
-            date,
-            direction: 'CREDIT', // ← CREDIT
-            amount,
-            description: `Investor payout${iname ? ' — ' + iname : ''}`,
-            category: 'Investor Payout',
-            accountLabel: 'Cash',
-            accountType: 'CASH',
-            isReconciled: false,
-          });
-        }
-      }
-    } catch (e) { errors.push(`InvestorPayout: ${e}`); }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // 9. BOOKING DEPOSITS → CREDIT
-    // ══════════════════════════════════════════════════════════════════════
-    try {
-      const Booking = (await import('@/lib/models/Booking')).default;
-      const docs = await Booking.find({
-        $or: [{ depositAmount: { $gt: 0 } }, { securityDeposit: { $gt: 0 } }, { deposit: { $gt: 0 } }],
-      }).lean();
-      console.log(`[SYNC] Booking deposits: ${docs.length}`);
-      for (const doc of docs) {
-        const deposit = n(f(doc, 'depositAmount', 'securityDeposit', 'deposit'));
-        if (deposit <= 0) continue;
-        const date = d(f(doc, 'startDate', 'bookingDate', 'createdAt'));
-        const bookingNum = s(f(doc, 'bookingNumber', 'bookingId', '_id'));
-        const customer = f(doc, 'customerId', 'customer', 'clientId');
-        const vehicle = f(doc, 'vehicleId', 'vehicle', 'unitId', 'carId');
-        await track('Booking', (doc as any)._id, 'SECURITY_DEPOSIT', {
-          date,
-          direction: 'CREDIT', // ← CREDIT
-          amount: deposit,
-          description: `Security deposit — Booking #${bookingNum}`,
-          category: 'Security Deposit',
-          accountLabel: 'Cash',
-          accountType: 'CASH',
-          bookingId: (doc as any)._id,
-          customerId: customer ?? undefined,
-          vehicleId: vehicle ?? undefined,
-          isReconciled: false,
-        });
-      }
-    } catch (e) { errors.push(`Booking deposits: ${e}`); }
+    // NOTE: We intentionally do NOT sync expenses/fines/maintenance/salaries/invoices/deposits here
+    // because the ledger view should only show:
+    // - manual debits (from Manual Entry form)
+    // - successful paid payments (credits)
 
     // ══════════════════════════════════════════════════════════════════════
     // RECOMPUTE RUNNING BALANCE

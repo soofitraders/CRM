@@ -189,6 +189,7 @@ export async function POST(request: NextRequest) {
       const data = createInvoiceSchema.parse(body)
       invoice = await createCustomInvoice({
         bookingId: data.booking,
+        transactionMethod: data.transactionMethod,
         items: data.items,
         issueDate: data.issueDate ? new Date(data.issueDate) : undefined,
         dueDate: data.dueDate ? new Date(data.dueDate) : undefined,

@@ -15,6 +15,7 @@ interface InvoiceItem {
 interface Invoice {
   _id: string
   invoiceNumber: string
+  transactionMethod?: 'CASH' | 'BANK_TRANSFER'
   booking: {
     _id: string
     vehicle: {
@@ -55,6 +56,7 @@ export default function InvoiceDetailPage() {
   const [editedTaxAmount, setEditedTaxAmount] = useState<number>(0)
   const [newFine, setNewFine] = useState({ label: '', amount: '' })
   const [isExportingPDF, setIsExportingPDF] = useState(false)
+  const [isSavingTransactionMethod, setIsSavingTransactionMethod] = useState(false)
 
   useEffect(() => {
     fetchInvoice()
@@ -291,6 +293,39 @@ export default function InvoiceDetailPage() {
   const canEditItems = canUpdateStatus && invoice.status !== 'PAID' && invoice.status !== 'VOID'
   const canMarkPaid = canUpdateStatus && invoice.status !== 'PAID' && invoice.status !== 'VOID'
   const canVoid = canUpdateStatus && invoice.status !== 'PAID' && invoice.status !== 'VOID'
+  const canEditTransactionMethod = canUpdateStatus && invoice.status !== 'VOID'
+
+  const handleTransactionMethodChange = async (transactionMethod: 'CASH' | 'BANK_TRANSFER') => {
+    if (!invoice) return
+    // Optimistic UI update
+    setInvoice({ ...invoice, transactionMethod })
+    setIsSavingTransactionMethod(true)
+    try {
+      const response = await fetch(`/api/invoices/${invoiceId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactionMethod }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        alert(error.error || 'Failed to update transaction method')
+        // Revert by refetching authoritative data
+        await fetchInvoice()
+        return
+      }
+
+      const data = await response.json()
+      setInvoice(data.invoice)
+      router.refresh()
+    } catch (error: any) {
+      console.error('Error updating transaction method:', error)
+      alert('Failed to update transaction method')
+      await fetchInvoice()
+    } finally {
+      setIsSavingTransactionMethod(false)
+    }
+  }
 
   const getStatusVariant = (status: string): 'yellow' | 'green' | 'red' => {
     if (status === 'PAID') return 'green'
@@ -359,7 +394,7 @@ export default function InvoiceDetailPage() {
 
       {/* Invoice Header Card */}
       <SectionCard>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div>
             <label className="block text-sm font-medium text-headingText mb-1">
               Invoice Number
@@ -379,6 +414,29 @@ export default function InvoiceDetailPage() {
             <p className={`text-bodyText ${isOverdue ? 'text-red-500 font-semibold' : ''}`}>
               {formatDate(invoice.dueDate)}
             </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-headingText mb-1">
+              Transaction Method
+            </label>
+            {canEditTransactionMethod ? (
+              <select
+                value={(invoice.transactionMethod || 'CASH') as any}
+                onChange={(e) => handleTransactionMethodChange(e.target.value as 'CASH' | 'BANK_TRANSFER')}
+                disabled={isSavingTransactionMethod}
+                className="w-full px-3 py-2 bg-pageBg border border-borderSoft rounded-lg text-sm text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <option value="CASH">Cash</option>
+                <option value="BANK_TRANSFER">Bank Transfer</option>
+              </select>
+            ) : (
+              <p className="text-bodyText">
+                {(invoice.transactionMethod || 'CASH') === 'BANK_TRANSFER' ? 'Bank Transfer' : 'Cash'}
+              </p>
+            )}
+            {isSavingTransactionMethod && (
+              <p className="text-xs text-sidebarMuted mt-1">Saving...</p>
+            )}
           </div>
         </div>
         <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-borderSoft">

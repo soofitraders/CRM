@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document, Model } from 'mongoose'
 
 export type InvoiceStatus = 'DRAFT' | 'ISSUED' | 'PAID' | 'VOID'
+export type InvoiceTransactionMethod = 'CASH' | 'BANK_TRANSFER'
 
 export interface InvoiceItem {
   label: string
@@ -12,6 +13,7 @@ export interface IInvoice extends Document {
   invoiceNumber: string
   issueDate: Date
   dueDate: Date
+  transactionMethod: InvoiceTransactionMethod
   items: InvoiceItem[]
   subtotal: number
   taxAmount: number
@@ -60,6 +62,12 @@ const InvoiceSchema = new Schema<IInvoice>(
     dueDate: {
       type: Date,
       required: [true, 'Due date is required'],
+    },
+    transactionMethod: {
+      type: String,
+      enum: ['CASH', 'BANK_TRANSFER'],
+      required: true,
+      default: 'CASH',
     },
     items: {
       type: [InvoiceItemSchema],
