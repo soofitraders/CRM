@@ -3,9 +3,18 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/authOptions'
 import connectDB from '@/lib/db'
 import Invoice from '@/lib/models/Invoice'
+// Ensure models are registered before populate() on nested refs
+import CustomerProfile from '@/lib/models/CustomerProfile'
+import Vehicle from '@/lib/models/Vehicle'
+import User from '@/lib/models/User'
 import { updateInvoiceStatusSchema } from '@/lib/validation/invoice'
 import { getCurrentUser, hasRole } from '@/lib/auth'
 import { logger } from '@/lib/utils/performance'
+
+// Touch model imports so bundlers keep them and Mongoose registers schemas.
+void CustomerProfile
+void Vehicle
+void User
 
 // GET - Get single invoice
 export async function GET(

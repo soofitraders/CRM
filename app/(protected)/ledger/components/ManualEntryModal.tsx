@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface Props {
   onClose: () => void;
@@ -49,8 +49,32 @@ export default function ManualEntryModal({ onClose, onSuccess }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [expenseCategories, setExpenseCategories] = useState<string[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
 
   const isDebit = tab === 'DEBIT';
+
+  useEffect(() => {
+    const loadExpenseCategories = async () => {
+      setLoadingCategories(true);
+      try {
+        const res = await fetch('/api/expense-categories');
+        if (!res.ok) return;
+        const data = await res.json();
+        const names = Array.isArray(data?.categories)
+          ? data.categories
+              .map((c: any) => String(c?.name || '').trim())
+              .filter((v: string) => Boolean(v))
+          : [];
+        setExpenseCategories(names);
+      } catch {
+        // Non-blocking: keep manual fallback input behavior.
+      } finally {
+        setLoadingCategories(false);
+      }
+    };
+    loadExpenseCategories();
+  }, []);
 
   const handleTab = (t: 'DEBIT' | 'CREDIT') => {
     setTab(t);
@@ -148,12 +172,28 @@ export default function ManualEntryModal({ onClose, onSuccess }: Props) {
           {/* Fields */}
           {[
             {
-              label: isDebit ? 'Expense / Fine Type' : 'Income Type',
+              label: isDebit ? 'Category' : 'Income Type',
               content: (
-                <select value={entryType} onChange={e => setEntryType(e.target.value)}
-                  className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500">
-                  {types.map(t => <option key={t.v} value={t.v}>{t.l}</option>)}
-                </select>
+                isDebit ? (
+                  <select
+                    value={form.category}
+                    onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500"
+                    disabled={loadingCategories}
+                  >
+                    <option value="">
+                      {loadingCategories ? 'Loading categories...' : 'Select expense category'}
+                    </option>
+                    {expenseCategories.map((name) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <select value={entryType} onChange={e => setEntryType(e.target.value)}
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500">
+                    {types.map(t => <option key={t.v} value={t.v}>{t.l}</option>)}
+                  </select>
+                )
               ),
             },
             {
@@ -185,15 +225,15 @@ export default function ManualEntryModal({ onClose, onSuccess }: Props) {
                   className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500" />
               ),
             },
-            {
+            ...(!isDebit ? [{
               label: 'Category',
               content: (
                 <input type="text" value={form.category}
                   onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
-                  placeholder={isDebit ? 'e.g. Traffic Fine, Office Supplies' : 'e.g. Booking, Deposit'}
+                  placeholder="e.g. Booking, Deposit"
                   className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500" />
               ),
-            },
+            }] : []),
             {
               label: 'Account',
               content: (
