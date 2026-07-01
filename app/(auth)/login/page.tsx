@@ -45,7 +45,7 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-sidebarActiveBg rounded-card mb-4 shadow-card">
             <h1 className="text-2xl font-bold text-white">MW</h1>
           </div>
-          <h1 className="text-3xl font-bold text-headingText mb-2">MISTERWHEELS</h1>
+          <h1 className="text-3xl font-bold text-headingText mb-2">APEX CAR RENTAL</h1>
           <p className="text-bodyText">RENT A CAR LLC</p>
         </div>
 

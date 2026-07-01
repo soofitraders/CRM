@@ -317,7 +317,7 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
     // Load company logo and name from settings
     const Settings = (await import('@/lib/models/Settings')).default
     const settings = await Settings.findOne()
-    const companyName = settings?.companyName || 'MisterWheels'
+    const companyName = settings?.companyName || 'Apex Car Rental'
     
     let logoBase64: string | null = null
     try {
@@ -390,7 +390,7 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
     setTextStyle(doc, 'secondaryLine')
     doc.text('Car Rental Services', 20, cardY + 16)
     doc.text('Dubai, United Arab Emirates', 20, cardY + 20)
-    doc.text('info@misterwheels.com', 20, cardY + 24)
+    doc.text('info@apexridecarrental.com', 20, cardY + 24)
 
     // To (Customer) Card - reduced height and tighter spacing, very light border
     drawCard(doc, 107, cardY, 88, 34, DESIGN_SYSTEM.COLORS.bgWhite, [230, 230, 230], DESIGN_SYSTEM.BORDER.radiusSm, 0.2)
@@ -582,10 +582,10 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
     doc.text('1606, Empire Heights Tower B, Business Bay, Dubai', 105, footerY, {
       align: 'center',
     })
-    doc.text('+971586840296, +971585282840', 105, footerY + 5, {
+    doc.text('+971 58 684 0296, +971 58 617 4112', 105, footerY + 5, {
       align: 'center',
     })
-    doc.text('www.misterwheels.ae', 105, footerY + 10, {
+    doc.text('https://apexridecarrental.com/', 105, footerY + 10, {
       align: 'center',
     })
     
@@ -707,7 +707,7 @@ export async function generateInvestorPayoutPDF(payoutId: string): Promise<Buffe
     // Get company name from settings
     const SettingsPayout = (await import('@/lib/models/Settings')).default
     const settingsPayout = await SettingsPayout.findOne()
-    const companyNamePayout = settingsPayout?.companyName || 'MisterWheels'
+    const companyNamePayout = settingsPayout?.companyName || 'Apex Car Rental'
 
     // ============= CLEAN MINIMAL HEADER =============
     // White background

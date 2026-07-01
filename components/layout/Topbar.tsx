@@ -24,7 +24,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
   const { data: session, status } = useSession()
   const router = useRouter()
   const userName = session?.user?.name || 'Admin User'
-  const userEmail = session?.user?.email || 'admin@misterwheels.com'
+  const userEmail = session?.user?.email || 'admin@apexridecarrental.com'
 
   const [showNotifications, setShowNotifications] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
@@ -246,7 +246,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
             <div className="w-10 h-10 bg-sidebarActiveBg rounded-full flex items-center justify-center shadow-sm overflow-hidden">
               <img 
                 src="/logo.png?v=2"
-                alt="MisterWheels" 
+                alt="Apex Car Rental" 
                 className="w-full h-full object-contain p-1.5"
                 style={{ imageRendering: 'auto' }}
                 loading="eager"

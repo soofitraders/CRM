@@ -43,7 +43,7 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="p-6 border-b border-gray-700">
         <h1 className="text-white text-xs font-bold leading-tight uppercase">
-          MISTERWHEELS<br />
+          APEX CAR RENTAL<br />
           <span className="text-gray-400 text-[10px] font-normal">RENT A CAR LLC</span>
         </h1>
       </div>

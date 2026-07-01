@@ -25,7 +25,7 @@ interface NotificationPreferences {
 export default function SettingsPage() {
   const { data: session } = useSession()
   const [settings, setSettings] = useState<Settings>({
-    companyName: 'MisterWheels',
+    companyName: 'Apex Car Rental',
     logoUrl: '/logo.png',
     invoiceLogoUrl: '/logo.png',
     defaultCurrency: 'AED',

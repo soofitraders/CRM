@@ -16,7 +16,7 @@ const SettingsSchema = new Schema<ISettings>(
       type: String,
       required: [true, 'Company name is required'],
       trim: true,
-      default: 'MisterWheels',
+      default: 'Apex Car Rental',
     },
     logoUrl: {
       type: String,
