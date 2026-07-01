@@ -28,7 +28,7 @@ function LogoDisplay() {
       <div className="flex items-center justify-center">
         <img 
           src={logoUrl}
-          alt="MisterWheels Logo" 
+          alt="Apex Car Rental Logo" 
           className="h-10 w-auto object-contain max-w-full"
           style={{ imageRendering: 'auto' }}
           loading="eager"
@@ -40,7 +40,7 @@ function LogoDisplay() {
             if (parent && !parent.querySelector('.logo-fallback')) {
               const fallback = document.createElement('div')
               fallback.className = 'logo-fallback'
-              fallback.innerHTML = '<h1 class="text-sidebarText text-xl font-bold leading-tight tracking-tight">MISTERWHEELS</h1><p class="text-sidebarMuted text-xs mt-1.5 font-medium">RENT A CAR LLC</p>'
+              fallback.innerHTML = '<h1 class="text-sidebarText text-xl font-bold leading-tight tracking-tight">APEX CAR RENTAL</h1><p class="text-sidebarMuted text-xs mt-1.5 font-medium">RENT A CAR LLC</p>'
               parent.appendChild(fallback)
             }
           }}

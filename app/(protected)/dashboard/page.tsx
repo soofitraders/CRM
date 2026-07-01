@@ -81,7 +81,7 @@ export default function DashboardPage() {
         {/* Page Header */}
         <div className="mb-2">
           <h1 className="text-4xl font-bold text-headingText mb-2">Dashboard</h1>
-          <p className="text-bodyText text-base">Welcome to MisterWheels CRM</p>
+          <p className="text-bodyText text-base">Welcome to Apex Car Rental CRM</p>
         </div>
 
         {/* Summary Cards */}

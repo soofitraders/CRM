@@ -11,7 +11,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "MisterWheels - Car Rental Management",
+  title: "Apex Car Rental - Car Rental Management",
   description: "Car Rental Management System",
 };
 

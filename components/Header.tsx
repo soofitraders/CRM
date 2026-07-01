@@ -17,7 +17,7 @@ export default function Header() {
           <div className="w-10 h-10 bg-yellow-400 rounded-full flex items-center justify-center">
             <User className="w-6 h-6 text-gray-800" />
           </div>
-          <span className="text-sm font-medium text-gray-900">MisterWheels Admin</span>
+          <span className="text-sm font-medium text-gray-900">Apex Car Rental Admin</span>
         </div>
       </div>
     </div>
