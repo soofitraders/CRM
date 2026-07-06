@@ -15,7 +15,7 @@ const DESIGN_SYSTEM = {
     border: [229, 231, 235] as [number, number, number], // Light border
     bgSoft: [249, 250, 251] as [number, number, number], // Soft background
     bgWhite: [255, 255, 255] as [number, number, number], // White
-    accent: [242, 178, 51] as [number, number, number], // Gold #F2B233
+    accent: [239, 68, 68] as [number, number, number], // Red #EF4444
     accentDark: [17, 24, 39] as [number, number, number], // Dark for headers
   },
   FONT_SIZES: {
@@ -52,7 +52,7 @@ async function loadPoppinsFonts(doc: any): Promise<void> {
     // Read and convert fonts to base64
     const regularFont = fs.readFileSync(regularPath)
     const semiboldFont = fs.readFileSync(semiboldPath)
-    
+
     const regularBase64 = regularFont.toString('base64')
     const semiboldBase64 = semiboldFont.toString('base64')
 
@@ -87,15 +87,15 @@ function setTextStyle(
     totalNumber: { size: 11, weight: 'bold' as const, color: DESIGN_SYSTEM.COLORS.textPrimary },
     regular: { size: 9, weight: 'regular' as const, color: DESIGN_SYSTEM.COLORS.textPrimary },
   }
-  
+
   const style = styles[variant]
   const fontMap: { [key: string]: 'normal' | 'bold' } = {
     regular: 'normal',
     bold: 'bold',
   }
-  
+
   doc.setFontSize(style.size)
-  
+
   // Try to use Poppins, fallback to helvetica if not available
   try {
     doc.setFont('Poppins', fontMap[style.weight])
@@ -103,7 +103,7 @@ function setTextStyle(
     // Fallback to helvetica if Poppins is not loaded
     doc.setFont('helvetica', fontMap[style.weight])
   }
-  
+
   doc.setTextColor(style.color[0], style.color[1], style.color[2])
 }
 
@@ -124,9 +124,9 @@ function setFont(
     semibold: 'bold',
     bold: 'bold',
   }
-  
+
   doc.setFontSize(size)
-  
+
   // Try to use Poppins, fallback to helvetica if not available
   try {
     doc.setFont('Poppins', fontMap[weight])
@@ -134,7 +134,7 @@ function setFont(
     // Fallback to helvetica if Poppins is not loaded
     doc.setFont('helvetica', fontMap[weight])
   }
-  
+
   if (color) {
     doc.setTextColor(color[0], color[1], color[2])
   }
@@ -159,13 +159,13 @@ function drawCard(
   } else {
     doc.setFillColor(...DESIGN_SYSTEM.COLORS.bgWhite)
   }
-  
+
   if (borderColor) {
     doc.setDrawColor(borderColor[0], borderColor[1], borderColor[2])
   } else {
     doc.setDrawColor(...DESIGN_SYSTEM.COLORS.border)
   }
-  
+
   doc.setLineWidth(lineWidth)
   doc.roundedRect(x, y, w, h, radius, radius, bgColor ? 'FD' : 'D')
 }
@@ -318,13 +318,13 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
     const Settings = (await import('@/lib/models/Settings')).default
     const settings = await Settings.findOne()
     const companyName = settings?.companyName || 'Apex Car Rental'
-    
+
     let logoBase64: string | null = null
     try {
       // Use invoiceLogoUrl if available, otherwise fall back to logoUrl, then default
       const logoUrl = settings?.invoiceLogoUrl || settings?.logoUrl || '/logo.png'
       const logoPath = path.join(process.cwd(), 'public', logoUrl.replace(/^\//, ''))
-      
+
       if (fs.existsSync(logoPath)) {
         const logoBuffer = fs.readFileSync(logoPath)
         // Detect image format from file extension
@@ -341,32 +341,32 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
     // White background
     doc.setFillColor(...DESIGN_SYSTEM.COLORS.bgWhite)
     doc.rect(0, 0, 210, 38, 'F')
-    
+
     // Thin accent line at top (2mm)
     doc.setFillColor(...DESIGN_SYSTEM.COLORS.accent)
     doc.rect(0, 0, 210, 2, 'F')
-    
+
     const headerY = 12
-    
+
     // Logo - slightly smaller
     if (logoBase64) {
       try {
         // Detect image format from base64 data URI
-        const imageType = logoBase64.startsWith('data:image/jpeg') || logoBase64.startsWith('data:image/jpg') 
+        const imageType = logoBase64.startsWith('data:image/jpeg') || logoBase64.startsWith('data:image/jpg')
           ? 'JPEG' : 'PNG'
         doc.addImage(logoBase64, imageType, 15, headerY, 28, 16)
       } catch (imgError) {
         logger.error('[PDF] Error adding logo image:', imgError)
       }
     }
-    
+
     // Invoice details box - reduced height and smaller font, very light border
     drawCard(doc, 130, headerY - 1, 65, 18, DESIGN_SYSTEM.COLORS.bgWhite, [230, 230, 230], DESIGN_SYSTEM.BORDER.radiusSm, 0.2)
-    
+
     setTextStyle(doc, 'sectionLabel')
     doc.text('Invoice No:', 135, headerY + 7)
     doc.text('Date:', 135, headerY + 11.5)
-    
+
     setTextStyle(doc, 'regular')
     doc.text(invoiceNumber, 190, headerY + 7, { align: 'right' })
     doc.text(issueDate, 190, headerY + 11.5, { align: 'right' })
@@ -380,13 +380,13 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
 
     // From (Supplier) Card - reduced height and tighter spacing, very light border
     drawCard(doc, 15, cardY, 88, 34, DESIGN_SYSTEM.COLORS.bgWhite, [230, 230, 230], DESIGN_SYSTEM.BORDER.radiusSm, 0.2)
-    
+
     setTextStyle(doc, 'sectionLabel')
     doc.text('FROM', 20, cardY + 5)
-    
+
     setTextStyle(doc, 'primaryName')
     doc.text(companyName, 20, cardY + 11)
-    
+
     setTextStyle(doc, 'secondaryLine')
     doc.text('Car Rental Services', 20, cardY + 16)
     doc.text('Dubai, United Arab Emirates', 20, cardY + 20)
@@ -394,17 +394,17 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
 
     // To (Customer) Card - reduced height and tighter spacing, very light border
     drawCard(doc, 107, cardY, 88, 34, DESIGN_SYSTEM.COLORS.bgWhite, [230, 230, 230], DESIGN_SYSTEM.BORDER.radiusSm, 0.2)
-    
+
     setTextStyle(doc, 'sectionLabel')
     doc.text('BILL TO', 112, cardY + 5)
-    
+
     setTextStyle(doc, 'primaryName')
     doc.text(customer?.name || 'N/A', 112, cardY + 11)
-    
+
     setTextStyle(doc, 'secondaryLine')
     doc.text(customer?.email || 'N/A', 112, cardY + 16)
     doc.text(customer?.phone || 'N/A', 112, cardY + 20)
-    
+
     if (vehicle) {
       setTextStyle(doc, 'secondaryLine')
       // Combine plate and vehicle info into 2 lines max
@@ -421,12 +421,12 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
     doc.setDrawColor(230, 230, 230)
     doc.setLineWidth(0.2)
     doc.roundedRect(15, bannerY, 180, 8, DESIGN_SYSTEM.BORDER.radiusSm, DESIGN_SYSTEM.BORDER.radiusSm, 'D')
-    
+
     // Payment Due and Status on same baseline with fontSize 8, with spacing
     setTextStyle(doc, 'regular')
     doc.setFontSize(8)
     doc.text(`Payment Due: ${dueDate}`, 20, bannerY + 5)
-    
+
     setTextStyle(doc, 'secondaryLine')
     doc.setFontSize(8)
     doc.text(`Status: ${status}`, 185, bannerY + 5, { align: 'right' }) // Moved from 190 to 185 for more space
@@ -434,7 +434,7 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
     // ============= MODERN TABLE =============
     const items = invoiceData.items || []
     const tableStartY = bannerY + 12 // Adjusted: bannerY + 8 (banner height) + 4 (spacing)
-    
+
     const subtotal = invoiceData.subtotal || 0
     const taxAmount = invoiceData.taxAmount || 0
     const vatPercent = subtotal > 0 ? ((taxAmount / subtotal) * 100).toFixed(0) : '0'
@@ -443,7 +443,7 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
       const itemSubtotal = Math.abs(item.amount)
       const itemVAT = (itemSubtotal * parseFloat(vatPercent)) / 100
       const itemTotal = itemSubtotal + itemVAT
-      
+
       return [
         String(index + 1),
         item.label,
@@ -498,7 +498,7 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
     // Try to use Poppins font, fallback silently if autoTable doesn't support it
     try {
       if (typeof (doc as any).autoTable === 'function' && autoTableFn === (doc as any).autoTable.bind(doc)) {
-        ;(doc as any).autoTable(autoTableOptions)
+        ; (doc as any).autoTable(autoTableOptions)
       } else {
         autoTableFn(doc, autoTableOptions)
       }
@@ -513,7 +513,7 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
           bodyStyles: { ...autoTableOptions.bodyStyles, font: undefined },
         }
         if (typeof (doc as any).autoTable === 'function' && autoTableFn === (doc as any).autoTable.bind(doc)) {
-          ;(doc as any).autoTable(fallbackOptions)
+          ; (doc as any).autoTable(fallbackOptions)
         } else {
           autoTableFn(doc, fallbackOptions)
         }
@@ -529,7 +529,7 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
 
     // Totals box - minimal white with light border
     drawCard(doc, 125, totalsY, 70, 24, DESIGN_SYSTEM.COLORS.bgWhite, [230, 230, 230], DESIGN_SYSTEM.BORDER.radiusSm, 0.2)
-    
+
     // Subtotal - muted label with bold value
     setTextStyle(doc, 'secondaryLine')
     doc.text('Subtotal:', 130, totalsY + 6)
@@ -560,7 +560,7 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
       doc.setFont('helvetica', 'bold')
     }
     doc.text('TOTAL:', 130, totalsY + 20)
-    
+
     // Total amount in black and bold
     setTextStyle(doc, 'totalNumber')
     doc.setTextColor(...DESIGN_SYSTEM.COLORS.textPrimary)
@@ -573,22 +573,22 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
 
     // ============= FOOTER =============
     const footerY = 270 // Pulled up from 280
-    
+
     doc.setDrawColor(230, 230, 230)
     doc.setLineWidth(0.2)
     doc.line(15, footerY - DESIGN_SYSTEM.SPACING.sm, 195, footerY - DESIGN_SYSTEM.SPACING.sm)
-    
+
     setTextStyle(doc, 'secondaryLine')
     doc.text('1606, Empire Heights Tower B, Business Bay, Dubai', 105, footerY, {
       align: 'center',
     })
-    doc.text('+971 58 684 0296, +971 58 617 4112', 105, footerY + 5, {
+    doc.text('+971 58 617 4112', 105, footerY + 5, {
       align: 'center',
     })
     doc.text('https://apexridecarrental.com/', 105, footerY + 10, {
       align: 'center',
     })
-    
+
     setTextStyle(doc, 'secondaryLine')
     doc.setFontSize(7) // Smaller for page number
     doc.text('Page 1 of 1', 195, 290, { align: 'right' })
@@ -713,11 +713,11 @@ export async function generateInvestorPayoutPDF(payoutId: string): Promise<Buffe
     // White background
     doc.setFillColor(...DESIGN_SYSTEM.COLORS.bgWhite)
     doc.rect(0, 0, 210, 42, 'F')
-    
+
     // Thin accent bar at top
     doc.setFillColor(...DESIGN_SYSTEM.COLORS.accent)
     doc.rect(0, 0, 210, 2, 'F')
-    
+
     setTextStyle(doc, 'title')
     doc.text('INVESTOR', 20, 18)
     doc.setFontSize(19) // Slightly larger for second line
@@ -737,15 +737,15 @@ export async function generateInvestorPayoutPDF(payoutId: string): Promise<Buffe
     const generatedDate = format(new Date(), 'MMM dd, yyyy HH:mm')
 
     drawCard(doc, 130, 8, 65, 28, DESIGN_SYSTEM.COLORS.bgWhite, [230, 230, 230], DESIGN_SYSTEM.BORDER.radiusMd, 0.2)
-    
+
     setTextStyle(doc, 'sectionLabel')
     doc.text('PERIOD', 162.5, 13, { align: 'center' })
-    
+
     setTextStyle(doc, 'secondaryLine')
     doc.text(`${periodFrom}`, 162.5, 18, { align: 'center' })
     doc.text('to', 162.5, 22, { align: 'center' })
     doc.text(`${periodTo}`, 162.5, 26, { align: 'center' })
-    
+
     // Status badge - smaller and more subtle
     const statusColor = status === 'PAID' ? [34, 197, 94] : status === 'PENDING' ? DESIGN_SYSTEM.COLORS.accent : DESIGN_SYSTEM.COLORS.textMuted
     doc.setFillColor(statusColor[0], statusColor[1], statusColor[2])
@@ -759,17 +759,17 @@ export async function generateInvestorPayoutPDF(payoutId: string): Promise<Buffe
 
     // Investor card - reduced height by 20% (40 -> 32), very light border
     drawCard(doc, 15, startY, 90, 32, DESIGN_SYSTEM.COLORS.bgWhite, [230, 230, 230], DESIGN_SYSTEM.BORDER.radiusMd, 0.2)
-    
+
     // Header strip - subtle bgSoft
     doc.setFillColor(...DESIGN_SYSTEM.COLORS.bgSoft)
     doc.roundedRect(15, startY, 90, 6, DESIGN_SYSTEM.BORDER.radiusMd, DESIGN_SYSTEM.BORDER.radiusMd, 'F')
-    
+
     setTextStyle(doc, 'sectionLabel')
     doc.text('INVESTOR INFORMATION', 20, startY + 4)
 
     setTextStyle(doc, 'primaryName')
     doc.text(investorUser?.name || 'N/A', 20, startY + 12)
-    
+
     setTextStyle(doc, 'secondaryLine')
     if (investor?.companyName) {
       doc.text(investor.companyName, 20, startY + 17)
@@ -782,11 +782,11 @@ export async function generateInvestorPayoutPDF(payoutId: string): Promise<Buffe
     // Bank details card - reduced height by 20% (40 -> 32), very light border
     if (investor) {
       drawCard(doc, 110, startY, 85, 32, DESIGN_SYSTEM.COLORS.bgWhite, [230, 230, 230], DESIGN_SYSTEM.BORDER.radiusMd, 0.2)
-      
+
       // Subtle header with bgSoft instead of yellow
       doc.setFillColor(...DESIGN_SYSTEM.COLORS.bgSoft)
       doc.roundedRect(110, startY, 85, 6, DESIGN_SYSTEM.BORDER.radiusMd, DESIGN_SYSTEM.BORDER.radiusMd, 'F')
-      
+
       setTextStyle(doc, 'sectionLabel')
       doc.text('BANK DETAILS', 115, startY + 4)
 
@@ -801,21 +801,21 @@ export async function generateInvestorPayoutPDF(payoutId: string): Promise<Buffe
 
     // ============= PAYOUT SUMMARY CARD =============
     const summaryY = startY + 38 // Reduced spacing (was startY + 48)
-    
+
     // Reduced height by 20% (48 -> 38), very light border
     drawCard(doc, 15, summaryY, 180, 38, DESIGN_SYSTEM.COLORS.bgWhite, [230, 230, 230], DESIGN_SYSTEM.BORDER.radiusMd, 0.2)
-    
+
     // Header with subtle bgSoft
     doc.setFillColor(...DESIGN_SYSTEM.COLORS.bgSoft)
     doc.roundedRect(15, summaryY, 180, 8, DESIGN_SYSTEM.BORDER.radiusMd, DESIGN_SYSTEM.BORDER.radiusMd, 'F')
-    
+
     setTextStyle(doc, 'sectionLabel')
     doc.setFontSize(8) // Slightly larger for summary header
     doc.text('PAYOUT SUMMARY', 20, summaryY + 5.5)
 
     // Summary rows with tighter spacing
     setTextStyle(doc, 'secondaryLine')
-    
+
     // Total Revenue
     doc.text('Total Revenue:', 20, summaryY + 15)
     setTextStyle(doc, 'regular')
@@ -836,11 +836,11 @@ export async function generateInvestorPayoutPDF(payoutId: string): Promise<Buffe
     // Net Payout - subtle bgSoft row with thin accent line on the left
     doc.setFillColor(...DESIGN_SYSTEM.COLORS.bgSoft)
     doc.roundedRect(15, summaryY + 28, 180, 8, DESIGN_SYSTEM.BORDER.radiusSm, DESIGN_SYSTEM.BORDER.radiusSm, 'F')
-    
+
     // Thin accent line on the left
     doc.setFillColor(...DESIGN_SYSTEM.COLORS.accent)
     doc.rect(15, summaryY + 28, 2, 8, 'F')
-    
+
     setTextStyle(doc, 'regular')
     try {
       doc.setFont('Poppins', 'bold')
@@ -848,7 +848,7 @@ export async function generateInvestorPayoutPDF(payoutId: string): Promise<Buffe
       doc.setFont('helvetica', 'bold')
     }
     doc.text('NET PAYOUT', 20, summaryY + 33)
-    
+
     // Net payout amount in accent color and bold
     setTextStyle(doc, 'totalNumber')
     doc.setTextColor(...DESIGN_SYSTEM.COLORS.accent)
@@ -866,11 +866,11 @@ export async function generateInvestorPayoutPDF(payoutId: string): Promise<Buffe
       // Section header with icon-style design
       doc.setFillColor(...DESIGN_SYSTEM.COLORS.bgSoft)
       doc.roundedRect(15, tableStartY - 10, 180, 8, DESIGN_SYSTEM.BORDER.radiusSm, DESIGN_SYSTEM.BORDER.radiusSm, 'F')
-      
+
       setTextStyle(doc, 'sectionLabel')
       doc.setFontSize(8) // Slightly larger for section header
       doc.text('VEHICLE BREAKDOWN', 20, tableStartY - 5)
-      
+
       setTextStyle(doc, 'secondaryLine')
       doc.text(`${breakdown.length} vehicle(s)`, 190, tableStartY - 5, { align: 'right' })
 
@@ -923,7 +923,7 @@ export async function generateInvestorPayoutPDF(payoutId: string): Promise<Buffe
       // Try to use Poppins font, fallback silently if autoTable doesn't support it
       try {
         if (typeof (doc as any).autoTable === 'function' && autoTableFn === (doc as any).autoTable.bind(doc)) {
-          ;(doc as any).autoTable(autoTableOptions)
+          ; (doc as any).autoTable(autoTableOptions)
         } else {
           autoTableFn(doc, autoTableOptions)
         }
@@ -938,7 +938,7 @@ export async function generateInvestorPayoutPDF(payoutId: string): Promise<Buffe
             bodyStyles: { ...autoTableOptions.bodyStyles, font: undefined },
           }
           if (typeof (doc as any).autoTable === 'function' && autoTableFn === (doc as any).autoTable.bind(doc)) {
-            ;(doc as any).autoTable(fallbackOptions)
+            ; (doc as any).autoTable(fallbackOptions)
           } else {
             autoTableFn(doc, fallbackOptions)
           }
@@ -950,16 +950,16 @@ export async function generateInvestorPayoutPDF(payoutId: string): Promise<Buffe
 
     // ============= PAYMENT INFORMATION =============
     const paymentY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 15 : tableStartY + 50
-    
+
     if (payoutData.payment) {
       const payment = payoutData.payment
-      
+
       doc.setFillColor(236, 253, 245)
       doc.roundedRect(15, paymentY, 180, 28, 3, 3, 'F')
       doc.setDrawColor(167, 243, 208)
       doc.setLineWidth(0.3)
       doc.roundedRect(15, paymentY, 180, 28, 3, 3, 'D')
-      
+
       doc.setFontSize(10)
       try {
         doc.setFont('Poppins', 'bold')
@@ -968,7 +968,7 @@ export async function generateInvestorPayoutPDF(payoutId: string): Promise<Buffe
       }
       doc.setTextColor(5, 150, 105)
       doc.text('PAYMENT INFORMATION', 20, paymentY + 7)
-      
+
       doc.setFontSize(8.5)
       try {
         doc.setFont('Poppins', 'normal')
@@ -976,7 +976,7 @@ export async function generateInvestorPayoutPDF(payoutId: string): Promise<Buffe
         doc.setFont('helvetica', 'normal')
       }
       doc.setTextColor(6, 78, 59)
-      
+
       if (payment.method) {
         doc.text(`Method: ${payment.method}`, 20, paymentY + 15)
       }
@@ -993,11 +993,11 @@ export async function generateInvestorPayoutPDF(payoutId: string): Promise<Buffe
 
     // ============= FOOTER =============
     const footerY = 272
-    
+
     doc.setDrawColor(230, 230, 230)
     doc.setLineWidth(0.2)
     doc.line(15, footerY, 195, footerY)
-    
+
     setTextStyle(doc, 'secondaryLine')
     doc.text('This is an automatically generated payout statement.', 105, footerY + DESIGN_SYSTEM.SPACING.md, { align: 'center' })
     doc.text('For inquiries, please contact us through the CRM system.', 105, footerY + 11, {
@@ -1009,7 +1009,7 @@ export async function generateInvestorPayoutPDF(payoutId: string): Promise<Buffe
     doc.setFontSize(7) // Smaller for notice
     doc.setTextColor(148, 163, 184)
     doc.text('CONFIDENTIAL - For authorized recipients only', 105, footerY + 17, { align: 'center' })
-    
+
     // Page number
     setTextStyle(doc, 'secondaryLine')
     doc.setFontSize(7) // Smaller for page number

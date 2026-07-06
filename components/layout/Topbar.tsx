@@ -243,7 +243,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
             }}
             className="flex items-center gap-3 pl-5 border-l border-borderSoft hover:opacity-80 transition-opacity"
           >
-            <div className="w-10 h-10 bg-sidebarActiveBg rounded-full flex items-center justify-center shadow-sm overflow-hidden">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden">
               <img 
                 src="/logo.png?v=2"
                 alt="Apex Car Rental" 
