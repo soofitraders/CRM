@@ -18,6 +18,12 @@ export default function NewInvestorPage() {
   const [loading, setLoading] = useState(false)
   const [loadingUsers, setLoadingUsers] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isCreatingUser, setIsCreatingUser] = useState(false)
+  const [newUserFormData, setNewUserFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+  })
 
   const [formData, setFormData] = useState({
     userId: '',
@@ -29,7 +35,7 @@ export default function NewInvestorPage() {
     bankName: '',
     iban: '',
     swift: '',
-    payoutFrequency: 'MONTHLY' as 'MONTHLY' | 'QUARTERLY',
+    payoutFrequency: 'MONTHLY' as 'MONTHLY' | 'QUARTERLY' | 'YEARLY',
   })
 
   useEffect(() => {
@@ -70,10 +76,38 @@ export default function NewInvestorPage() {
     setLoading(true)
 
     try {
+      let finalUserId = formData.userId
+
+      if (isCreatingUser) {
+        // Create user first
+        const userRes = await fetch('/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: newUserFormData.name,
+            email: newUserFormData.email,
+            role: 'INVESTOR',
+            status: 'ACTIVE',
+            tempPassword: newUserFormData.password || undefined
+          })
+        })
+        const userData = await userRes.json()
+        if (!userRes.ok) {
+           throw new Error(userData.error || 'Failed to create user')
+        }
+        finalUserId = userData.user._id
+        
+        if (userData.user.tempPassword) {
+          alert(`User created successfully with generated password: ${userData.user.tempPassword}\n\nPlease save this password.`)
+        }
+      }
+
+      const payload = { ...formData, userId: finalUserId }
+
       const response = await fetch('/api/investors', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       })
 
       if (!response.ok) {
@@ -114,101 +148,87 @@ export default function NewInvestorPage() {
         <SectionCard title="Investor Information">
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-bodyText mb-1">
-                User *
-              </label>
-              <select
-                value={formData.userId}
-                onChange={(e) => setFormData({ ...formData, userId: e.target.value })}
-                required
-                disabled={loadingUsers}
-                className="w-full px-3 py-2 bg-cardBg border border-borderSoft rounded text-bodyText disabled:opacity-50"
-              >
-                <option value="">
-                  {loadingUsers ? 'Loading users...' : 'Select User'}
-                </option>
-                {users.map((user) => (
-                  <option key={user._id} value={user._id}>
-                    {user.name} ({user.email})
-                  </option>
-                ))}
-              </select>
-              {!loadingUsers && users.length === 0 && (
-                <p className="text-xs text-red-500 mt-1">
-                  No users found. Please create a user first or check your permissions.
-                </p>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-bodyText">
+                  User *
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsCreatingUser(!isCreatingUser)}
+                  className="text-sm text-sidebarActiveBg hover:underline"
+                >
+                  {isCreatingUser ? 'Select Existing User' : 'Create New User'}
+                </button>
+              </div>
+
+              {isCreatingUser ? (
+                <div className="space-y-4 p-4 border border-borderSoft rounded bg-pageBg/50">
+                  <div>
+                    <label className="block text-sm font-medium text-bodyText mb-1">Name *</label>
+                    <input
+                      type="text"
+                      required={isCreatingUser}
+                      value={newUserFormData.name}
+                      onChange={(e) => setNewUserFormData({...newUserFormData, name: e.target.value})}
+                      className="w-full px-3 py-2 bg-cardBg border border-borderSoft rounded text-bodyText"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-bodyText mb-1">Email *</label>
+                    <input
+                      type="email"
+                      required={isCreatingUser}
+                      value={newUserFormData.email}
+                      onChange={(e) => setNewUserFormData({...newUserFormData, email: e.target.value})}
+                      className="w-full px-3 py-2 bg-cardBg border border-borderSoft rounded text-bodyText"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-bodyText mb-1">Temporary Password</label>
+                    <input
+                      type="text"
+                      value={newUserFormData.password}
+                      onChange={(e) => setNewUserFormData({...newUserFormData, password: e.target.value})}
+                      placeholder="Leave blank to auto-generate"
+                      minLength={8}
+                      className="w-full px-3 py-2 bg-cardBg border border-borderSoft rounded text-bodyText"
+                    />
+                    <p className="text-xs text-sidebarMuted mt-1">
+                      Leave blank to auto-generate a secure password.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <select
+                    value={formData.userId}
+                    onChange={(e) => setFormData({ ...formData, userId: e.target.value })}
+                    required={!isCreatingUser}
+                    disabled={loadingUsers}
+                    className="w-full px-3 py-2 bg-cardBg border border-borderSoft rounded text-bodyText disabled:opacity-50"
+                  >
+                    <option value="">
+                      {loadingUsers ? 'Loading users...' : 'Select User'}
+                    </option>
+                    {users.map((user) => (
+                      <option key={user._id} value={user._id}>
+                        {user.name} ({user.email})
+                      </option>
+                    ))}
+                  </select>
+                  {!loadingUsers && users.length === 0 && (
+                    <p className="text-xs text-red-500 mt-1">
+                      No users found. Please create a user first or check your permissions.
+                    </p>
+                  )}
+                  <p className="text-xs text-sidebarMuted mt-1">
+                    Select the user account for this investor. If the user doesn&apos;t exist, create one above.
+                  </p>
+                </>
               )}
-              <p className="text-xs text-sidebarMuted mt-1">
-                Select the user account for this investor. If the user doesn&apos;t exist, create one first.
-              </p>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-bodyText mb-1">
-                Type *
-              </label>
-              <select
-                value={formData.type}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    type: e.target.value as 'INDIVIDUAL' | 'COMPANY',
-                  })
-                }
-                required
-                className="w-full px-3 py-2 bg-cardBg border border-borderSoft rounded text-bodyText"
-              >
-                <option value="INDIVIDUAL">Individual</option>
-                <option value="COMPANY">Company</option>
-              </select>
-            </div>
 
-            {formData.type === 'COMPANY' && (
-              <div>
-                <label className="block text-sm font-medium text-bodyText mb-1">
-                  Company Name *
-                </label>
-                <input
-                  type="text"
-                  value={formData.companyName}
-                  onChange={(e) =>
-                    setFormData({ ...formData, companyName: e.target.value })
-                  }
-                  required={formData.type === 'COMPANY'}
-                  className="w-full px-3 py-2 bg-cardBg border border-borderSoft rounded text-bodyText"
-                />
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-bodyText mb-1">
-                  Trade License Number
-                </label>
-                <input
-                  type="text"
-                  value={formData.tradeLicenseNumber}
-                  onChange={(e) =>
-                    setFormData({ ...formData, tradeLicenseNumber: e.target.value })
-                  }
-                  className="w-full px-3 py-2 bg-cardBg border border-borderSoft rounded text-bodyText"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-bodyText mb-1">
-                  Tax ID *
-                </label>
-                <input
-                  type="text"
-                  value={formData.taxId}
-                  onChange={(e) =>
-                    setFormData({ ...formData, taxId: e.target.value })
-                  }
-                  required
-                  className="w-full px-3 py-2 bg-cardBg border border-borderSoft rounded text-bodyText"
-                />
-              </div>
-            </div>
 
             <div>
               <label className="block text-sm font-medium text-bodyText mb-1">
@@ -219,7 +239,7 @@ export default function NewInvestorPage() {
                 onChange={(e) =>
                   setFormData({
                     ...formData,
-                    payoutFrequency: e.target.value as 'MONTHLY' | 'QUARTERLY',
+                    payoutFrequency: e.target.value as 'MONTHLY' | 'QUARTERLY' | 'YEARLY',
                   })
                 }
                 required
@@ -227,6 +247,7 @@ export default function NewInvestorPage() {
               >
                 <option value="MONTHLY">Monthly</option>
                 <option value="QUARTERLY">Quarterly</option>
+                <option value="YEARLY">Yearly</option>
               </select>
             </div>
           </div>
@@ -236,7 +257,7 @@ export default function NewInvestorPage() {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-bodyText mb-1">
-                Bank Account Name *
+                Bank Account Name
               </label>
               <input
                 type="text"
@@ -244,14 +265,13 @@ export default function NewInvestorPage() {
                 onChange={(e) =>
                   setFormData({ ...formData, bankAccountName: e.target.value })
                 }
-                required
                 className="w-full px-3 py-2 bg-cardBg border border-borderSoft rounded text-bodyText"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-bodyText mb-1">
-                Bank Name *
+                Bank Name
               </label>
               <input
                 type="text"
@@ -259,7 +279,6 @@ export default function NewInvestorPage() {
                 onChange={(e) =>
                   setFormData({ ...formData, bankName: e.target.value })
                 }
-                required
                 className="w-full px-3 py-2 bg-cardBg border border-borderSoft rounded text-bodyText"
               />
             </div>
@@ -267,7 +286,7 @@ export default function NewInvestorPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-bodyText mb-1">
-                  IBAN *
+                  IBAN
                 </label>
                 <input
                   type="text"
@@ -275,13 +294,12 @@ export default function NewInvestorPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, iban: e.target.value.toUpperCase() })
                   }
-                  required
                   className="w-full px-3 py-2 bg-cardBg border border-borderSoft rounded text-bodyText font-mono"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-bodyText mb-1">
-                  SWIFT Code *
+                  SWIFT Code
                 </label>
                 <input
                   type="text"
@@ -289,7 +307,6 @@ export default function NewInvestorPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, swift: e.target.value.toUpperCase() })
                   }
-                  required
                   className="w-full px-3 py-2 bg-cardBg border border-borderSoft rounded text-bodyText font-mono"
                 />
               </div>

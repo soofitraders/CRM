@@ -1,18 +1,18 @@
 import mongoose, { Schema, Document, Model } from 'mongoose'
 
 export type InvestorType = 'INDIVIDUAL' | 'COMPANY'
-export type PayoutFrequency = 'MONTHLY' | 'QUARTERLY'
+export type PayoutFrequency = 'MONTHLY' | 'QUARTERLY' | 'YEARLY'
 
 export interface IInvestorProfile extends Document {
   user: mongoose.Types.ObjectId
-  type: InvestorType
+  type?: InvestorType
   companyName?: string
   tradeLicenseNumber?: string
-  taxId: string
-  bankAccountName: string
-  bankName: string
-  iban: string
-  swift: string
+  taxId?: string
+  bankAccountName?: string
+  bankName?: string
+  iban?: string
+  swift?: string
   payoutFrequency: PayoutFrequency
   documents: mongoose.Types.ObjectId[]
   createdAt: Date
@@ -30,13 +30,9 @@ const InvestorProfileSchema = new Schema<IInvestorProfile>(
     type: {
       type: String,
       enum: ['INDIVIDUAL', 'COMPANY'],
-      required: [true, 'Investor type is required'],
     },
     companyName: {
       type: String,
-      required: function(this: IInvestorProfile) {
-        return this.type === 'COMPANY'
-      },
       trim: true,
     },
     tradeLicenseNumber: {
@@ -45,34 +41,29 @@ const InvestorProfileSchema = new Schema<IInvestorProfile>(
     },
     taxId: {
       type: String,
-      required: [true, 'Tax ID is required'],
       trim: true,
     },
     bankAccountName: {
       type: String,
-      required: [true, 'Bank account name is required'],
       trim: true,
     },
     bankName: {
       type: String,
-      required: [true, 'Bank name is required'],
       trim: true,
     },
     iban: {
       type: String,
-      required: [true, 'IBAN is required'],
       trim: true,
       uppercase: true,
     },
     swift: {
       type: String,
-      required: [true, 'SWIFT code is required'],
       trim: true,
       uppercase: true,
     },
     payoutFrequency: {
       type: String,
-      enum: ['MONTHLY', 'QUARTERLY'],
+      enum: ['MONTHLY', 'QUARTERLY', 'YEARLY'],
       required: [true, 'Payout frequency is required'],
       default: 'MONTHLY',
     },

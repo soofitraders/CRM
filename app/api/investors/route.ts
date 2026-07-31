@@ -69,9 +69,9 @@ export async function POST(request: NextRequest) {
     } = body
 
     // Validate required fields
-    if (!userId || !type || !taxId || !bankAccountName || !bankName || !iban || !swift) {
+    if (!userId) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'User ID is required' },
         { status: 400 }
       )
     }
@@ -108,8 +108,8 @@ export async function POST(request: NextRequest) {
       taxId,
       bankAccountName,
       bankName,
-      iban: iban.toUpperCase(),
-      swift: swift.toUpperCase(),
+      iban: iban?.toUpperCase(),
+      swift: swift?.toUpperCase(),
       payoutFrequency: payoutFrequency || 'MONTHLY',
     })
 

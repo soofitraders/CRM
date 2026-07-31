@@ -6,6 +6,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { createBookingSchema, CreateBookingInput } from '@/lib/validation/booking'
 import { Calendar, X, Search, ChevronDown } from 'lucide-react'
 import { logger } from '@/lib/utils/logger'
+import CustomerForm from '@/components/customers/CustomerForm'
+import { CreateCustomerInput } from '@/lib/validation/customer'
 
 interface BookingFormProps {
   initialData?: Partial<CreateBookingInput>
@@ -45,6 +47,8 @@ export default function BookingForm({
   const [vehicleSearchTerm, setVehicleSearchTerm] = useState('')
   const [showVehicleDropdown, setShowVehicleDropdown] = useState(false)
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
+  const [showCustomerModal, setShowCustomerModal] = useState(false)
+  const [isCreatingCustomer, setIsCreatingCustomer] = useState(false)
   const vehicleDropdownRef = useRef<HTMLDivElement>(null)
   const customerDropdownRef = useRef<HTMLDivElement>(null)
 
@@ -167,6 +171,32 @@ export default function BookingForm({
     setVehicleSearchTerm('')
   }
 
+  const handleCreateCustomer = async (data: CreateCustomerInput) => {
+    setIsCreatingCustomer(true)
+    try {
+      const response = await fetch('/api/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to create customer')
+      }
+      
+      const newCustomer = await response.json()
+      
+      setCustomers((prev) => [...prev, newCustomer.customer])
+      setValue('customer', newCustomer.customer._id)
+      setShowCustomerModal(false)
+    } catch (error: any) {
+      alert(error.message || 'Failed to create customer')
+    } finally {
+      setIsCreatingCustomer(false)
+    }
+  }
+
   const onFormSubmit = async (data: CreateBookingInput) => {
     // Include mileage in the submission
     const formData = { ...data } as any
@@ -178,6 +208,7 @@ export default function BookingForm({
   }
 
   return (
+    <>
     <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Vehicle */}
@@ -277,9 +308,18 @@ export default function BookingForm({
 
         {/* Customer */}
         <div>
-          <label className="block text-sm font-medium text-headingText mb-2">
-            Customer *
-          </label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-sm font-medium text-headingText">
+              Customer *
+            </label>
+            <button
+              type="button"
+              onClick={() => setShowCustomerModal(true)}
+              className="text-sm text-sidebarActiveBg hover:underline"
+            >
+              Create New Customer
+            </button>
+          </div>
           <div className="relative" ref={customerDropdownRef}>
             <input type="hidden" {...register('customer')} />
             <button
@@ -551,6 +591,31 @@ export default function BookingForm({
         </button>
       </div>
     </form>
+
+    {showCustomerModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 overflow-y-auto p-4 backdrop-blur-sm">
+        <div className="bg-cardBg p-6 rounded-lg w-full max-w-4xl m-4 border border-borderSoft shadow-xl max-h-[90vh] overflow-y-auto">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h2 className="text-xl font-bold text-headingText">Create New Customer</h2>
+              <p className="text-sm text-bodyText mt-1">Add a new customer to the system</p>
+            </div>
+            <button 
+              onClick={() => setShowCustomerModal(false)}
+              className="p-2 hover:bg-pageBg rounded-lg transition-colors text-bodyText"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <CustomerForm 
+            onSubmit={handleCreateCustomer} 
+            onCancel={() => setShowCustomerModal(false)}
+            isLoading={isCreatingCustomer}
+          />
+        </div>
+      </div>
+    )}
+    </>
   )
 }
 
