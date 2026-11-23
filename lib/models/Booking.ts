@@ -15,7 +15,7 @@ export interface IBooking extends Document {
   dropoffBranch: string
   status: BookingStatus
   rentalType: RentalType
-  /** Price per rental unit: per day (DAILY), per week (WEEKLY) or per month (MONTHLY) */
+  /** Price per day, for every rental type */
   baseRate: number
   discounts: number
   taxPercent?: number
