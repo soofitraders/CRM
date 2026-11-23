@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/authOptions'
 import connectDB from '@/lib/db'
 import Vehicle from '@/lib/models/Vehicle'
 import Booking from '@/lib/models/Booking'
+import { BLOCKING_STATUSES, overlapFilter } from '@/lib/services/bookingAvailability'
 // Import models to ensure they're registered with Mongoose before populate
 import InvestorProfile from '@/lib/models/InvestorProfile'
 import User from '@/lib/models/User'
@@ -54,6 +55,26 @@ export async function GET(request: NextRequest) {
 
     if (query.status) {
       filter.status = query.status
+    }
+
+    // "Bookable" mode (used by the booking form's car picker): every car that is not
+    // INACTIVE and has no active booking overlapping the chosen dates. Unlike the old
+    // AVAILABLE filter, a car with a booking next year is still offered for free dates.
+    if (searchParams.get('bookable') === 'true') {
+      filter.status = { $ne: 'INACTIVE' }
+      const from = searchParams.get('from') ? new Date(searchParams.get('from') as string) : null
+      const to = searchParams.get('to') ? new Date(searchParams.get('to') as string) : null
+      const excludeBooking = searchParams.get('excludeBooking')
+      if (from && !isNaN(from.getTime())) {
+        const clashing: any = {
+          status: { $in: BLOCKING_STATUSES },
+          ...overlapFilter(from, to && !isNaN(to.getTime()) && to > from ? to : null),
+        }
+        if (excludeBooking && /^[0-9a-fA-F]{24}$/.test(excludeBooking)) clashing._id = { $ne: excludeBooking }
+        const busy = await Booking.find(clashing).select('vehicle').lean()
+        const busyIds = Array.from(new Set(busy.map((b: any) => String(b.vehicle))))
+        if (busyIds.length > 0) filter._id = { $nin: busyIds }
+      }
     }
 
     if (query.ownershipType) {

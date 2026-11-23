@@ -1,5 +1,6 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
+import { getCurrentUser, hasRole } from '@/lib/auth';
 import connectDB from '@/lib/db';
 import { NextResponse } from 'next/server';
 import LedgerEntry from '@/lib/models/LedgerEntry';
@@ -27,6 +28,13 @@ export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    // Changing the ledger is a finance action: only these roles may do it
+    // (everyone else is refused, whatever else they can see).
+    const ledgerUser = await getCurrentUser();
+    if (!hasRole(ledgerUser, ['SUPER_ADMIN', 'ADMIN', 'FINANCE'])) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     await connectDB();
 

@@ -3,6 +3,58 @@ import Invoice from '@/lib/models/Invoice'
 import Booking from '@/lib/models/Booking'
 import Settings from '@/lib/models/Settings'
 import { logger } from '@/lib/utils/performance'
+import mongoose from 'mongoose'
+import {
+  calculateBookingAmounts,
+  bookingTaxPercent,
+  formatRentalUnits,
+  rentalUnitName,
+} from '@/lib/utils/bookingPricing'
+
+/**
+ * Find the existing invoice for a booking (if any).
+ *
+ * Older invoices were saved with the booking reference as TEXT instead of an
+ * ObjectId (raw insertOne skips Mongoose casting), and Mongoose casts query
+ * values to ObjectId, so `Invoice.findOne({ booking: id })` never matched them.
+ * Query the raw collection for BOTH representations so duplicates can't slip in.
+ */
+async function findInvoiceForBooking(bookingId: string): Promise<any | null> {
+  const raw = await Invoice.collection.findOne(
+    { booking: { $in: [new mongoose.Types.ObjectId(bookingId), String(bookingId)] } as any },
+    { sort: { _id: 1 } }
+  )
+  return raw ? Invoice.findById(raw._id) : null
+}
+
+/**
+ * A cancelled booking must not keep an open invoice (it would still count as sales
+ * and as money the customer owes).
+ *
+ *  - ISSUED / DRAFT invoices are set to VOID.
+ *  - A PAID invoice cannot be voided (money was received); the caller must stop the
+ *    cancellation and ask for a refund to be handled first.
+ */
+export async function getPaidInvoiceForBooking(bookingId: string): Promise<any | null> {
+  await connectDB()
+  return Invoice.collection.findOne({
+    booking: { $in: [new mongoose.Types.ObjectId(bookingId), String(bookingId)] } as any,
+    status: 'PAID',
+  })
+}
+
+export async function voidOpenInvoicesForBooking(bookingId: string): Promise<string[]> {
+  await connectDB()
+  const filter: any = {
+    booking: { $in: [new mongoose.Types.ObjectId(bookingId), String(bookingId)] },
+    status: { $in: ['ISSUED', 'DRAFT'] },
+  }
+  const open = await Invoice.collection.find(filter).toArray()
+  if (open.length > 0) {
+    await Invoice.collection.updateMany(filter, { $set: { status: 'VOID', updatedAt: new Date() } })
+  }
+  return open.map((i: any) => String(i.invoiceNumber))
+}
 
 /**
  * Generate a unique invoice number
@@ -38,7 +90,7 @@ export async function createInvoiceFromBooking(bookingId: string): Promise<any> 
     await connectDB()
 
     // Check if invoice already exists for this booking
-    const existingInvoice = await Invoice.findOne({ booking: bookingId })
+    const existingInvoice = await findInvoiceForBooking(bookingId)
     if (existingInvoice) {
       return existingInvoice
     }
@@ -58,32 +110,26 @@ export async function createInvoiceFromBooking(bookingId: string): Promise<any> 
       throw new Error('Vehicle not found')
     }
 
-    // Calculate number of days based on hours (24 hours = 1 day)
-    let numberOfDays = 1 // Default to 1 day if no end date
-    if (booking.endDateTime) {
-      const startDate = new Date(booking.startDateTime)
-      const endDate = new Date(booking.endDateTime)
-      const diffTime = endDate.getTime() - startDate.getTime()
-      const diffHours = diffTime / (1000 * 60 * 60)
-      numberOfDays = Math.max(1, Math.ceil(diffHours / 24))
-    }
-
-    // Use the booking's baseRate (entered during booking creation) instead of vehicle rates
-    // baseRate is the rate per day/period that was set when creating the booking
-    const baseRate = booking.baseRate || 0
-    
-    // Calculate line total: Base Rate × Number of Days
-    // This uses the rate that was specifically set for this booking
-    const lineTotal = baseRate * numberOfDays
-    
-    // Calculate effective daily rate for display purposes
-    const effectiveDailyRate = numberOfDays > 0 ? lineTotal / numberOfDays : baseRate
+    // The booking is the single source of truth for the price. The invoice is
+    // built from the same calculation the booking uses: base rate is the price
+    // per rental unit (day / week / month), units come from the rental type and
+    // the start/end dates.
+    const taxPercent = bookingTaxPercent(booking as any)
+    const amounts = calculateBookingAmounts({
+      rentalType: booking.rentalType as any,
+      baseRate: booking.baseRate || 0,
+      discounts: booking.discounts || 0,
+      taxPercent,
+      startDateTime: booking.startDateTime,
+      endDateTime: booking.endDateTime,
+    })
+    const lineTotal = amounts.rentalAmount
 
     // Calculate invoice items
     // Note: We use positive amounts and calculate subtotal separately to avoid validation issues
     const items = [
       {
-        label: `Rental - ${vehicle.brand || ''} ${vehicle.model || ''} (${booking.rentalType}) - ${numberOfDays} day${numberOfDays !== 1 ? 's' : ''} @ ${effectiveDailyRate.toFixed(2)} AED/day`,
+        label: `Rental - ${vehicle.brand || ''} ${vehicle.model || ''} (${booking.rentalType}) - ${formatRentalUnits(booking.rentalType as any, amounts.units)} @ ${(booking.baseRate || 0).toFixed(2)} AED/${rentalUnitName(booking.rentalType as any)}`,
         amount: lineTotal,
       },
     ]
@@ -118,10 +164,8 @@ export async function createInvoiceFromBooking(bookingId: string): Promise<any> 
     const taxableSubtotal = taxableItems.reduce((sum, item) => sum + item.amount, 0)
     
     // VAT is calculated on the taxable subtotal (rental - discounts, excluding deposits)
-    // Get VAT rate from settings (defaultTaxPercent) or use default 5%
-    const settings = await Settings.findOne().lean()
-    const vatRate = settings?.defaultTaxPercent || 5
-    const taxAmount = Math.max(0, (taxableSubtotal * vatRate) / 100)
+    // using the SAME tax percent the booking was priced with (so totals match).
+    const taxAmount = Math.max(0, Math.round(((taxableSubtotal * taxPercent) / 100) * 100) / 100)
     
     // Calculate final subtotal including all items (rental - discount - deposit)
     const finalSubtotal = items.reduce((sum, item) => sum + item.amount, 0)
@@ -135,13 +179,11 @@ export async function createInvoiceFromBooking(bookingId: string): Promise<any> 
     const dueDate = new Date(issueDate)
     dueDate.setDate(dueDate.getDate() + 30) // 30 days payment terms
 
-    // Generate invoice number
-    const invoiceNumber = await generateInvoiceNumber()
-
     // Create invoice document
-    const invoiceData = {
-      booking: bookingId,
-      invoiceNumber,
+    // NOTE: booking MUST be an ObjectId (raw insertOne does not cast it).
+    const invoiceData: any = {
+      booking: new mongoose.Types.ObjectId(bookingId),
+      invoiceNumber: '',
       issueDate,
       dueDate,
       transactionMethod: 'CASH' as const,
@@ -154,10 +196,36 @@ export async function createInvoiceFromBooking(bookingId: string): Promise<any> 
       updatedAt: new Date(),
     }
 
-    // Use insertOne to bypass Mongoose validation that might block negative amounts
-    const result = await Invoice.collection.insertOne(invoiceData)
-    const invoice = await Invoice.findById(result.insertedId)
-    
+    // Use insertOne to bypass Mongoose validation that might block negative amounts.
+    // Invoice numbers are "last + 1", so two simultaneous requests can pick the
+    // same number: retry with a fresh number if the unique index rejects it.
+    let insertedId: any = null
+    for (let attempt = 0; attempt < 5; attempt++) {
+      invoiceData.invoiceNumber = await generateInvoiceNumber()
+      try {
+        const result = await Invoice.collection.insertOne({ ...invoiceData })
+        insertedId = result.insertedId
+        break
+      } catch (insertError: any) {
+        const dupNumber = insertError?.code === 11000 && insertError?.keyPattern?.invoiceNumber
+        if (!dupNumber || attempt === 4) throw insertError
+      }
+    }
+
+    // Two simultaneous confirms can both pass the "already exists" check above.
+    // The invoice with the lowest _id wins; any later one is removed again.
+    const allForBooking = await Invoice.collection
+      .find({ booking: { $in: [invoiceData.booking, String(bookingId)] } as any })
+      .sort({ _id: 1 })
+      .toArray()
+    if (allForBooking.length > 1 && String(allForBooking[0]._id) !== String(insertedId)) {
+      await Invoice.collection.deleteOne({ _id: insertedId })
+      const winner = await Invoice.findById(allForBooking[0]._id)
+      if (winner) return winner
+    }
+
+    const invoice = await Invoice.findById(insertedId)
+
     if (!invoice) {
       throw new Error('Failed to create invoice')
     }
@@ -190,7 +258,7 @@ export async function createCustomInvoice(data: {
     await connectDB()
 
     // Check if invoice already exists for this booking
-    const existingInvoice = await Invoice.findOne({ booking: data.bookingId })
+    const existingInvoice = await findInvoiceForBooking(data.bookingId)
     if (existingInvoice) {
       throw new Error('Invoice already exists for this booking')
     }

@@ -4,7 +4,6 @@ export const createCustomerSchema = z.object({
   // User fields
   name: z.string().min(1, 'Name is required'),
   email: z.string().email('Invalid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters').optional(),
   
   // CustomerProfile fields
   nationalId: z.string().optional(),
@@ -24,9 +23,7 @@ export const createCustomerSchema = z.object({
   emergencyContactPhone: z.string().min(1, 'Emergency contact phone is required'),
 })
 
-export const updateCustomerSchema = createCustomerSchema.partial().extend({
-  password: z.string().min(6, 'Password must be at least 6 characters').optional(),
-})
+export const updateCustomerSchema = createCustomerSchema.partial()
 
 export const customerQuerySchema = z.object({
   search: z.string().optional(),

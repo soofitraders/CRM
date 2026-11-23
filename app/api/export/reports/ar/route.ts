@@ -48,8 +48,12 @@ export async function GET(request: NextRequest) {
     const exportData = [
       // Summary
       {
-        bucket: '0-30 Days',
-        amount: arData.buckets['0-30'],
+        bucket: 'Current (not yet due)',
+        amount: arData.buckets.current,
+      },
+      {
+        bucket: '1-30 Days overdue',
+        amount: arData.buckets['1-30'],
       },
       {
         bucket: '31-60 Days',

@@ -28,6 +28,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
+    // Investors see their own payouts (below); staff need a finance / admin role
+    if (user.role !== 'INVESTOR' && !hasRole(user, ['SUPER_ADMIN', 'ADMIN', 'FINANCE'])) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     await connectDB()
 
     const searchParams = request.nextUrl.searchParams

@@ -1,5 +1,6 @@
 'use client'
 
+import { statusChoices, statusLabel, toLocalInputValue } from '@/lib/utils/bookingRules'
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import BookingForm from '@/components/bookings/BookingForm'
@@ -245,16 +246,21 @@ export default function EditBookingPage() {
   const canEdit = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'SALES_AGENT'].includes(userRole)
   const canChangePayment = ['SUPER_ADMIN', 'ADMIN', 'FINANCE'].includes(userRole)
 
-  // Calculate tax percent from existing data
-  const subtotal = booking.baseRate - booking.discounts
-  const taxPercent = subtotal > 0 ? (booking.taxes / subtotal) * 100 : 0
+  // Tax percent: stored on newer bookings, otherwise derived from tax / amount-before-tax
+  const beforeTax = (booking.totalAmount || 0) - (booking.taxes || 0)
+  const taxPercent =
+    typeof (booking as any).taxPercent === 'number'
+      ? (booking as any).taxPercent
+      : beforeTax > 0
+        ? Math.round(((booking.taxes || 0) / beforeTax) * 10000) / 100
+        : 0
 
   const initialFormData: Partial<CreateBookingInput> = {
     vehicle: booking.vehicle?._id || '',
     customer: booking.customer?._id || '',
     rentalType: booking.rentalType as any,
-    startDateTime: booking.startDateTime ? new Date(booking.startDateTime).toISOString().slice(0, 16) : '',
-    endDateTime: booking.endDateTime ? new Date(booking.endDateTime).toISOString().slice(0, 16) : '',
+    startDateTime: booking.startDateTime ? toLocalInputValue(booking.startDateTime) : '',
+    endDateTime: booking.endDateTime ? toLocalInputValue(booking.endDateTime) : '',
     pickupBranch: booking.pickupBranch || '',
     dropoffBranch: booking.dropoffBranch || '',
     baseRate: booking.baseRate || 0,
@@ -316,11 +322,12 @@ export default function EditBookingPage() {
                   disabled={isSaving}
                   className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <option value="PENDING">Pending</option>
-                  <option value="CONFIRMED">Confirmed</option>
-                  <option value="CHECKED_OUT">Checked Out</option>
-                  <option value="CHECKED_IN">Checked In</option>
-                  <option value="CANCELLED">Cancelled</option>
+                  {/* only the current status and the steps that may legally follow it */}
+                  {statusChoices(booking.status).map((status) => (
+                    <option key={status} value={status}>
+                      {statusLabel(status)}
+                    </option>
+                  ))}
                 </select>
                 {isSaving && (
                   <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
@@ -365,6 +372,7 @@ export default function EditBookingPage() {
       {canEdit && (
         <SectionCard title="Booking Details">
           <BookingForm
+            bookingId={bookingId}
             initialData={initialFormData}
             onSubmit={handleUpdate as any}
             isLoading={isSaving}

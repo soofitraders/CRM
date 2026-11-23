@@ -101,6 +101,7 @@ const menuSections: MenuSection[] = [
     items: [
       { label: 'Overview', path: '/dashboard', icon: Home },
     ],
+    roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'SALES_AGENT', 'FINANCE', 'OPERATIONS'],
   },
   {
     id: 'bookings',
@@ -110,6 +111,7 @@ const menuSections: MenuSection[] = [
       { label: 'Bookings Overview', path: '/bookings', icon: List },
       { label: 'New Booking', path: '/bookings/new', icon: PlusCircle },
     ],
+    roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'SALES_AGENT', 'FINANCE', 'OPERATIONS'],
   },
   {
     id: 'vehicles',
@@ -120,6 +122,7 @@ const menuSections: MenuSection[] = [
       { label: 'Add New Vehicle', path: '/units/new', icon: PlusCircle },
       { label: 'Vehicle Maintenance', path: '/maintenance', icon: Wrench, roles: ['SUPER_ADMIN', 'ADMIN', 'FINANCE', 'OPERATIONS'] },
     ],
+    roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'SALES_AGENT', 'FINANCE', 'OPERATIONS'],
   },
   {
     id: 'financials',
@@ -136,6 +139,7 @@ const menuSections: MenuSection[] = [
       { label: 'P&L Reports', path: '/financials/management/profit-and-loss', icon: TrendingUp, roles: ['SUPER_ADMIN', 'ADMIN', 'FINANCE'] },
       { label: 'Investor Reports', path: '/financials/management/investor-reports', icon: Building2, roles: ['SUPER_ADMIN', 'ADMIN', 'FINANCE'] },
     ],
+    roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'SALES_AGENT', 'FINANCE', 'OPERATIONS'],
   },
   {
     id: 'customers',
@@ -145,16 +149,17 @@ const menuSections: MenuSection[] = [
       { label: 'Customer Profiles', path: '/clients', icon: User },
       { label: 'Manage Clients', path: '/clients', icon: ClipboardList },
     ],
+    roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'SALES_AGENT', 'FINANCE', 'OPERATIONS'],
   },
   {
     id: 'investors',
     label: 'Investor Management',
     icon: Building2,
     items: [
-      { label: 'Investor Overview', path: '/investors', icon: List, roles: ['SUPER_ADMIN', 'ADMIN', 'FINANCE'] },
+      { label: 'Investor Overview', path: '/investors', icon: List, roles: ['SUPER_ADMIN', 'ADMIN', 'FINANCE', 'INVESTOR'] },
       { label: 'New Investor', path: '/investors/new', icon: PlusCircle, roles: ['SUPER_ADMIN', 'ADMIN', 'FINANCE'] },
     ],
-    roles: ['SUPER_ADMIN', 'ADMIN', 'FINANCE'],
+    roles: ['SUPER_ADMIN', 'ADMIN', 'FINANCE', 'INVESTOR'],
   },
   {
     id: 'users',

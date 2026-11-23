@@ -4,8 +4,35 @@ import Payment from '@/lib/models/Payment'
 import { logger } from '@/lib/utils/performance'
 
 /**
- * Calculate total sales for a given period
- * Sales are calculated from invoices (PAID or ISSUED status)
+ * Money actually RECEIVED in a period = customer payments that were recorded as
+ * successful (a payment is recorded when an invoice is marked Paid).
+ * Unpaid invoices are NOT included. Investor payouts (money going OUT) are not
+ * included either (they have no booking).
+ * The date used is the day the payment was received (paidAt).
+ */
+export async function totalReceivedForPeriod(startDate?: Date, endDate?: Date): Promise<number> {
+  try {
+    await connectDB()
+    const pipeline: any[] = [
+      { $match: { status: 'SUCCESS', booking: { $exists: true, $ne: null } } },
+      { $addFields: { receivedOn: { $ifNull: ['$paidAt', '$createdAt'] } } },
+    ]
+    const range: any = {}
+    if (startDate) range.$gte = startDate
+    if (endDate) range.$lte = endDate
+    if (startDate || endDate) pipeline.push({ $match: { receivedOn: range } })
+    pipeline.push({ $group: { _id: null, total: { $sum: '$amount' } } })
+    const result = await Payment.aggregate(pipeline)
+    return result.length > 0 ? result[0].total : 0
+  } catch (error) {
+    logger.error('Error calculating money received:', error)
+    return 0
+  }
+}
+
+/**
+ * Calculate total INVOICED for a given period (billed, whether or not it was paid)
+ * Invoiced amounts are calculated from invoices (PAID or ISSUED status)
  * Excludes fines from revenue calculation
  * @param startDate - Start date of the period (optional, defaults to beginning of current month)
  * @param endDate - End date of the period (optional, defaults to now)
@@ -106,20 +133,24 @@ export async function getFinancialSummary() {
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
     const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0)
 
-    const [currentMonthSales, lastMonthSales, unpaidInvoices] = await Promise.all([
+    // "Total Sales" on the dashboard = money actually received this month.
+    // (Billed-but-unpaid invoices are shown separately as "unpaid", never added to sales.)
+    const [receivedThisMonth, receivedLastMonth, invoicedThisMonth, unpaidInvoices] = await Promise.all([
+      totalReceivedForPeriod(startOfMonth, now),
+      totalReceivedForPeriod(startOfLastMonth, endOfLastMonth),
       totalSalesForPeriod(startOfMonth, now),
-      totalSalesForPeriod(startOfLastMonth, endOfLastMonth),
       totalUnpaidInvoices(),
     ])
 
     const salesGrowth =
-      lastMonthSales > 0
-        ? ((currentMonthSales - lastMonthSales) / lastMonthSales) * 100
+      receivedLastMonth > 0
+        ? ((receivedThisMonth - receivedLastMonth) / receivedLastMonth) * 100
         : 0
 
     return {
-      totalSales: currentMonthSales,
+      totalSales: receivedThisMonth,
       salesGrowth,
+      invoicedThisMonth,
       unpaidInvoices,
     }
   } catch (error) {
@@ -127,6 +158,7 @@ export async function getFinancialSummary() {
     return {
       totalSales: 0,
       salesGrowth: 0,
+      invoicedThisMonth: 0,
       unpaidInvoices: 0,
     }
   }

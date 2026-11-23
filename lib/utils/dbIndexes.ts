@@ -8,6 +8,7 @@ import Booking from '../models/Booking'
 import CustomerProfile from '../models/CustomerProfile'
 import Vehicle from '../models/Vehicle'
 import Invoice from '../models/Invoice'
+import Payment from '../models/Payment'
 import User from '../models/User'
 import { logger } from '@/lib/utils/performance'
 
@@ -82,6 +83,17 @@ export async function createOptimalIndexes() {
     // Skip invoiceNumber if it already exists (might be unique)
     try {
       await Invoice.collection.createIndex({ invoiceNumber: 1 }, { background: true })
+    } catch (e: any) {
+      if (e.code !== 86 && e.code !== 85) throw e
+    }
+
+    logger.log('Creating Payment indexes...')
+    try {
+      // one payment record per invoice (only payments that carry an invoice link)
+      await Payment.collection.createIndex(
+        { invoice: 1 },
+        { unique: true, name: 'invoice_unique', partialFilterExpression: { invoice: { $exists: true } }, background: true }
+      )
     } catch (e: any) {
       if (e.code !== 86 && e.code !== 85) throw e
     }

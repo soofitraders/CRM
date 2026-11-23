@@ -59,6 +59,9 @@ export async function GET(
       if (!investorProfile || String((payout as any).investor._id) !== String(investorProfile._id)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
+    } else if (!hasRole(user, ['SUPER_ADMIN', 'ADMIN', 'FINANCE'])) {
+      // staff outside finance/admin (sales agents, managers) must not see payouts
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     return NextResponse.json({ payout })

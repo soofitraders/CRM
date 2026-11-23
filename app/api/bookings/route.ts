@@ -18,6 +18,14 @@ import { cacheQuery } from '@/lib/cache/cacheUtils'
 import { CacheKeys } from '@/lib/cache/cacheKeys'
 import { invalidateBookingCache, invalidateDashboardCache } from '@/lib/cache/cacheUtils'
 import { logger } from '@/lib/utils/performance'
+import { calculateBookingAmounts } from '@/lib/utils/bookingPricing'
+import { CREATE_STATUSES, startsBeforeToday, statusLabel, PAST_START_MESSAGE } from '@/lib/utils/bookingRules'
+import {
+  BLOCKING_STATUSES,
+  findConflictingBooking,
+  hasOlderConflict,
+  conflictMessage,
+} from '@/lib/services/bookingAvailability'
 
 // Ensure models are registered by accessing them
 // This ensures Mongoose knows about these models when populating
@@ -177,13 +185,58 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const data = createBookingSchema.parse(body)
 
-    // Calculate total amount
-    const subtotal = data.baseRate - data.discounts
-    const taxAmount = (subtotal * data.taxPercent) / 100
-    const totalAmount = subtotal + taxAmount
+    // A new booking starts as Pending or Confirmed (check-out / check-in / cancel
+    // only make sense later, one step at a time)
+    if (data.status && !CREATE_STATUSES.includes(data.status as any)) {
+      return NextResponse.json(
+        { error: `A new booking can only be created as Pending or Confirmed (not ${statusLabel(data.status)}).` },
+        { status: 400 }
+      )
+    }
+
+    // Starting in the past is almost always a typo. Earlier today is fine;
+    // only an Admin can deliberately enter an older date (e.g. recording a past rental).
+    if (startsBeforeToday(data.startDateTime) && !hasRole(user, ['SUPER_ADMIN', 'ADMIN'])) {
+      return NextResponse.json({ error: PAST_START_MESSAGE }, { status: 400 })
+    }
+
+    // Calculate total amount (base rate is per day/week/month; units come from the dates)
+    const amounts = calculateBookingAmounts({
+      rentalType: data.rentalType,
+      baseRate: data.baseRate,
+      discounts: data.discounts,
+      taxPercent: data.taxPercent,
+      startDateTime: data.startDateTime,
+      endDateTime: data.endDateTime,
+    })
+    if (data.discounts > amounts.rentalAmount) {
+      return NextResponse.json(
+        { error: `Discount (AED ${data.discounts}) cannot be more than the rental amount (AED ${amounts.rentalAmount})` },
+        { status: 400 }
+      )
+    }
+    const taxAmount = amounts.taxAmount
+    const totalAmount = amounts.totalAmount
 
     const bookingStatus = data.status || 'PENDING'
-    
+
+    // The car must exist and must not already be booked for these dates
+    const carForBooking = await Vehicle.findById(data.vehicle).select('plateNumber brand model').lean()
+    if (!carForBooking) {
+      return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 })
+    }
+    const carLabel = `${(carForBooking as any).plateNumber} (${(carForBooking as any).brand} ${(carForBooking as any).model})`
+    if (BLOCKING_STATUSES.includes(bookingStatus as any)) {
+      const clash = await findConflictingBooking({
+        vehicleId: data.vehicle,
+        startDateTime: data.startDateTime,
+        endDateTime: data.endDateTime,
+      })
+      if (clash) {
+        return NextResponse.json({ error: conflictMessage(carLabel, clash), conflictingBookingId: String(clash._id) }, { status: 409 })
+      }
+    }
+
     const booking = new Booking({
       vehicle: data.vehicle,
       customer: data.customer,
@@ -195,6 +248,7 @@ export async function POST(request: NextRequest) {
       rentalType: data.rentalType,
       baseRate: data.baseRate,
       discounts: data.discounts,
+      taxPercent: data.taxPercent,
       taxes: taxAmount,
       totalAmount,
       depositAmount: data.depositAmount,
@@ -206,6 +260,22 @@ export async function POST(request: NextRequest) {
     })
 
     await booking.save()
+
+    // Two requests can pass the check above at the same instant. The booking that
+    // was created first keeps the car; the later one is removed again.
+    if (BLOCKING_STATUSES.includes(bookingStatus as any) && (await hasOlderConflict(booking))) {
+      await Booking.deleteOne({ _id: booking._id })
+      const clash = await findConflictingBooking({
+        vehicleId: data.vehicle,
+        startDateTime: data.startDateTime,
+        endDateTime: data.endDateTime,
+        excludeBookingId: String(booking._id),
+      })
+      return NextResponse.json(
+        { error: clash ? conflictMessage(carLabel, clash) : `${carLabel} was just booked by someone else for these dates.` },
+        { status: 409 }
+      )
+    }
 
     // Invalidate related caches
     invalidateBookingCache(
@@ -278,8 +348,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ booking: populatedBooking }, { status: 201 })
   } catch (error: any) {
     if (error.name === 'ZodError') {
+      // Show the first problem in plain words (e.g. "The deposit cannot be more than the total")
+      const first = error.issues?.[0] || error.errors?.[0]
       return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
+        { error: first?.message || 'Validation error', details: error.errors ?? error.issues },
         { status: 400 }
       )
     }

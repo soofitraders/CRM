@@ -149,9 +149,7 @@ export async function PATCH(
     if (data.email !== undefined) {
       ;(customer.user as any).email = data.email.toLowerCase()
     }
-    if (data.password !== undefined) {
-      ;(customer.user as any).passwordHash = await bcrypt.hash(data.password, 12)
-    }
+    // (customers have no login, so there is no password to change)
     await (customer.user as any).save()
 
     // Update CustomerProfile fields

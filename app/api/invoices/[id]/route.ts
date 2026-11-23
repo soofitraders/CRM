@@ -337,6 +337,30 @@ export async function PATCH(
       await invoice.save()
     }
 
+    // Marking an invoice PAID must also record the payment, mark the booking as
+    // paid and add the ledger credit straight away. If that fails, put the invoice
+    // back so it is never left "Paid" without a payment behind it.
+    if (oldStatus !== 'PAID' && invoice.status === 'PAID') {
+      try {
+        const { recordInvoicePayment } = await import('@/lib/services/invoicePaymentService')
+        await recordInvoicePayment(invoice, user._id.toString())
+      } catch (paymentError: any) {
+        logger.error('Error recording invoice payment:', paymentError)
+        // recordInvoicePayment already undid whatever THIS request created. If a payment
+        // exists anyway (a simultaneous click recorded it), the invoice really is paid.
+        if (!paymentError?.paymentExists) {
+          await Invoice.collection.updateOne(
+            { _id: invoice._id as any },
+            { $set: { status: oldStatus, updatedAt: new Date() } }
+          )
+          return NextResponse.json(
+            { error: `Could not record the payment, so the invoice was left as ${oldStatus}. Please try again.` },
+            { status: 500 }
+          )
+        }
+      }
+    }
+
     // Fetch the updated invoice with populated relations
     const updatedInvoice = await Invoice.findById(invoice._id as any)
       .populate({

@@ -5,6 +5,7 @@ export type PaymentStatus = 'PENDING' | 'SUCCESS' | 'FAILED' | 'REFUNDED'
 
 export interface IPayment extends Document {
   booking?: mongoose.Types.ObjectId // Made optional to support investor payouts
+  invoice?: mongoose.Types.ObjectId // Set when the payment was recorded by marking an invoice PAID
   amount: number
   method: PaymentMethod
   status: PaymentStatus
@@ -21,6 +22,11 @@ const PaymentSchema = new Schema<IPayment>(
       type: Schema.Types.ObjectId,
       ref: 'Booking',
       required: false, // Made optional to support investor payouts
+    },
+    invoice: {
+      type: Schema.Types.ObjectId,
+      ref: 'Invoice',
+      required: false,
     },
     amount: {
       type: Number,
@@ -57,6 +63,7 @@ const PaymentSchema = new Schema<IPayment>(
 
 // Create indexes
 PaymentSchema.index({ booking: 1 })
+// (the unique one-payment-per-invoice index is created in invoicePaymentService)
 PaymentSchema.index({ status: 1 })
 PaymentSchema.index({ method: 1 })
 PaymentSchema.index({ transactionId: 1 })

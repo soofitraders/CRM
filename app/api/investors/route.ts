@@ -17,9 +17,32 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const viewer = await getCurrentUser()
+    if (!viewer) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
     await connectDB()
 
-    const investors = await InvestorProfile.find()
+    // Who sees what:
+    //  - SUPER_ADMIN / ADMIN / FINANCE: every investor, full details (incl. bank details)
+    //  - MANAGER: names only (needed by the vehicle form), never bank details
+    //  - INVESTOR: only their OWN profile
+    //  - everyone else (sales agents, customers): nothing
+    let filter: any = {}
+    let projection = ''
+    if (viewer.role === 'INVESTOR') {
+      filter = { user: viewer._id }
+    } else if (hasRole(viewer, ['SUPER_ADMIN', 'ADMIN', 'FINANCE'])) {
+      // full access
+    } else if (hasRole(viewer, ['MANAGER'])) {
+      projection = '-bankAccountName -bankName -iban -swift -taxId -tradeLicenseNumber'
+    } else {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const investors = await InvestorProfile.find(filter)
+      .select(projection)
       .populate('user', 'name email phone')
       .sort({ createdAt: -1 })
       .lean()

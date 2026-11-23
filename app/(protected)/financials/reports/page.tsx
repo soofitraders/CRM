@@ -587,7 +587,7 @@ export default function ReportsPage() {
       {/* AR Report */}
       {activeTab === 'ar' && arData && !loading && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
             <StatCard
               icon={Coins}
               value={`AED ${arData.total.toLocaleString('en-US', {
@@ -598,11 +598,19 @@ export default function ReportsPage() {
             />
             <StatCard
               icon={FileText}
-              value={`AED ${arData.buckets['0-30'].toLocaleString('en-US', {
+              value={`AED ${arData.buckets.current.toLocaleString('en-US', {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}`}
-              label="0-30 Days"
+              label="Current (not yet due)"
+            />
+            <StatCard
+              icon={FileText}
+              value={`AED ${arData.buckets['1-30'].toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}`}
+              label="1-30 Days overdue"
             />
             <StatCard
               icon={FileText}
@@ -636,11 +644,12 @@ export default function ReportsPage() {
               <PieChart>
                 <Pie
                   data={[
-                    { name: '0-30 Days', value: arData.buckets['0-30'] },
+                    { name: 'Current', value: arData.buckets.current },
+                    { name: '1-30 Days', value: arData.buckets['1-30'] },
                     { name: '31-60 Days', value: arData.buckets['31-60'] },
                     { name: '61-90 Days', value: arData.buckets['61-90'] },
                     { name: '90+ Days', value: arData.buckets['90+'] },
-                  ]}
+                  ].filter((slice) => slice.value > 0)}
                   cx="50%"
                   cy="50%"
                   labelLine={false}
@@ -649,7 +658,7 @@ export default function ReportsPage() {
                   fill="#8884d8"
                   dataKey="value"
                 >
-                  {[0, 1, 2, 3].map((entry, index) => (
+                  {[0, 1, 2, 3, 4].map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>

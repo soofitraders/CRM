@@ -60,9 +60,14 @@ interface AccountsReceivableParams {
 }
 
 interface AccountsReceivableResult {
+  /** Everything still owed: not-yet-due ("current") plus overdue */
   total: number
+  /** Only the part of `total` whose due date has already passed */
+  overdueTotal: number
   buckets: {
-    '0-30': number
+    /** Unpaid but not yet due on the "as of" date */
+    current: number
+    '1-30': number
     '31-60': number
     '61-90': number
     '90+': number
@@ -388,9 +393,11 @@ export async function getAccountsReceivable(
   const { dateAsOf, branchId } = params
 
   // Build invoice filter
+  // Everything unpaid that existed on the "as of" date counts as receivable,
+  // whether or not it is overdue yet (not-yet-due invoices go in "current").
   const invoiceFilter: any = {
     status: { $in: ['ISSUED', 'DRAFT'] },
-    dueDate: { $lte: dateAsOf },
+    issueDate: { $lte: endOfDay(dateAsOf) },
   }
 
   // Find all unpaid or partially paid invoices
@@ -430,13 +437,15 @@ export async function getAccountsReceivable(
   })
 
   const buckets = {
-    '0-30': 0,
+    current: 0,
+    '1-30': 0,
     '31-60': 0,
     '61-90': 0,
     '90+': 0,
   }
 
   let total = 0
+  let overdueTotal = 0
   const invoiceList: AccountsReceivableResult['invoices'] = []
 
   filteredInvoices.forEach((invoice: any) => {
@@ -446,12 +455,19 @@ export async function getAccountsReceivable(
 
     if (balance <= 0) return // Skip fully paid
 
-    const daysOverdue = differenceInDays(dateAsOf, new Date(invoice.dueDate))
+    // Whole calendar days past the due date (negative / zero = not overdue yet)
+    const daysOverdue = differenceInDays(
+      startOfDay(dateAsOf),
+      startOfDay(new Date(invoice.dueDate))
+    )
     let bucket: string
 
-    if (daysOverdue <= 30) {
-      bucket = '0-30'
-      buckets['0-30'] += balance
+    if (daysOverdue <= 0) {
+      bucket = 'Current'
+      buckets.current += balance
+    } else if (daysOverdue <= 30) {
+      bucket = '1-30'
+      buckets['1-30'] += balance
     } else if (daysOverdue <= 60) {
       bucket = '31-60'
       buckets['31-60'] += balance
@@ -464,6 +480,7 @@ export async function getAccountsReceivable(
     }
 
     total += balance
+    if (daysOverdue > 0) overdueTotal += balance
 
     invoiceList.push({
       invoiceNumber: invoice.invoiceNumber || 'N/A',
@@ -473,13 +490,15 @@ export async function getAccountsReceivable(
       total: invoice.total || 0,
       paidAmount,
       balance,
-      daysOverdue,
+      // Not-yet-due invoices are 0 days overdue (never negative)
+      daysOverdue: Math.max(0, daysOverdue),
       bucket,
     })
   })
 
   return {
     total,
+    overdueTotal,
     buckets,
     invoices: invoiceList.sort((a, b) => b.daysOverdue - a.daysOverdue),
   }

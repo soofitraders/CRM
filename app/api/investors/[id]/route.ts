@@ -27,6 +27,11 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const viewer = await getCurrentUser()
+    if (!viewer) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
     await connectDB()
 
     // Ensure Document model is registered before populate
@@ -34,13 +39,23 @@ export async function GET(
       throw new Error('Document model not available')
     }
 
-    const investor = await InvestorProfile.findById(params.id)
+    const investor: any = await InvestorProfile.findById(params.id)
       .populate('user', 'name email phone address')
       .populate('documents')
       .lean()
 
     if (!investor) {
       return NextResponse.json({ error: 'Investor not found' }, { status: 404 })
+    }
+
+    // Investors may only open their OWN profile; staff need a finance/admin role.
+    // (Same "not found" answer for someone else's profile, so ids can't be probed.)
+    if (viewer.role === 'INVESTOR') {
+      if (String(investor.user?._id ?? investor.user) !== String(viewer._id)) {
+        return NextResponse.json({ error: 'Investor not found' }, { status: 404 })
+      }
+    } else if (!hasRole(viewer, ['SUPER_ADMIN', 'ADMIN', 'FINANCE'])) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     return NextResponse.json({ investor })
