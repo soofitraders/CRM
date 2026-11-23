@@ -8,14 +8,19 @@ interface StatCardProps {
 }
 
 export default function StatCard({ icon: Icon, value, label, subtext }: StatCardProps) {
+  const display = typeof value === 'number' ? value.toLocaleString() : value
+  // Long amounts (e.g. "AED 400,372.77") get a smaller font so they stay inside the card
+  const sizeClass =
+    display.length > 18 ? 'text-xl' : display.length > 12 ? 'text-2xl' : 'text-3xl'
+
   return (
-    <div className="bg-cardBg rounded-xl shadow-sm border border-borderSoft p-6 hover:shadow-md transition-shadow duration-200">
-      <div className="flex items-start justify-between">
+    <div className="bg-cardBg rounded-xl shadow-sm border border-borderSoft p-6 hover:shadow-md transition-shadow duration-200 overflow-hidden">
+      <div className="flex items-start justify-between gap-3">
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium text-bodyText mb-2">{label}</div>
-          <div className="text-3xl font-bold text-headingText mb-1">
-            {typeof value === 'number' ? value.toLocaleString() : value}
+          <div className={`${sizeClass} font-bold text-headingText mb-1 break-words`}>
+            {display}
           </div>
           {subtext && (
             <div className="text-xs text-sidebarMuted mt-2">{subtext}</div>

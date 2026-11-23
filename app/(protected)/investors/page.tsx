@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import SectionCard from '@/components/ui/SectionCard'
 import Table, { TableRow, TableCell } from '@/components/ui/Table'
 import { Search, Plus, Edit, Trash2 } from 'lucide-react'
@@ -25,6 +26,9 @@ interface Investor {
 }
 
 export default function InvestorsPage() {
+  // Investors only see their own profile: no "New Investor" for them
+  const { data: session } = useSession()
+  const canManageInvestors = ['SUPER_ADMIN', 'ADMIN', 'FINANCE'].includes((session?.user as any)?.role)
   const router = useRouter()
   const [investors, setInvestors] = useState<Investor[]>([])
   const [search, setSearch] = useState('')
@@ -90,13 +94,15 @@ export default function InvestorsPage() {
           <h1 className="text-3xl font-bold text-headingText">Investors</h1>
           <p className="text-bodyText mt-2">Manage investor profiles</p>
         </div>
-        <Link
-          href="/investors/new"
-          className="px-4 py-2 bg-sidebarActiveBg text-white rounded-lg font-medium hover:bg-sidebarActiveBg/90 transition-colors flex items-center gap-2"
-        >
-          <Plus className="w-5 h-5" />
-          New Investor
-        </Link>
+        {canManageInvestors && (
+          <Link
+            href="/investors/new"
+            className="px-4 py-2 bg-sidebarActiveBg text-white rounded-lg font-medium hover:bg-sidebarActiveBg/90 transition-colors flex items-center gap-2"
+          >
+            <Plus className="w-5 h-5" />
+            New Investor
+          </Link>
+        )}
       </div>
 
       {/* Investors List */}

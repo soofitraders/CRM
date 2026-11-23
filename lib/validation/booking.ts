@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { calculateBookingAmounts } from '@/lib/utils/bookingPricing'
+import { depositMessage } from '@/lib/utils/bookingRules'
 
 export const bookingStatusSchema = z.enum([
   'PENDING',
@@ -42,6 +44,24 @@ export const createBookingSchema = z
       path: ['endDateTime'],
     }
   )
+  .superRefine((data, ctx) => {
+    // The deposit is part of what the customer pays, so it can't exceed the booking total
+    const total = calculateBookingAmounts({
+      rentalType: data.rentalType,
+      baseRate: data.baseRate,
+      discounts: data.discounts,
+      taxPercent: data.taxPercent,
+      startDateTime: data.startDateTime,
+      endDateTime: data.endDateTime,
+    }).totalAmount
+    if (data.depositAmount > total + 0.005) {
+      ctx.addIssue({
+        code: 'custom',
+        message: depositMessage(data.depositAmount, total),
+        path: ['depositAmount'],
+      })
+    }
+  })
 
 export const updateBookingSchema = z.object({
   status: bookingStatusSchema.optional(),

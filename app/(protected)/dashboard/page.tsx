@@ -111,13 +111,14 @@ export default function DashboardPage() {
                 ? '...'
                 : `AED ${summaryData.totalSales.toLocaleString()}`
             }
-            label="Total Sales"
+            label="Total Sales (received this month)"
             subtext={
-              financialSummary.salesGrowth > 0
-                ? `Last month +${financialSummary.salesGrowth.toFixed(1)}%`
+              `Unpaid invoices: AED ${Math.round(financialSummary.unpaidInvoices || 0).toLocaleString()}` +
+              (financialSummary.salesGrowth > 0
+                ? ` · +${financialSummary.salesGrowth.toFixed(1)}% vs last month`
                 : financialSummary.salesGrowth < 0
-                ? `Last month ${financialSummary.salesGrowth.toFixed(1)}%`
-                : 'No change from last month'
+                ? ` · ${financialSummary.salesGrowth.toFixed(1)}% vs last month`
+                : '')
             }
           />
         </div>

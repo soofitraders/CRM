@@ -15,8 +15,10 @@ export interface IBooking extends Document {
   dropoffBranch: string
   status: BookingStatus
   rentalType: RentalType
+  /** Price per rental unit: per day (DAILY), per week (WEEKLY) or per month (MONTHLY) */
   baseRate: number
   discounts: number
+  taxPercent?: number
   taxes: number
   totalAmount: number
   depositAmount: number
@@ -90,6 +92,11 @@ const BookingSchema = new Schema<IBooking>(
       type: Number,
       default: 0,
       min: [0, 'Discounts cannot be negative'],
+    },
+    taxPercent: {
+      type: Number,
+      min: [0, 'Tax percent cannot be negative'],
+      max: [100, 'Tax percent cannot exceed 100'],
     },
     taxes: {
       type: Number,

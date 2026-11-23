@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { AlertCircle } from 'lucide-react'
@@ -11,6 +11,13 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Messages for being sent back to the login page by the access rules
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get('error')
+    if (code === 'denied') setError('This account type cannot sign in to the system. Please contact an administrator.')
+    else if (code === 'inactive') setError('Account is inactive. Please contact an administrator.')
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

@@ -75,23 +75,6 @@ export default function CustomerForm({
             )}
           </div>
 
-          {!isEdit && (
-            <div>
-              <label className="block text-sm font-medium text-headingText mb-2">
-                Password {!isEdit && '(optional)'}
-              </label>
-              <input
-                type="password"
-                {...register('password')}
-                placeholder="Leave empty for default password"
-                className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText placeholder-sidebarMuted focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
-              />
-              {errors.password && (
-                <p className="text-danger text-xs mt-1">{errors.password.message}</p>
-              )}
-            </div>
-          )}
-
           <div>
             <label className="block text-sm font-medium text-headingText mb-2">
               Phone *

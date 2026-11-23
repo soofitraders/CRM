@@ -8,12 +8,20 @@ import { Calendar, X, Search, ChevronDown } from 'lucide-react'
 import { logger } from '@/lib/utils/logger'
 import CustomerForm from '@/components/customers/CustomerForm'
 import { CreateCustomerInput } from '@/lib/validation/customer'
+import {
+  calculateBookingAmounts,
+  formatRentalUnits,
+  rentalUnitName,
+  type RentalTypeValue,
+} from '@/lib/utils/bookingPricing'
 
 interface BookingFormProps {
   initialData?: Partial<CreateBookingInput>
   onSubmit: (data: CreateBookingInput) => Promise<void>
   onCancel?: () => void
   isLoading?: boolean
+  /** When editing: this booking's own dates must not make its car look "taken" */
+  bookingId?: string
 }
 
 interface Vehicle {
@@ -37,8 +45,10 @@ export default function BookingForm({
   onSubmit,
   onCancel,
   isLoading = false,
+  bookingId,
 }: BookingFormProps) {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
+  const [vehiclesLoaded, setVehiclesLoaded] = useState(false)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [customerSearchTerm, setCustomerSearchTerm] = useState('')
   const [calculatedTotal, setCalculatedTotal] = useState(0)
@@ -71,15 +81,25 @@ export default function BookingForm({
   const baseRate = watch('baseRate') || 0
   const discounts = watch('discounts') || 0
   const taxPercent = watch('taxPercent') || 0
+  const rentalTypeValue = (watch('rentalType') || 'DAILY') as RentalTypeValue
+  const startValue = watch('startDateTime')
+  const endValue = watch('endDateTime')
   const selectedVehicleId = watch('vehicle')
 
-  // Calculate total whenever rates change
+  // Calculate total whenever rate, rental type, dates, discount or tax change.
+  // The base rate is the price per day / week / month; the number of units
+  // comes from the dates (same calculation the server uses for the booking and invoice).
+  const pricing = calculateBookingAmounts({
+    rentalType: rentalTypeValue,
+    baseRate,
+    discounts,
+    taxPercent,
+    startDateTime: (startValue as any) || new Date(),
+    endDateTime: (endValue as any) || undefined,
+  })
   useEffect(() => {
-    const subtotal = baseRate - discounts
-    const taxAmount = (subtotal * taxPercent) / 100
-    const total = subtotal + taxAmount
-    setCalculatedTotal(total)
-  }, [baseRate, discounts, taxPercent])
+    setCalculatedTotal(pricing.totalAmount)
+  }, [pricing.totalAmount])
 
   // Fetch vehicle details when vehicle is selected
   useEffect(() => {
@@ -110,14 +130,6 @@ export default function BookingForm({
   useEffect(() => {
     async function fetchData() {
       try {
-        // Fetch available vehicles with cache busting to ensure fresh data
-        const vehiclesRes = await fetch(`/api/vehicles?status=AVAILABLE&limit=1000&_t=${Date.now()}`)
-        if (vehiclesRes.ok) {
-          const vehiclesData = await vehiclesRes.json()
-          setVehicles(vehiclesData.vehicles || [])
-          logger.log(`[BookingForm] Loaded ${vehiclesData.vehicles?.length || 0} available vehicles`)
-        }
-
         // Fetch customers with a higher limit so all customers show in the dropdown
         const customersRes = await fetch('/api/customers?limit=1000&page=1')
         if (customersRes.ok) {
@@ -130,6 +142,29 @@ export default function BookingForm({
     }
     fetchData()
   }, [])
+
+  // Cars offered in the picker: every car that is free for the chosen dates.
+  // Re-loaded whenever the start / end date changes.
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({ bookable: 'true', limit: '1000', _t: String(Date.now()) })
+        if (startValue) params.set('from', String(startValue))
+        if (endValue) params.set('to', String(endValue))
+        if (bookingId) params.set('excludeBooking', bookingId)
+        const res = await fetch(`/api/vehicles?${params.toString()}`)
+        if (res.ok) {
+          const data = await res.json()
+          setVehicles(data.vehicles || [])
+          setVehiclesLoaded(true)
+          logger.log(`[BookingForm] ${data.vehicles?.length || 0} cars free for the chosen dates`)
+        }
+      } catch (error) {
+        logger.error('Error fetching vehicles:', error)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [startValue, endValue, bookingId])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -273,6 +308,11 @@ export default function BookingForm({
           )}
           {errors.vehicle && (
             <p className="text-danger text-xs mt-1">{errors.vehicle.message}</p>
+          )}
+          {vehiclesLoaded && selectedVehicleId && !vehicles.some((v) => v._id === selectedVehicleId) && (
+            <p className="text-danger text-xs mt-1">
+              This car is already booked for the chosen dates. Pick other dates or another car.
+            </p>
           )}
         </div>
 
@@ -479,7 +519,7 @@ export default function BookingForm({
         {/* Base Rate */}
         <div>
           <label className="block text-sm font-medium text-headingText mb-2">
-            Base Rate (AED) *
+            Rate per {rentalUnitName(rentalTypeValue)} (AED) *
           </label>
           <input
             type="number"
@@ -552,6 +592,12 @@ export default function BookingForm({
           <span className="text-2xl font-bold text-sidebarActiveBg">
             AED {calculatedTotal.toFixed(2)}
           </span>
+        </div>
+        <div className="text-xs text-bodyText mt-1">
+          {formatRentalUnits(rentalTypeValue, pricing.units)} × AED {(baseRate || 0).toFixed(2)} = AED{' '}
+          {pricing.rentalAmount.toFixed(2)}
+          {discounts > 0 ? `, minus discount AED ${Number(discounts).toFixed(2)}` : ''}
+          {taxPercent > 0 ? `, plus ${taxPercent}% tax` : ''}
         </div>
       </div>
 

@@ -1,5 +1,6 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
+import { getCurrentUser, hasRole } from '@/lib/auth';
 import connectDB from '@/lib/db';
 import { NextResponse } from 'next/server';
 import mongoose from 'mongoose';
@@ -94,6 +95,12 @@ export async function POST(request: Request) {
     const session = await getServerSession(authOptions);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    // Rebuilding the ledger is a finance action: only these roles may run it.
+    const ledgerUser = await getCurrentUser();
+    if (!hasRole(ledgerUser, ['SUPER_ADMIN', 'ADMIN', 'FINANCE'])) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     await connectDB();
 
     // Fix indexes and duplicates first
@@ -172,8 +179,14 @@ export async function POST(request: Request) {
     // ══════════════════════════════════════════════════════════════════════
     try {
       const Payment = (await import('@/lib/models/Payment')).default;
-      const docs = await Payment.find({ status: 'SUCCESS' }).lean();
-      console.log(`[SYNC] Payments (SUCCESS only): ${docs.length}`);
+      // Payments recorded by "Mark invoice as paid" carry an `invoice` link. Those are
+      // already shown through their PAID invoice (section 6), so skip them here to
+      // avoid counting the same money twice.
+      const docs = await Payment.find({
+        status: 'SUCCESS',
+        $or: [{ invoice: { $exists: false } }, { invoice: null }],
+      }).lean();
+      console.log(`[SYNC] Payments (SUCCESS only, not invoice-linked): ${docs.length}`);
       for (const doc of docs) {
         const amount = n(f(doc, 'amount', 'totalAmount', 'paidAmount'));
         const date = d(f(doc, 'date', 'paymentDate', 'paidAt', 'createdAt'));
@@ -207,9 +220,19 @@ export async function POST(request: Request) {
       const Invoice = (await import('@/lib/models/Invoice')).default;
       const docs = await Invoice.find({ status: 'PAID' }).lean();
       console.log(`[SYNC] Invoices (PAID only): ${docs.length}`);
+      // Bookings already shown through a stand-alone payment row (section 5): don't
+      // add the paid invoice for the same money as well.
+      const PaymentModel = (await import('@/lib/models/Payment')).default;
+      const standalone = await PaymentModel.find({
+        status: 'SUCCESS',
+        booking: { $exists: true, $ne: null },
+        $or: [{ invoice: { $exists: false } }, { invoice: null }],
+      }).select('booking').lean();
+      const bookingsWithPayment = new Set(standalone.map((p: any) => String(p.booking)));
       for (const doc of docs) {
         const amount = n(f(doc, 'total', 'totalAmount', 'grandTotal', 'invoiceAmount', 'netAmount'));
         if (amount <= 0) continue;
+        if (bookingsWithPayment.has(String(f(doc, 'booking')))) continue;
         const date = d(f(doc, 'updatedAt', 'paidAt', 'issueDate', 'createdAt'));
         const invoiceNum = s(f(doc, 'invoiceNumber', 'invoiceNo', 'number', 'reference'), 'Invoice');
         const bookingId = f(doc, 'booking');

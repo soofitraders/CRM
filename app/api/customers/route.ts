@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
+import { randomBytes } from 'crypto'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/authOptions'
 import connectDB from '@/lib/db'
@@ -202,9 +203,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Create User first
-    const passwordHash = data.password
-      ? await bcrypt.hash(data.password, 12)
-      : await bcrypt.hash('TempPassword123!', 12) // Default password if not provided
+    // Customers cannot sign in (no customer portal), so they never get a usable password.
+    // A random, unguessable value is stored (never a shared default password).
+    const passwordHash = await bcrypt.hash(randomBytes(32).toString('hex'), 12)
 
     const newUser = new User({
       name: data.name,

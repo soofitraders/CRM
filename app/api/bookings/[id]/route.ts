@@ -9,9 +9,12 @@ import Vehicle from '@/lib/models/Vehicle'
 import User from '@/lib/models/User'
 import { updateBookingSchema } from '@/lib/validation/booking'
 import { hasRole, getCurrentUser } from '@/lib/auth'
-import { createInvoiceFromBooking } from '@/lib/services/invoiceService'
+import { createInvoiceFromBooking, getPaidInvoiceForBooking, voidOpenInvoicesForBooking } from '@/lib/services/invoiceService'
 import { logger } from '@/lib/utils/performance'
-import { invalidateBookingCache, invalidateDashboardCache } from '@/lib/cache/cacheUtils'
+import { invalidateBookingCache, invalidateDashboardCache, invalidateFinancialCache } from '@/lib/cache/cacheUtils'
+import { canMoveBooking, transitionMessage, startsBeforeToday, PAST_START_MESSAGE, depositMessage } from '@/lib/utils/bookingRules'
+import { calculateBookingAmounts, bookingTaxPercent } from '@/lib/utils/bookingPricing'
+import { BLOCKING_STATUSES, findConflictingBooking, conflictMessage } from '@/lib/services/bookingAvailability'
 
 // Ensure models are registered by accessing them
 // This ensures Mongoose knows about CustomerProfile when populating
@@ -138,6 +141,81 @@ export async function PATCH(
       }
     }
 
+    // ---- Booking rules (all checked BEFORE anything is changed) --------------
+    const statusBefore = booking.status
+
+    // 1) Follow the life of a booking: no skipping steps, no going backwards
+    if (data.status !== undefined && !canMoveBooking(statusBefore, data.status)) {
+      return NextResponse.json({ error: transitionMessage(statusBefore, data.status) }, { status: 409 })
+    }
+
+    // 2) A booking with a PAID invoice can't just be cancelled: the money has to be refunded first
+    if (data.status === 'CANCELLED' && statusBefore !== 'CANCELLED') {
+      const paid = await getPaidInvoiceForBooking(String(booking._id))
+      if (paid) {
+        return NextResponse.json(
+          { error: `This booking cannot be cancelled yet: invoice ${paid.invoiceNumber} is already PAID. Please refund the customer (finance) first, then cancel.` },
+          { status: 409 }
+        )
+      }
+    }
+
+    // 3) Moving the start date into the past needs an Admin (only checked when the start really changed)
+    if (data.startDateTime !== undefined) {
+      const minuteOf = (d: any) => Math.floor(new Date(d).getTime() / 60000)
+      const startChanged = minuteOf(data.startDateTime) !== minuteOf(booking.startDateTime)
+      if (startChanged && startsBeforeToday(data.startDateTime) && !hasRole(user, ['SUPER_ADMIN', 'ADMIN'])) {
+        return NextResponse.json({ error: PAST_START_MESSAGE }, { status: 400 })
+      }
+    }
+
+    // 4) The deposit can't be more than the booking total (with the new price / dates / deposit)
+    if (
+      data.depositAmount !== undefined || data.baseRate !== undefined || data.discounts !== undefined ||
+      data.taxPercent !== undefined || data.startDateTime !== undefined || data.endDateTime !== undefined
+    ) {
+      const newTotal = calculateBookingAmounts({
+        rentalType: booking.rentalType,
+        baseRate: data.baseRate ?? booking.baseRate,
+        discounts: data.discounts ?? booking.discounts,
+        taxPercent: data.taxPercent ?? bookingTaxPercent(booking as any),
+        startDateTime: data.startDateTime ?? booking.startDateTime,
+        endDateTime: data.endDateTime ?? booking.endDateTime,
+      }).totalAmount
+      const newDeposit = data.depositAmount ?? booking.depositAmount
+      if (newDeposit > newTotal + 0.005) {
+        return NextResponse.json({ error: depositMessage(newDeposit, newTotal) }, { status: 400 })
+      }
+    }
+
+    // The car must still be free for the NEW dates / status. Check BEFORE changing
+    // anything (a refused change must not trigger an invoice or any other side effect).
+    // Needed when dates change, or when a cancelled / checked-in booking is brought back.
+    {
+      const newStatus = data.status ?? booking.status
+      const newStart = data.startDateTime ?? booking.startDateTime
+      const newEnd = data.endDateTime ?? booking.endDateTime
+      const nowHoldsCar = BLOCKING_STATUSES.includes(newStatus as any)
+      const heldCarBefore = BLOCKING_STATUSES.includes(booking.status as any)
+      const datesChanged = data.startDateTime !== undefined || data.endDateTime !== undefined
+      if (nowHoldsCar && (datesChanged || !heldCarBefore)) {
+        const clash = await findConflictingBooking({
+          vehicleId: String(booking.vehicle),
+          startDateTime: newStart,
+          endDateTime: newEnd,
+          excludeBookingId: String(booking._id),
+        })
+        if (clash) {
+          const car: any = await Vehicle.findById(booking.vehicle).select('plateNumber brand model').lean()
+          const carLabel = car ? `${car.plateNumber} (${car.brand} ${car.model})` : 'This car'
+          return NextResponse.json(
+            { error: conflictMessage(carLabel, clash), conflictingBookingId: String(clash._id) },
+            { status: 409 }
+          )
+        }
+      }
+    }
+
     // Update fields
     if (data.status !== undefined) {
       const previousStatus = booking.status
@@ -177,11 +255,33 @@ export async function PATCH(
     if (data.discounts !== undefined) {
       booking.discounts = data.discounts
     }
-    if (data.taxPercent !== undefined) {
-      // Recalculate taxes and total
-      const subtotal = booking.baseRate - booking.discounts
-      booking.taxes = (subtotal * data.taxPercent) / 100
-      booking.totalAmount = subtotal + booking.taxes
+    // Re-price the booking whenever anything that affects the price changed
+    // (rate, discount, tax %, start or end date), so the total is always right.
+    const pricingChanged =
+      data.baseRate !== undefined ||
+      data.discounts !== undefined ||
+      data.taxPercent !== undefined ||
+      data.startDateTime !== undefined ||
+      data.endDateTime !== undefined
+    if (pricingChanged) {
+      const taxPercent = data.taxPercent ?? bookingTaxPercent(booking as any)
+      const amounts = calculateBookingAmounts({
+        rentalType: booking.rentalType,
+        baseRate: booking.baseRate,
+        discounts: booking.discounts,
+        taxPercent,
+        startDateTime: booking.startDateTime,
+        endDateTime: booking.endDateTime,
+      })
+      if (booking.discounts > amounts.rentalAmount) {
+        return NextResponse.json(
+          { error: `Discount (AED ${booking.discounts}) cannot be more than the rental amount (AED ${amounts.rentalAmount})` },
+          { status: 400 }
+        )
+      }
+      booking.taxPercent = taxPercent
+      booking.taxes = amounts.taxAmount
+      booking.totalAmount = amounts.totalAmount
     }
     if (data.depositAmount !== undefined) {
       booking.depositAmount = data.depositAmount
@@ -191,6 +291,28 @@ export async function PATCH(
     }
 
     await booking.save()
+
+    // A cancelled booking must not keep an open invoice (it would still count as sales / money owed)
+    if (data.status === 'CANCELLED' && statusBefore !== 'CANCELLED') {
+      const voided = await voidOpenInvoicesForBooking(String(booking._id))
+      if (voided.length > 0) {
+        invalidateFinancialCache()
+        try {
+          const { logActivity } = await import('@/lib/services/activityLogService')
+          await logActivity({
+            activityType: 'INVOICE_UPDATED',
+            module: 'INVOICES',
+            action: 'UPDATE',
+            description: `Invoice ${voided.join(', ')} voided because booking was cancelled`,
+            entityType: 'Booking',
+            entityId: String(booking._id),
+            userId: user._id.toString(),
+          })
+        } catch (logError) {
+          logger.error('Error logging invoice void:', logError)
+        }
+      }
+    }
 
     // Invalidate cache to ensure bookings list refreshes
     invalidateBookingCache(
@@ -255,9 +377,30 @@ export async function DELETE(
       return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
     }
 
-    // Soft delete by setting status to CANCELLED
+    // Only a booking that has not left yet can be cancelled
+    if (!canMoveBooking(booking.status, 'CANCELLED')) {
+      return NextResponse.json({ error: transitionMessage(booking.status, 'CANCELLED') }, { status: 409 })
+    }
+    if (booking.status !== 'CANCELLED') {
+      const paid = await getPaidInvoiceForBooking(String(booking._id))
+      if (paid) {
+        return NextResponse.json(
+          { error: `This booking cannot be cancelled yet: invoice ${paid.invoiceNumber} is already PAID. Please refund the customer (finance) first, then cancel.` },
+          { status: 409 }
+        )
+      }
+    }
+
+    // Soft delete by setting status to CANCELLED, and void its open invoice(s)
+    const wasCancelled = booking.status === 'CANCELLED'
     booking.status = 'CANCELLED'
     await booking.save()
+    if (!wasCancelled) {
+      await voidOpenInvoicesForBooking(String(booking._id))
+      invalidateFinancialCache()
+      invalidateBookingCache(String(booking._id), booking.customer ? String(booking.customer) : undefined, booking.vehicle ? String(booking.vehicle) : undefined)
+      invalidateDashboardCache()
+    }
 
     return NextResponse.json({ message: 'Booking cancelled successfully' })
   } catch (error: any) {

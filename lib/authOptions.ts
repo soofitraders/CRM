@@ -34,6 +34,13 @@ export const authOptions: NextAuthOptions = {
             throw new Error('Account is inactive. Please contact an administrator.')
           }
 
+          // Customers are rental clients managed by staff. There is no customer portal,
+          // so customer accounts can never sign in (same message as a wrong password,
+          // so nobody can use this screen to find out who is a customer).
+          if (user.role === 'CUSTOMER') {
+            throw new Error('Invalid email or password')
+          }
+
           const isPasswordValid = await bcrypt.compare(
             credentials.password,
             user.passwordHash
