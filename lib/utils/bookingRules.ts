@@ -64,3 +64,14 @@ export const PAST_START_MESSAGE =
 export function depositMessage(deposit: number, total: number): string {
   return `The deposit (AED ${deposit.toFixed(2)}) cannot be more than the booking total (AED ${total.toFixed(2)}).`
 }
+
+/**
+ * "YYYY-MM-DDTHH:mm" in the viewer's LOCAL time, the format <input type="datetime-local"> shows.
+ * (Showing the UTC clock here instead made every edit-and-save move the booking by the
+ * viewer's UTC offset.)
+ */
+export function toLocalInputValue(d: Date | string): string {
+  const date = new Date(d)
+  if (isNaN(date.getTime())) return ''
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+}

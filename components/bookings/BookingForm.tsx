@@ -451,8 +451,8 @@ export default function BookingForm({
             {...register('startDateTime', {
               setValueAs: (value) => {
                 if (!value) return value
-                // Convert to ISO string for datetime-local format
-                return new Date(value).toISOString().slice(0, 16)
+                // Send the exact moment (with its time zone), so saving can never shift the time
+                return new Date(value).toISOString()
               },
             })}
             className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"
@@ -472,8 +472,8 @@ export default function BookingForm({
             {...register('endDateTime', {
               setValueAs: (value) => {
                 if (!value) return value
-                // Convert to ISO string for datetime-local format
-                return new Date(value).toISOString().slice(0, 16)
+                // Send the exact moment (with its time zone), so saving can never shift the time
+                return new Date(value).toISOString()
               },
             })}
             className="w-full px-4 py-2 bg-pageBg border border-borderSoft rounded-lg text-bodyText focus:outline-none focus:ring-2 focus:ring-sidebarActiveBg/20 focus:border-sidebarActiveBg/50"

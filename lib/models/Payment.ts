@@ -63,7 +63,7 @@ const PaymentSchema = new Schema<IPayment>(
 
 // Create indexes
 PaymentSchema.index({ booking: 1 })
-PaymentSchema.index({ invoice: 1 })
+// (the unique one-payment-per-invoice index is created in invoicePaymentService)
 PaymentSchema.index({ status: 1 })
 PaymentSchema.index({ method: 1 })
 PaymentSchema.index({ transactionId: 1 })

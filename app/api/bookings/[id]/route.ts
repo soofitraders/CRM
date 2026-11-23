@@ -102,6 +102,22 @@ export async function GET(
   }
 }
 
+/**
+ * Is the date sent by the edit form the same moment that is already stored?
+ *
+ * The edit form shows the stored time as plain clock fields ("2048-02-01T10:00", no time
+ * zone) and sends them back unchanged. Reading that text as server-local time would make an
+ * untouched date look different (and shift it) whenever the server is not in UTC, so a
+ * zone-less value is compared with the stored value written the same way the form shows it.
+ */
+const ZONE_LESS = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/
+function sameMoment(incoming: any, stored: any): boolean {
+  if (!stored) return false
+  const text = String(incoming)
+  if (ZONE_LESS.test(text)) return text.slice(0, 16) === new Date(stored).toISOString().slice(0, 16)
+  return Math.floor(new Date(incoming).getTime() / 60000) === Math.floor(new Date(stored).getTime() / 60000)
+}
+
 // PATCH - Update booking
 export async function PATCH(
   request: NextRequest,
@@ -160,20 +176,27 @@ export async function PATCH(
       }
     }
 
-    // 3) Moving the start date into the past needs an Admin (only checked when the start really changed)
-    if (data.startDateTime !== undefined) {
-      const minuteOf = (d: any) => Math.floor(new Date(d).getTime() / 60000)
-      const startChanged = minuteOf(data.startDateTime) !== minuteOf(booking.startDateTime)
-      if (startChanged && startsBeforeToday(data.startDateTime) && !hasRole(user, ['SUPER_ADMIN', 'ADMIN'])) {
-        return NextResponse.json({ error: PAST_START_MESSAGE }, { status: 400 })
-      }
+    // What REALLY changed? The edit form always sends every field, so "sent" is not
+    // "changed". Editing only a note must not re-price, re-check dates or re-check the
+    // deposit of an existing (possibly older) booking.
+    const sameNum = (a: any, b: any) => Math.abs(Number(a) - Number(b)) < 0.005
+    const startChanged = data.startDateTime !== undefined && !sameMoment(data.startDateTime, booking.startDateTime)
+    const endChanged = data.endDateTime !== undefined && !sameMoment(data.endDateTime, booking.endDateTime)
+    const priceChanged =
+      (data.baseRate !== undefined && !sameNum(data.baseRate, booking.baseRate)) ||
+      (data.discounts !== undefined && !sameNum(data.discounts, booking.discounts)) ||
+      (data.taxPercent !== undefined && Math.abs(data.taxPercent - bookingTaxPercent(booking as any)) >= 0.01) ||
+      startChanged ||
+      endChanged
+    const depositChanged = data.depositAmount !== undefined && !sameNum(data.depositAmount, booking.depositAmount)
+
+    // 3) Moving the start date into the past needs an Admin (only when the start really changed)
+    if (startChanged && startsBeforeToday(data.startDateTime as any) && !hasRole(user, ['SUPER_ADMIN', 'ADMIN'])) {
+      return NextResponse.json({ error: PAST_START_MESSAGE }, { status: 400 })
     }
 
-    // 4) The deposit can't be more than the booking total (with the new price / dates / deposit)
-    if (
-      data.depositAmount !== undefined || data.baseRate !== undefined || data.discounts !== undefined ||
-      data.taxPercent !== undefined || data.startDateTime !== undefined || data.endDateTime !== undefined
-    ) {
+    // 4) The deposit can't be more than the booking total (checked when the price or the deposit changed)
+    if (priceChanged || depositChanged) {
       const newTotal = calculateBookingAmounts({
         rentalType: booking.rentalType,
         baseRate: data.baseRate ?? booking.baseRate,
@@ -197,7 +220,7 @@ export async function PATCH(
       const newEnd = data.endDateTime ?? booking.endDateTime
       const nowHoldsCar = BLOCKING_STATUSES.includes(newStatus as any)
       const heldCarBefore = BLOCKING_STATUSES.includes(booking.status as any)
-      const datesChanged = data.startDateTime !== undefined || data.endDateTime !== undefined
+      const datesChanged = startChanged || endChanged
       if (nowHoldsCar && (datesChanged || !heldCarBefore)) {
         const clash = await findConflictingBooking({
           vehicleId: String(booking.vehicle),
@@ -237,11 +260,11 @@ export async function PATCH(
         }
       }
     }
-    if (data.startDateTime !== undefined) {
-      booking.startDateTime = new Date(data.startDateTime)
+    if (startChanged) {
+      booking.startDateTime = new Date(data.startDateTime as any)
     }
-    if (data.endDateTime !== undefined) {
-      booking.endDateTime = new Date(data.endDateTime)
+    if (endChanged) {
+      booking.endDateTime = new Date(data.endDateTime as any)
     }
     if (data.paymentStatus !== undefined) {
       booking.paymentStatus = data.paymentStatus
@@ -255,14 +278,9 @@ export async function PATCH(
     if (data.discounts !== undefined) {
       booking.discounts = data.discounts
     }
-    // Re-price the booking whenever anything that affects the price changed
-    // (rate, discount, tax %, start or end date), so the total is always right.
-    const pricingChanged =
-      data.baseRate !== undefined ||
-      data.discounts !== undefined ||
-      data.taxPercent !== undefined ||
-      data.startDateTime !== undefined ||
-      data.endDateTime !== undefined
+    // Re-price the booking only when something that affects the price really CHANGED
+    // (rate, discount, tax %, start or end date). A notes-only edit leaves the stored total alone.
+    const pricingChanged = priceChanged
     if (pricingChanged) {
       const taxPercent = data.taxPercent ?? bookingTaxPercent(booking as any)
       const amounts = calculateBookingAmounts({

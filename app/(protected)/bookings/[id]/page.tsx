@@ -1,6 +1,6 @@
 'use client'
 
-import { statusChoices, statusLabel } from '@/lib/utils/bookingRules'
+import { statusChoices, statusLabel, toLocalInputValue } from '@/lib/utils/bookingRules'
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import BookingForm from '@/components/bookings/BookingForm'
@@ -259,8 +259,8 @@ export default function EditBookingPage() {
     vehicle: booking.vehicle?._id || '',
     customer: booking.customer?._id || '',
     rentalType: booking.rentalType as any,
-    startDateTime: booking.startDateTime ? new Date(booking.startDateTime).toISOString().slice(0, 16) : '',
-    endDateTime: booking.endDateTime ? new Date(booking.endDateTime).toISOString().slice(0, 16) : '',
+    startDateTime: booking.startDateTime ? toLocalInputValue(booking.startDateTime) : '',
+    endDateTime: booking.endDateTime ? toLocalInputValue(booking.endDateTime) : '',
     pickupBranch: booking.pickupBranch || '',
     dropoffBranch: booking.dropoffBranch || '',
     baseRate: booking.baseRate || 0,

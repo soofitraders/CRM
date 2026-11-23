@@ -346,20 +346,18 @@ export async function PATCH(
         await recordInvoicePayment(invoice, user._id.toString())
       } catch (paymentError: any) {
         logger.error('Error recording invoice payment:', paymentError)
-        try {
-          const { rollbackInvoicePayment } = await import('@/lib/services/invoicePaymentService')
-          await rollbackInvoicePayment(invoice)
-        } catch (rollbackError) {
-          logger.error('Error rolling back invoice payment:', rollbackError)
+        // recordInvoicePayment already undid whatever THIS request created. If a payment
+        // exists anyway (a simultaneous click recorded it), the invoice really is paid.
+        if (!paymentError?.paymentExists) {
+          await Invoice.collection.updateOne(
+            { _id: invoice._id as any },
+            { $set: { status: oldStatus, updatedAt: new Date() } }
+          )
+          return NextResponse.json(
+            { error: `Could not record the payment, so the invoice was left as ${oldStatus}. Please try again.` },
+            { status: 500 }
+          )
         }
-        await Invoice.collection.updateOne(
-          { _id: invoice._id as any },
-          { $set: { status: oldStatus, updatedAt: new Date() } }
-        )
-        return NextResponse.json(
-          { error: `Could not record the payment, so the invoice was left as ${oldStatus}. Please try again.` },
-          { status: 500 }
-        )
       }
     }
 
