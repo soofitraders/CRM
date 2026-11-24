@@ -8,6 +8,8 @@ import Expense from '@/lib/models/Expense'
 import ExpenseCategory from '@/lib/models/ExpenseCategory'
 import SalaryRecord from '@/lib/models/SalaryRecord'
 import User from '@/lib/models/User'
+import '@/lib/models/Vehicle'
+import { isObjectIdString } from '@/lib/utils/objectId'
 import { hasRole, getCurrentUser } from '@/lib/auth'
 import { exportToCSV, exportToExcel, exportToPDF } from '@/lib/services/exportService'
 import ExportLog from '@/lib/models/ExportLog'
@@ -68,12 +70,25 @@ export async function GET(request: NextRequest) {
 
     const categoryId = searchParams.get('categoryId')
     if (categoryId) {
+      if (!isObjectIdString(categoryId)) {
+        clearTimeout(timeoutId)
+        return NextResponse.json({ error: 'Invalid categoryId' }, { status: 400 })
+      }
       filter.category = categoryId
     }
 
     const branchId = searchParams.get('branchId')
     if (branchId) {
       filter.branchId = branchId
+    }
+
+    const vehicleId = searchParams.get('vehicleId')
+    if (vehicleId) {
+      if (!isObjectIdString(vehicleId)) {
+        clearTimeout(timeoutId)
+        return NextResponse.json({ error: 'Invalid vehicleId' }, { status: 400 })
+      }
+      filter.vehicle = vehicleId
     }
 
     // Fetch expenses with populated data
@@ -91,6 +106,7 @@ export async function GET(request: NextRequest) {
             select: 'name',
           },
         })
+        .populate({ path: 'vehicle', select: 'plateNumber brand model' })
         .populate('createdBy', 'name email')
         .sort({ dateIncurred: -1 })
         .lean()
@@ -99,6 +115,7 @@ export async function GET(request: NextRequest) {
       // Fallback: try without salaryRecord populate
       expenses = await Expense.find(filter)
         .populate('category', 'name type code')
+        .populate({ path: 'vehicle', select: 'plateNumber brand model' })
         .populate('createdBy', 'name email')
         .sort({ dateIncurred: -1 })
         .lean()
@@ -125,6 +142,7 @@ export async function GET(request: NextRequest) {
         amount: exp.amount || 0,
         currency: exp.currency || 'AED',
         branch: exp.branchId || 'N/A',
+        vehicle: exp.vehicle?.plateNumber ? `${exp.vehicle.plateNumber} ${exp.vehicle.brand || ''} ${exp.vehicle.model || ''}`.trim() : '—',
         linkedTo: linkedTo || '—',
         createdBy: createdBy?.name || 'N/A',
         createdAt: formatDate(new Date(exp.createdAt), 'yyyy-MM-dd HH:mm:ss'),
@@ -143,6 +161,8 @@ export async function GET(request: NextRequest) {
       { key: 'linkedTo' as const, label: 'Linked To' },
       { key: 'createdBy' as const, label: 'Created By' },
       { key: 'createdAt' as const, label: 'Created At' },
+      // Added last so the position of every existing column stays the same
+      { key: 'vehicle' as const, label: 'Vehicle' },
     ]
 
     let fileBuffer: Buffer
@@ -160,7 +180,7 @@ export async function GET(request: NextRequest) {
         contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         fileExtension = 'xlsx'
       } else if (format === 'pdf') {
-        fileBuffer = await exportToPDF('Expenses Report', exportData as any, columns as any)
+        fileBuffer = await exportToPDF('Expenses Report', exportData as any, columns as any, { fitToPage: true })
         contentType = 'application/pdf'
         fileExtension = 'pdf'
       } else {
@@ -181,6 +201,7 @@ export async function GET(request: NextRequest) {
             dateTo,
             categoryId,
             branchId,
+            vehicleId,
           },
           rowCount: exportData.length,
         })

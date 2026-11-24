@@ -504,6 +504,8 @@ export async function completeMaintenance(
         await Expense.findByIdAndUpdate(existingExpense._id, {
           amount: finalCost,
           dateIncurred: completedDate,
+          // older records were saved without the vehicle; fill it in when the job is completed
+          vehicle: vehicle?._id ?? maintenance.vehicle,
         })
       } else if (maintenanceCategory) {
         // Create new expense linked to maintenance record
@@ -515,6 +517,7 @@ export async function completeMaintenance(
           dateIncurred: completedDate,
           branchId: vehicle?.currentBranch,
           createdBy: createdBy?._id || maintenance.createdBy,
+          vehicle: vehicle?._id ?? maintenance.vehicle,
           maintenanceRecord: maintenanceId,
         })
       }

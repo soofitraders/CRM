@@ -81,7 +81,7 @@ export default function VehiclePerformanceTab() {
           { v: 'all', l: 'All Time' },
           { v: '30', l: '30 Days' },
           { v: '90', l: '3 Months' },
-          { v: '365', l: 'This Year'},
+          { v: 'year', l: 'This Year'},
         ].map(p => (
           <button key={p.v} onClick={() => { setPeriod(p.v); load(p.v); }}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
@@ -211,6 +211,44 @@ export default function VehiclePerformanceTab() {
                 </div>
               ))}
             </div>
+            {fin.canViewExpenseDetails && (
+              <>
+              {(fin.purchaseCost ?? 0) > 0 && (
+                <p className="text-xs text-gray-500 mt-3">
+                  Purchase cost of the car: <span className="font-semibold text-gray-700">{fmtAED(fin.purchaseCost)}</span> (shown separately, not subtracted from Net Profit)
+                </p>
+              )}
+              <div className="mt-4">
+                <p className="text-xs font-semibold text-gray-600 mb-2">Expenses for this vehicle</p>
+                {(fin.expenseItems ?? []).length === 0 ? (
+                  <p className="text-xs text-gray-400">No expenses recorded for this vehicle in this period. Add one on the Expenses page and pick this vehicle.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-left text-gray-500 border-b border-gray-100">
+                          <th className="py-1.5 pr-3 font-medium">Date</th>
+                          <th className="py-1.5 pr-3 font-medium">Category</th>
+                          <th className="py-1.5 pr-3 font-medium">Description</th>
+                          <th className="py-1.5 text-right font-medium">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(fin.expenseItems as any[]).map((e) => (
+                          <tr key={e.id} className="border-b border-gray-50">
+                            <td className="py-1.5 pr-3 text-gray-600 whitespace-nowrap">{e.date ? new Date(e.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</td>
+                            <td className="py-1.5 pr-3 text-gray-700">{e.category}{e.isPurchase ? ' (not in Net Profit)' : ''}</td>
+                            <td className="py-1.5 pr-3 text-gray-600">{e.description}</td>
+                            <td className="py-1.5 text-right font-medium text-gray-800">{fmtAED(e.amount)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+              </>
+            )}
           </div>
         </div>
       )}

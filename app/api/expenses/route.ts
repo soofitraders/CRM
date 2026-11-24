@@ -8,11 +8,20 @@ import { hasRole, getCurrentUser } from '@/lib/auth'
 import Expense from '@/lib/models/Expense'
 import ExpenseCategory from '@/lib/models/ExpenseCategory'
 import SalaryRecord from '@/lib/models/SalaryRecord'
+// Registered for populate(); an unused named import is dropped by the build
+import '@/lib/models/SalaryRecord'
+import '@/lib/models/InvestorPayout'
+import '@/lib/models/InvestorProfile'
+import '@/lib/models/User'
+import '@/lib/models/Vehicle'
 import { startOfDay, endOfDay } from 'date-fns'
 import { cacheQuery } from '@/lib/cache/cacheUtils'
 import { CacheKeys } from '@/lib/cache/cacheKeys'
 import { invalidateFinancialCache } from '@/lib/cache/cacheUtils'
 import { logger } from '@/lib/utils/performance'
+import { summarizeVehicleExpenses } from '@/lib/services/vehicleExpenseSummary'
+import { isObjectIdString } from '@/lib/utils/objectId'
+import Vehicle from '@/lib/models/Vehicle'
 
 // GET - List expenses with filters
 export async function GET(request: NextRequest) {
@@ -38,6 +47,13 @@ export async function GET(request: NextRequest) {
     const dateTo = searchParams.get('dateTo')
     const categoryId = searchParams.get('categoryId')
     const branchId = searchParams.get('branchId')
+    const vehicleId = searchParams.get('vehicleId')
+    if (vehicleId && !isObjectIdString(vehicleId)) {
+      return NextResponse.json({ error: 'Invalid vehicleId' }, { status: 400 })
+    }
+    if (categoryId && !isObjectIdString(categoryId)) {
+      return NextResponse.json({ error: 'Invalid categoryId' }, { status: 400 })
+    }
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '50')
 
@@ -58,6 +74,10 @@ export async function GET(request: NextRequest) {
 
     if (branchId) {
       filter.branchId = branchId
+    }
+
+    if (vehicleId) {
+      filter.vehicle = vehicleId
     }
 
     const skip = (page - 1) * limit
@@ -96,6 +116,7 @@ export async function GET(request: NextRequest) {
                 },
               },
             })
+            .populate({ path: 'vehicle', select: 'plateNumber brand model' })
             .populate('createdBy', 'name email')
             .sort({ dateIncurred: -1 })
             .skip(skip)
@@ -105,6 +126,7 @@ export async function GET(request: NextRequest) {
               // Fallback without complex populate
               return Expense.find(filter)
                 .populate('category', 'name type code')
+                .populate({ path: 'vehicle', select: 'plateNumber brand model' })
                 .populate('createdBy', 'name email')
                 .sort({ dateIncurred: -1 })
                 .skip(skip)
@@ -114,15 +136,29 @@ export async function GET(request: NextRequest) {
           Expense.countDocuments(filter),
         ])
 
-        return { expenses, total }
+        // Summary for one vehicle over the chosen dates (same rules as the Vehicle Performance
+        // page). It ignores the category/branch filters and the page size: it is the whole car.
+        let summary = null
+        if (vehicleId) {
+          const summaryFilter: any = { isDeleted: false, vehicle: vehicleId }
+          if (filter.dateIncurred) summaryFilter.dateIncurred = filter.dateIncurred
+          const [all, purchaseCategory]: any[] = await Promise.all([
+            Expense.find(summaryFilter).select('amount category maintenanceRecord').lean(),
+            ExpenseCategory.findOne({ code: 'VEHICLE_PURCHASE' }).select('_id').lean(),
+          ])
+          summary = summarizeVehicleExpenses(all, purchaseCategory?._id?.toString() ?? '')
+        }
+
+        return { expenses, total, summary }
       },
       60 // Cache for 1 minute
     )
 
-    const { expenses, total } = result
+    const { expenses, total, summary } = result
 
     return NextResponse.json({
       expenses,
+      summary,
       pagination: {
         page,
         limit,
@@ -184,6 +220,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (!isObjectIdString(category)) {
+      return NextResponse.json({ error: 'Invalid category id' }, { status: 400 })
+    }
+    if (vehicle) {
+      if (!isObjectIdString(vehicle)) {
+        return NextResponse.json({ error: 'Invalid vehicle id' }, { status: 400 })
+      }
+      if (!(await Vehicle.exists({ _id: vehicle }))) {
+        return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 })
+      }
+    }
+
     // Check if trying to create expense with Salaries or Investor Payouts category
     const categoryDoc = await ExpenseCategory.findById(category).lean()
     if (categoryDoc) {
@@ -199,6 +247,13 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         )
       }
+    }
+
+    if (categoryDoc?.code === 'VEHICLE_PURCHASE' && !vehicle) {
+      return NextResponse.json(
+        { error: 'Please select the vehicle this purchase is for.' },
+        { status: 400 }
+      )
     }
 
     const expense = await Expense.create({

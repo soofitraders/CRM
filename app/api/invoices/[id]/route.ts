@@ -271,7 +271,7 @@ export async function PATCH(
           // Get booking details for branch
           const booking = await (await import('@/lib/models/Booking')).default
             .findById(invoice.booking)
-            .select('pickupBranch')
+            .select('pickupBranch vehicle')
             .lean()
           
           // Create expense for each new fine
@@ -286,6 +286,7 @@ export async function PATCH(
                   currency: 'AED',
                   dateIncurred: invoice.issueDate || new Date(),
                   branchId: booking?.pickupBranch,
+                  vehicle: (booking as any)?.vehicle,
                   createdBy: user._id,
                 })
               }

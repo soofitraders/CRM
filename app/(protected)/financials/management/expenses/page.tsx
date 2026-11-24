@@ -22,6 +22,12 @@ interface Expense {
   currency: string
   dateIncurred: string
   branchId?: string
+  vehicle?: {
+    _id: string
+    plateNumber?: string
+    brand?: string
+    model?: string
+  }
   salaryRecord?: {
     _id: string
     month: number
@@ -72,6 +78,8 @@ export default function ExpensesPage() {
   const [dateFrom, setDateFrom] = useState(format(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'))
   const [dateTo, setDateTo] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [categoryId, setCategoryId] = useState<string>('')
+  const [filterVehicleId, setFilterVehicleId] = useState<string>('')
+  const [summary, setSummary] = useState<{ totalExpenses: number; runningTotal: number; maintenanceTotal: number; purchaseCost: number; count: number } | null>(null)
   const [branchId, setBranchId] = useState<string>('')
 
   // Modal states
@@ -96,7 +104,7 @@ export default function ExpensesPage() {
     fetchCategories()
     fetchInvestors()
     fetchVehicles()
-  }, [dateFrom, dateTo, categoryId, branchId])
+  }, [dateFrom, dateTo, categoryId, branchId, filterVehicleId])
 
   const fetchExpenses = async () => {
     setLoading(true)
@@ -106,12 +114,18 @@ export default function ExpensesPage() {
       if (dateTo) params.append('dateTo', dateTo)
       if (categoryId) params.append('categoryId', categoryId)
       if (branchId) params.append('branchId', branchId)
+      if (filterVehicleId) {
+        params.append('vehicleId', filterVehicleId)
+        params.append('limit', '500') // show every expense of the selected car
+      }
 
       const response = await fetch(`/api/expenses?${params.toString()}`)
       if (!response.ok) throw new Error('Failed to fetch expenses')
 
       const data = await response.json()
       setExpenses(data.expenses || [])
+      setSummary(filterVehicleId ? data.summary || null : null)
+      setError(null)
     } catch (err: any) {
       setError(err.message || 'Failed to load expenses')
     } finally {
@@ -145,7 +159,7 @@ export default function ExpensesPage() {
 
   const fetchVehicles = async () => {
     try {
-      const response = await fetch('/api/vehicles')
+      const response = await fetch('/api/vehicles?limit=1000')
       if (response.ok) {
         const data = await response.json()
         setVehicles(data.vehicles || [])
@@ -235,6 +249,7 @@ export default function ExpensesPage() {
                   dateTo,
                   categoryId,
                   branchId,
+                  vehicleId: filterVehicleId,
                 }}
               />
               <button
@@ -271,7 +286,7 @@ export default function ExpensesPage() {
 
       {/* Filters */}
       <SectionCard>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div>
             <label className="block text-sm font-medium text-bodyText mb-1">Date From</label>
             <input
@@ -308,6 +323,21 @@ export default function ExpensesPage() {
             </select>
           </div>
           <div>
+            <label className="block text-sm font-medium text-bodyText mb-1">Vehicle</label>
+            <select
+              value={filterVehicleId}
+              onChange={(e) => setFilterVehicleId(e.target.value)}
+              className="w-full px-3 py-2 bg-cardBg border border-borderSoft rounded text-bodyText"
+            >
+              <option value="">All Vehicles</option>
+              {vehicles.map((vehicle) => (
+                <option key={vehicle._id} value={vehicle._id}>
+                  {vehicle.plateNumber} - {vehicle.brand} {vehicle.model}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label className="block text-sm font-medium text-bodyText mb-1">Branch</label>
             <input
               type="text"
@@ -320,6 +350,45 @@ export default function ExpensesPage() {
         </div>
       </SectionCard>
 
+      {/* Summary for the selected vehicle (same rules as its Performance page) */}
+      {filterVehicleId && summary && (
+        <SectionCard>
+          <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+            <h3 className="text-sm font-semibold text-headingText">
+              Expense summary for {(() => { const v = vehicles.find((x) => x._id === filterVehicleId); return v ? `${v.plateNumber} - ${v.brand} ${v.model}` : 'selected vehicle' })()}
+            </h3>
+            <span className="text-xs text-sidebarMuted">{dateFrom} to {dateTo}</span>
+          </div>
+          {(() => {
+            const aed = (n: number) => `AED ${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            return (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="col-span-2 md:col-span-1 rounded-lg border border-borderSoft bg-gray-50 p-3">
+                  <p className="text-xs text-sidebarMuted">Total expenses</p>
+                  <p className="text-xl font-bold text-headingText mt-1">{aed(summary.totalExpenses)}</p>
+                  <p className="text-[11px] text-sidebarMuted mt-1">{summary.count} expense{summary.count === 1 ? '' : 's'} in this date range (purchase price not included)</p>
+                </div>
+                <div className="rounded-lg border border-borderSoft p-3">
+                  <p className="text-xs text-sidebarMuted">Fuel, fines &amp; other costs</p>
+                  <p className="text-lg font-bold text-headingText mt-1">{aed(summary.runningTotal)}</p>
+                  <p className="text-[11px] text-sidebarMuted mt-1">Part of the total</p>
+                </div>
+                <div className="rounded-lg border border-borderSoft p-3">
+                  <p className="text-xs text-sidebarMuted">Maintenance jobs</p>
+                  <p className="text-lg font-bold text-headingText mt-1">{aed(summary.maintenanceTotal)}</p>
+                  <p className="text-[11px] text-sidebarMuted mt-1">Part of the total</p>
+                </div>
+                <div className="rounded-lg border border-dashed border-borderSoft p-3">
+                  <p className="text-xs text-sidebarMuted">Purchase cost</p>
+                  <p className="text-lg font-bold text-headingText mt-1">{aed(summary.purchaseCost)}</p>
+                  <p className="text-[11px] text-sidebarMuted mt-1">Shown separately, not in the total or net profit</p>
+                </div>
+              </div>
+            )
+          })()}
+        </SectionCard>
+      )}
+
       {/* Expenses Table */}
       <SectionCard>
         {loading ? (
@@ -328,7 +397,7 @@ export default function ExpensesPage() {
           <div className="py-12 text-center text-red-600">{error}</div>
         ) : (
           <Table
-            headers={['Date', 'Category', 'Description', 'Amount', 'Branch', 'Investor', 'Linked To', 'Created By', 'Actions']}
+            headers={['Date', 'Category', 'Description', 'Amount', 'Branch', 'Vehicle', 'Investor', 'Linked To', 'Created By', 'Actions']}
           >
             {expenses.map((expense) => {
               const isSalaryLinked = !!expense.salaryRecord
@@ -349,6 +418,13 @@ export default function ExpensesPage() {
                   </TableCell>
                   <TableCell>{expense.branchId || 'N/A'}</TableCell>
                   <TableCell>
+                    {expense.vehicle ? (
+                      <span className="text-bodyText">{expense.vehicle.plateNumber} <span className="text-sidebarMuted">{expense.vehicle.brand} {expense.vehicle.model}</span></span>
+                    ) : (
+                      <span className="text-sidebarMuted">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
                     {(expense as any).investor ? (
                       <span className="text-bodyText">
                         {(expense as any).investor.user.name}
@@ -366,7 +442,7 @@ export default function ExpensesPage() {
                       >
                         Salary • {expense.salaryRecord.month}/{expense.salaryRecord.year}
                       </a>
-                    ) : isInvestorPayoutLinked && expense.investorPayout ? (
+                    ) : isInvestorPayoutLinked && expense.investorPayout && expense.investorPayout.periodFrom ? (
                       <a
                         href={`/financials/management/investor-payouts/${expense.investorPayout._id}`}
                         className="inline-flex items-center gap-1 px-2 py-1 bg-purple-50 text-purple-700 rounded text-xs hover:bg-purple-100"
@@ -377,7 +453,7 @@ export default function ExpensesPage() {
                       <span className="text-sidebarMuted">—</span>
                     )}
                   </TableCell>
-                  <TableCell>{expense.createdBy.name}</TableCell>
+                  <TableCell>{expense.createdBy?.name || 'Unknown user'}</TableCell>
                   <TableCell>
                     <div className="flex gap-2">
                       {isProtected ? (
@@ -513,16 +589,16 @@ export default function ExpensesPage() {
                 
                 return (
                   <>
-                    {isVehiclePurchase && (
+                    {(
                       <div>
-                        <label className="block text-sm font-medium text-bodyText mb-1">Vehicle *</label>
+                        <label className="block text-sm font-medium text-bodyText mb-1">Vehicle{isVehiclePurchase ? ' *' : ' (Optional)'}</label>
                         <select
                           value={formData.vehicle}
                           onChange={(e) => setFormData({ ...formData, vehicle: e.target.value })}
                           required={isVehiclePurchase}
                           className="w-full px-3 py-2 bg-cardBg border border-borderSoft rounded text-bodyText"
                         >
-                          <option value="">Select Vehicle</option>
+                          <option value="">{isVehiclePurchase ? 'Select Vehicle' : 'No specific vehicle'}</option>
                           {vehicles.map((vehicle) => (
                             <option key={vehicle._id} value={vehicle._id}>
                               {vehicle.plateNumber} - {vehicle.brand} {vehicle.model}
@@ -530,7 +606,7 @@ export default function ExpensesPage() {
                           ))}
                         </select>
                         <p className="text-xs text-sidebarMuted mt-1">
-                          Select the vehicle this purchase expense is for
+                          {isVehiclePurchase ? 'Select the vehicle this purchase expense is for' : 'Pick a vehicle to show this cost on that vehicle\'s Performance page'}
                         </p>
                       </div>
                     )}

@@ -191,6 +191,7 @@ export async function POST(request: NextRequest) {
             dateIncurred: scheduledDate,
             branchId: vehicle?.currentBranch,
             createdBy: user._id,
+            vehicle: data.vehicle,
             maintenanceRecord: record._id,
           })
         }

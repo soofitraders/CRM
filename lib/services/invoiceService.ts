@@ -343,7 +343,7 @@ export async function createCustomInvoice(data: {
         
         // Get booking details for branch
         const booking = await Booking.findById(data.bookingId)
-          .select('pickupBranch')
+          .select('pickupBranch vehicle')
           .lean()
         
         // Create expense for each fine
@@ -356,6 +356,7 @@ export async function createCustomInvoice(data: {
               currency: 'AED',
               dateIncurred: issueDate,
               branchId: booking?.pickupBranch,
+              vehicle: (booking as any)?.vehicle,
               createdBy: data.createdBy,
             })
           }
