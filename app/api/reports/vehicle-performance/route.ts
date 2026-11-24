@@ -9,6 +9,7 @@ import { authOptions } from '@/lib/authOptions';
 import connectDB from '@/lib/db';
 import { NextResponse } from 'next/server';
 import mongoose from 'mongoose';
+import { getCurrentUser, hasRole } from '@/lib/auth';
 
 const safeNum = (v: any) => { const n = Number(v); return isNaN(n) ? 0 : n; };
 const safeDate = (v: any): Date | null => {
@@ -41,6 +42,11 @@ export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    // Individual expense records and the car's purchase price are only for the roles that may
+    // open the Expenses page. Every other staff role still gets the same totals as before.
+    const currentUser = await getCurrentUser();
+    const canViewExpenseDetails = hasRole(currentUser, ['SUPER_ADMIN', 'ADMIN', 'FINANCE']);
 
     await connectDB();
 
@@ -461,8 +467,9 @@ export async function GET(request: Request) {
           totalReceived: Math.round(totalReceived * 100) / 100,
           totalOutstanding: Math.round(totalOutstanding * 100) / 100,
           totalExpenses: Math.round(totalExpenses * 100) / 100,
-          purchaseCost: Math.round(purchaseCost * 100) / 100,
-          expenseItems,
+          canViewExpenseDetails,
+          purchaseCost: canViewExpenseDetails ? Math.round(purchaseCost * 100) / 100 : null,
+          expenseItems: canViewExpenseDetails ? expenseItems : [],
           totalMaintenance: Math.round(totalMaintenance * 100) / 100,
           totalCosts: Math.round(totalCosts * 100) / 100,
           netProfit: Math.round(netProfit * 100) / 100,
