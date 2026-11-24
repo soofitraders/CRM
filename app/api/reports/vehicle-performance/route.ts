@@ -1,6 +1,10 @@
 export const dynamic = 'force-dynamic'
 
 import { getServerSession } from 'next-auth';
+import { summarizeVehicleExpenses, isPurchaseExpense } from '@/lib/services/vehicleExpenseSummary';
+import { calculateBookingAmounts, bookingTaxPercent } from '@/lib/utils/bookingPricing';
+// Registered up front: populate('category') below needs it even on a freshly started server
+import '@/lib/models/ExpenseCategory';
 import { authOptions } from '@/lib/authOptions';
 import connectDB from '@/lib/db';
 import { NextResponse } from 'next/server';
@@ -80,8 +84,15 @@ export async function GET(request: Request) {
       rangeStart = new Date(startDate);
     } else if (period === 'all') {
       rangeStart = new Date('2000-01-01');
+    } else if (period === 'year') {
+      // "This Year" = 1 January of the current year up to today
+      rangeStart = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
     } else {
       rangeStart = new Date(now.getTime() - Number(period) * 86400000);
+    }
+
+    if (vehicleId && !mongoose.Types.ObjectId.isValid(vehicleId)) {
+      return NextResponse.json({ error: 'Invalid vehicle id' }, { status: 400 });
     }
 
     // Get vehicles
@@ -132,17 +143,39 @@ export async function GET(request: Request) {
         const startField = f(b, 'startDateTime','startDate','from','pickupDate','checkIn','rentalStartDate');
         const endField = f(b, 'endDateTime','endDate','to','returnDate','checkOut','rentalEndDate');
         const storedDays = safeNum(f(b, 'days','rentalDays','duration','numberOfDays','noOfDays'));
-        const rentalDays = storedDays > 0 ? storedDays : calcDays(startField, endField);
-        const dailyAmount = safeNum(f(b, 'totalAmount','amount','rentAmount','price','totalRent','totalCost'));
-        const amount = dailyAmount * rentalDays;
+        // Price the booking the same way the booking form and the invoice do: rate x days
+        // (+ VAT, - discount). This works for old and new bookings alike. (Old bookings save
+        // a one-day total and new ones the full total, so the saved total cannot be used as is.)
+        // Records without a rate (other schemas) keep the old "saved total x days" reading.
+        const hasRate = b.baseRate !== undefined && b.baseRate !== null && !!startField;
+        let rentalDays: number;
+        let amount: number;
+        if (hasRate) {
+          const priced = calculateBookingAmounts({
+            rentalType: b.rentalType ?? 'DAILY',
+            baseRate: safeNum(b.baseRate),
+            discounts: safeNum(b.discounts),
+            taxPercent: bookingTaxPercent(b),
+            startDateTime: startField,
+            endDateTime: endField,
+          });
+          rentalDays = priced.units;
+          amount = priced.totalAmount;
+        } else {
+          rentalDays = storedDays > 0 ? storedDays : calcDays(startField, endField);
+          amount = safeNum(f(b, 'totalAmount','amount','rentAmount','price','totalRent','totalCost')) * rentalDays;
+        }
+        const dailyAmount = hasRate ? safeNum(b.baseRate) : amount / Math.max(1, rentalDays);
         const paidDaily = safeNum(f(b, 'paidAmount','amountPaid','paid','paymentReceived'));
-        const paidAmt = paidDaily > 0 ? paidDaily * rentalDays : 0;
+        const paidAmt = paidDaily > 0 ? Math.min(amount, paidDaily) : 0;
         const dueAmt = Math.max(0, amount - paidAmt);
         const status = safeStr(f(b, 'status','bookingStatus','state'), 'unknown');
         const payStatus = safeStr(f(b, 'paymentStatus','invoiceStatus'), '');
         const isPaid = ['paid','completed','settled','done'].includes(payStatus.toLowerCase()) ||
                            ['paid','completed','settled','done'].includes(status.toLowerCase());
         const isPending = ['pending','partial','unpaid'].includes(payStatus.toLowerCase());
+        // A cancelled booking is not owed and earns nothing: it stays in the list but adds 0
+        const isCancelled = ['cancelled','canceled'].includes(status.toLowerCase());
         return {
           bookingId: b._id.toString(),
           bookingNumber: safeStr(f(b, 'bookingNumber','bookingId','reference')),
@@ -152,14 +185,15 @@ export async function GET(request: Request) {
           endDate: endField ? new Date(endField).toISOString() : null,
           rentalDays,
           dailyAmount,
-          totalAmount: amount,
-          paidAmount: isPaid ? amount : paidAmt,
-          dueAmount: isPaid ? 0 : dueAmt,
+          totalAmount: isCancelled ? 0 : amount,
+          paidAmount: isCancelled ? 0 : (isPaid ? amount : paidAmt),
+          dueAmount: isCancelled || isPaid ? 0 : dueAmt,
+          isCancelled,
           status,
           paymentStatus: payStatus,
           isPaid,
           isPending,
-          isUnpaid: !isPaid && !isPending && dueAmt > 0,
+          isUnpaid: !isCancelled && !isPaid && !isPending && dueAmt > 0,
         };
       };
 
@@ -171,13 +205,14 @@ export async function GET(request: Request) {
       const bookingById = new Map(allBookingDetails.map((b: any) => [String(b.bookingId), b]));
 
       // ── BOOKING FINANCIALS ────────────────────────────────────────────
-      const totalBookings = selectedBookingDetails.length;
-      const totalRentalDays = selectedBookingDetails.reduce((s, b) => s + b.rentalDays, 0);
+      const activeSelected = selectedBookingDetails.filter((b: any) => !b.isCancelled);
+      const totalBookings = activeSelected.length;
+      const totalRentalDays = activeSelected.reduce((s, b) => s + b.rentalDays, 0);
       const totalEarnings = selectedBookingDetails.reduce((s, b) => s + b.totalAmount, 0);
       const totalPaidBookings = selectedBookingDetails.reduce((s, b) => s + b.paidAmount, 0);
       const totalDueBookings = selectedBookingDetails.reduce((s, b) => s + b.dueAmount, 0);
-      const paidBookings = selectedBookingDetails.filter(b => b.isPaid).length;
-      const pendingBookings = selectedBookingDetails.filter(b => b.isPending || b.isUnpaid).length;
+      const paidBookings = activeSelected.filter(b => b.isPaid).length;
+      const pendingBookings = activeSelected.filter(b => b.isPending || b.isUnpaid).length;
       const avgRentalDays = totalBookings > 0 ? Math.round((totalRentalDays / totalBookings) * 10) / 10 : 0;
 
       // ── INVOICES ──────────────────────────────────────────────────────
@@ -223,7 +258,10 @@ export async function GET(request: Request) {
         };
       };
 
-      const processedInvoices = allInvoices.map(processInvoice);
+      // Voided/cancelled invoices are not owed and are not revenue
+      const processedInvoices = allInvoices
+        .filter((inv: any) => !['void', 'cancelled', 'canceled'].includes(String(inv.status ?? '').toLowerCase()))
+        .map(processInvoice);
       const selectedInvoices = useAllData
         ? processedInvoices
         : processedInvoices.filter((invoice) =>
@@ -290,22 +328,43 @@ export async function GET(request: Request) {
       const pendingPayAmt = pendingPayments.reduce((s, p) => s + p.amount, 0);
 
       // ── EXPENSES ──────────────────────────────────────────────────────
+      // Expenses recorded against this vehicle (Expenses page > Vehicle dropdown).
+      //  - deleted expenses are ignored
+      //  - the period uses the date the expense was incurred
+      //  - expenses created by a maintenance job are left out here: the same cost is
+      //    already counted below as Maintenance, so counting both would charge it twice
+      //  - the purchase price of the car is NOT a running cost: it is shown on its own
+      //    ("purchaseCost") and is not subtracted from net profit
       let allExpenses: any[] = [];
+      let purchaseCategoryId = '';
       if (Expense) {
-        allExpenses = await Expense.find(vLink).lean();
+        allExpenses = await Expense.find({ vehicle: vId, isDeleted: { $ne: true } })
+          .populate('category', 'name code type')
+          .sort({ dateIncurred: -1 })
+          .lean();
+        try {
+          const ExpenseCategory = (await import('@/lib/models/ExpenseCategory')).default;
+          const pc: any = await (ExpenseCategory as any).findOne({ code: 'VEHICLE_PURCHASE' }).lean();
+          purchaseCategoryId = pc?._id?.toString() ?? '';
+        } catch { /* ok */ }
       }
-      const selectedExpenses = useAllData
-        ? allExpenses
-        : allExpenses.filter((expense: any) =>
-            isDateInRange(
-              f(expense, 'date', 'expenseDate', 'transactionDate', 'createdAt', 'invoiceDate'),
-              rangeStart,
-              rangeEnd
-            )
-          );
-      const totalExpenses = selectedExpenses.reduce(
-        (s, e: any) => s + safeNum(f(e, 'amount','totalAmount','cost','price')), 0
-      );
+      const inPeriod = (e: any) =>
+        useAllData || isDateInRange(f(e, 'dateIncurred', 'date', 'createdAt'), rangeStart, rangeEnd);
+      const isPurchase = (e: any) => isPurchaseExpense(e, purchaseCategoryId);
+      const periodExpenses = allExpenses.filter(inPeriod);
+      const expenseSummary = summarizeVehicleExpenses(periodExpenses, purchaseCategoryId);
+      const totalExpenses = expenseSummary.runningTotal;
+      const purchaseCost = expenseSummary.purchaseCost;
+      const expenseItems = periodExpenses
+        .filter((e: any) => !e.maintenanceRecord)
+        .map((e: any) => ({
+          id: e._id.toString(),
+          date: safeDate(e.dateIncurred)?.toISOString() ?? null,
+          category: e.category?.name ?? '',
+          description: e.description ?? '',
+          amount: safeNum(e.amount),
+          isPurchase: isPurchase(e),
+        }));
 
       // ── MAINTENANCE ───────────────────────────────────────────────────
       let allMaintenance: any[] = [];
@@ -316,7 +375,10 @@ export async function GET(request: Request) {
         ? allMaintenance
         : allMaintenance.filter((maintenance: any) =>
             isDateInRange(
-              f(maintenance, 'date', 'serviceDate', 'completedAt', 'createdAt', 'maintenanceDate'),
+              // The date the work happened: finished date, else the scheduled date. The date the
+              // record was typed in (createdAt) is only the last resort - using it counted old
+              // repairs entered today and future repairs in the wrong period.
+              f(maintenance, 'completedDate', 'scheduledDate', 'date', 'serviceDate', 'completedAt', 'maintenanceDate', 'createdAt'),
               rangeStart,
               rangeEnd
             )
@@ -326,19 +388,23 @@ export async function GET(request: Request) {
       );
 
       // ── FINAL CALCULATIONS ────────────────────────────────────────────
-      // Revenue = prefer invoice total, fallback to payments, fallback to booking amounts
-      const totalRevenue = totalInvoiced > 0 ? totalInvoiced
+      // Where the money figures come from is decided ONCE per vehicle, not per period.
+      // A vehicle that has invoices uses its invoices in every period (so a period can never
+      // show more than "All Time" because it had no invoice and fell back to booking amounts).
+      // A vehicle with no invoices at all falls back to payments, then to booking amounts.
+      const vehicleHasInvoices = processedInvoices.some((i) => i.totalAmount > 0);
+      const totalRevenue = vehicleHasInvoices ? totalInvoiced
                          : totalPayments > 0 ? totalPayments
                          : totalEarnings;
 
-      const totalReceived = totalInvPaid > 0 ? totalInvPaid : paidPayAmt;
-      const totalOutstanding = totalInvDue > 0 ? totalInvDue : pendingPayAmt;
+      const totalReceived = vehicleHasInvoices ? totalInvPaid : paidPayAmt;
+      const totalOutstanding = vehicleHasInvoices ? totalInvDue : pendingPayAmt;
       const totalCosts = totalExpenses + totalMaintenance;
       const netProfit = totalRevenue - totalCosts;
       const revenuePerDay = totalRentalDays > 0 ? Math.round((totalRevenue / totalRentalDays) * 100) / 100 : 0;
 
       const periodDays = Math.max(1, Math.ceil((rangeEnd.getTime() - rangeStart.getTime()) / 86400000));
-      const periodRentalDays = periodBookingDetails.reduce((s, b) => s + b.rentalDays, 0);
+      const periodRentalDays = periodBookingDetails.filter((b: any) => !b.isCancelled).reduce((s, b) => s + b.rentalDays, 0);
       const utilizationPct = Math.min(100, Math.round((periodRentalDays / periodDays) * 100));
 
       return {
@@ -395,6 +461,8 @@ export async function GET(request: Request) {
           totalReceived: Math.round(totalReceived * 100) / 100,
           totalOutstanding: Math.round(totalOutstanding * 100) / 100,
           totalExpenses: Math.round(totalExpenses * 100) / 100,
+          purchaseCost: Math.round(purchaseCost * 100) / 100,
+          expenseItems,
           totalMaintenance: Math.round(totalMaintenance * 100) / 100,
           totalCosts: Math.round(totalCosts * 100) / 100,
           netProfit: Math.round(netProfit * 100) / 100,

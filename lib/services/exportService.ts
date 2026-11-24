@@ -100,7 +100,10 @@ export async function exportToExcel<T extends Record<string, any>>(
 export async function exportToPDF<T extends Record<string, any>>(
   title: string,
   rows: T[],
-  columns: { key: keyof T; label: string }[]
+  columns: { key: keyof T; label: string }[],
+  // Optional: shrink the columns so a wide table fits the page width (off by default, so
+  // every existing PDF export looks exactly as before)
+  options?: { fitToPage?: boolean }
 ): Promise<Buffer> {
   try {
     logger.log(`Generating PDF for ${rows.length} rows, ${columns.length} columns`)
@@ -187,12 +190,19 @@ export async function exportToPDF<T extends Record<string, any>>(
       body: data,
       startY: 32,
       theme: 'grid' as any,
-      styles: {
-        fontSize: 8,
-        cellPadding: 2,
-        overflow: 'linebreak' as any,
-        cellWidth: 'wrap' as any,
-      },
+      styles: options?.fitToPage
+        ? {
+            fontSize: 7,
+            cellPadding: 1.5,
+            overflow: 'linebreak' as any,
+            cellWidth: 'auto' as any,
+          }
+        : {
+            fontSize: 8,
+            cellPadding: 2,
+            overflow: 'linebreak' as any,
+            cellWidth: 'wrap' as any,
+          },
       headStyles: {
         fillColor: [224, 224, 224],
         textColor: [0, 0, 0],

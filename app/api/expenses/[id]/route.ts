@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { invalidateFinancialCache } from '@/lib/cache/cacheUtils'
+import { isObjectIdString } from '@/lib/utils/objectId'
+import Vehicle from '@/lib/models/Vehicle'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/authOptions'
 import connectDB from '@/lib/db'
@@ -154,6 +157,7 @@ export async function PATCH(
         .populate('createdBy', 'name email')
         .lean()
 
+      invalidateFinancialCache()
       return NextResponse.json({ expense })
     }
 
@@ -161,19 +165,55 @@ export async function PATCH(
     const body = await request.json()
     const { category, description, amount, currency, dateIncurred, branchId, vehicle, investor } = body
 
+    // Ids must be well formed, and the vehicle must really exist (otherwise the expense would
+    // point at nothing and disappear from every vehicle's page)
+    if (category !== undefined && category && !isObjectIdString(category)) {
+      return NextResponse.json({ error: 'Invalid category id' }, { status: 400 })
+    }
+    if (vehicle) {
+      if (!isObjectIdString(vehicle)) {
+        return NextResponse.json({ error: 'Invalid vehicle id' }, { status: 400 })
+      }
+      if (!(await Vehicle.exists({ _id: vehicle }))) {
+        return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 })
+      }
+    }
+
+    // A vehicle purchase must always belong to a vehicle (same rule as when it is created)
+    {
+      const current: any = await Expense.findOne({ _id: params.id, isDeleted: false }).select('category vehicle').lean()
+      const effectiveCategory = category !== undefined ? category : current?.category
+      const effectiveVehicle = vehicle !== undefined ? vehicle : current?.vehicle
+      if (effectiveCategory && !effectiveVehicle) {
+        const cat: any = await ExpenseCategory.findById(effectiveCategory).select('code').lean()
+        if (cat?.code === 'VEHICLE_PURCHASE') {
+          return NextResponse.json(
+            { error: 'Please select the vehicle this purchase is for.' },
+            { status: 400 }
+          )
+        }
+      }
+    }
+
+    // Empty values REMOVE the field (an "undefined" update is ignored by the database, which
+    // is why a chosen vehicle could never be cleared)
     const updateData: any = {}
+    const unsetData: any = {}
     if (category !== undefined) updateData.category = category
     if (description !== undefined) updateData.description = description
     if (amount !== undefined) updateData.amount = parseFloat(amount)
     if (currency !== undefined) updateData.currency = currency
     if (dateIncurred !== undefined) updateData.dateIncurred = new Date(dateIncurred)
-    if (branchId !== undefined) updateData.branchId = branchId || undefined
-    if (vehicle !== undefined) updateData.vehicle = vehicle || undefined
-    if (investor !== undefined) updateData.investor = investor || undefined
+    if (branchId !== undefined) { if (branchId) updateData.branchId = branchId; else unsetData.branchId = '' }
+    if (vehicle !== undefined) { if (vehicle) updateData.vehicle = vehicle; else unsetData.vehicle = '' }
+    if (investor !== undefined) { if (investor) updateData.investor = investor; else unsetData.investor = '' }
+    const update: any = {}
+    if (Object.keys(updateData).length) update.$set = updateData
+    if (Object.keys(unsetData).length) update.$unset = unsetData
 
     const expense = await Expense.findOneAndUpdate(
       { _id: params.id, isDeleted: false },
-      updateData,
+      update,
       { new: true, runValidators: true }
     )
       .populate('category', 'name type code')
@@ -193,6 +233,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Expense not found' }, { status: 404 })
     }
 
+    invalidateFinancialCache()
     return NextResponse.json({ expense })
   } catch (error: any) {
     logger.error('Error updating expense:', error)
@@ -292,6 +333,7 @@ export async function DELETE(
       )
     }
 
+    invalidateFinancialCache()
     return NextResponse.json({ message: 'Expense deleted successfully' })
   } catch (error: any) {
     logger.error('Error deleting expense:', error)
